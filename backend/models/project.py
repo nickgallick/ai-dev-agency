@@ -71,7 +71,7 @@ class Project(Base):
     
     # JSONB fields for flexible data storage
     agent_outputs = Column(JSONB, default=dict)
-    metadata = Column(JSONB, default=dict)  # For reference_urls, tech_stack, etc.
+    project_metadata = Column(JSONB, default=dict)  # For reference_urls, tech_stack, etc.
     revision_history = Column(JSONB, default=list)  # For project versioning
     
     # Relationships
