@@ -37,7 +37,7 @@ class KnowledgeBase(Base):
     created_by = Column(String(36), ForeignKey('users.id'), nullable=True)
     
     # Additional data
-    metadata = Column(JSONB, nullable=True)  # Flexible storage for type-specific data
+    entry_metadata = Column(JSONB, nullable=True)  # Flexible storage for type-specific data
     tags = Column(ARRAY(String(50)), nullable=True)
     
     # Relationships
@@ -58,6 +58,6 @@ class KnowledgeBase(Base):
             "usage_count": self.usage_count,
             "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "metadata": self.metadata,
+            "entry_metadata": self.entry_metadata,
             "tags": self.tags,
         }

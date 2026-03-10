@@ -46,7 +46,7 @@ class ProjectTemplate(Base):
     is_active = Column(Boolean, default=True)
     
     # Additional data
-    metadata = Column(JSONB, nullable=True)
+    template_metadata = Column(JSONB, nullable=True)
     tags = Column(ARRAY(String(50)), nullable=True)
     
     # Relationships
@@ -74,6 +74,6 @@ class ProjectTemplate(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "is_active": self.is_active,
-            "metadata": self.metadata,
+            "template_metadata": self.template_metadata,
             "tags": self.tags,
         }

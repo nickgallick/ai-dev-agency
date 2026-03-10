@@ -27,7 +27,7 @@ async def store_knowledge(
     tech_stack: Optional[List[str]] = None,
     agent_name: Optional[str] = None,
     quality_score: Optional[float] = None,
-    metadata: Optional[Dict[str, Any]] = None,
+    entry_metadata: Optional[Dict[str, Any]] = None,
     tags: Optional[List[str]] = None,
     created_by: Optional[str] = None,
 ) -> KnowledgeBase:
@@ -45,7 +45,7 @@ async def store_knowledge(
         tech_stack: List of technologies
         agent_name: Agent that generated this knowledge
         quality_score: Quality score 0-1
-        metadata: Additional metadata
+        entry_metadata: Additional metadata
         tags: Tags for categorization
         created_by: User ID who created this
         
@@ -68,7 +68,7 @@ async def store_knowledge(
         tech_stack=tech_stack,
         agent_name=agent_name,
         quality_score=quality_score,
-        metadata=metadata,
+        entry_metadata=entry_metadata,
         tags=tags,
         created_by=created_by,
     )
@@ -157,7 +157,7 @@ async def query_knowledge(
                 usage_count=entry.usage_count,
                 last_used_at=entry.last_used_at,
                 created_at=entry.created_at,
-                metadata=entry.metadata,
+                metadata=entry.entry_metadata,
                 tags=entry.tags,
             ),
             similarity_score=similarity,
@@ -351,7 +351,7 @@ async def store_user_preference(
         entry_type=KnowledgeEntryType.USER_PREFERENCE,
         title=title,
         content=preference,
-        metadata={"category": category},
+        entry_metadata={"category": category},
         created_by=created_by,
         quality_score=1.0,  # User preferences are always relevant
         **kwargs,
