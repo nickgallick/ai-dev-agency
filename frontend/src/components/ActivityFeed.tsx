@@ -30,7 +30,7 @@ export function ActivityFeed({ projectId, isActive }: ActivityFeedProps) {
     if (!isActive || !projectId) return
 
     // Connect to SSE endpoint
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const apiUrl = import.meta.env.VITE_API_URL || ''
     const eventSource = new EventSource(`${apiUrl}/api/activity/${projectId}/stream`)
     eventSourceRef.current = eventSource
 

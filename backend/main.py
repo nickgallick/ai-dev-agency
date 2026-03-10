@@ -9,8 +9,10 @@ if env_path.exists():
     load_dotenv(env_path)
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from api import projects_router, agents_router, costs_router, health_router
 from api.routes import revisions_router, analytics_router, integrations_router
@@ -85,14 +87,40 @@ app.include_router(export_router, prefix="/api")  # Phase 11C: Export
 app.include_router(activity_router, prefix="/api")  # Real-time activity streaming
 
 
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {
-        "name": "AI Dev Agency API",
-        "version": "1.0.0",
-        "docs": "/docs",
-    }
+# Static file serving for production
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists() and os.getenv("PRODUCTION", "").lower() == "true":
+    # Mount static files (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+    
+    @app.get("/")
+    async def serve_frontend():
+        """Serve the frontend."""
+        return FileResponse(static_dir / "index.html")
+    
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Catch-all route to serve SPA for client-side routing."""
+        # Don't serve static files for API routes
+        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("health"):
+            return {"detail": "Not Found"}
+        
+        # Check if file exists in static folder
+        file_path = static_dir / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        
+        # Return index.html for SPA routing
+        return FileResponse(static_dir / "index.html")
+else:
+    @app.get("/")
+    async def root():
+        """Root endpoint (development mode)."""
+        return {
+            "name": "AI Dev Agency API",
+            "version": "1.0.0",
+            "docs": "/docs",
+        }
 
 
 if __name__ == "__main__":

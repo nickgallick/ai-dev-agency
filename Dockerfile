@@ -1,15 +1,4 @@
-# Production Dockerfile for Railway deployment
-# Combined backend + frontend in a single container
-
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /frontend
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --only=production || npm install
-COPY frontend/ ./
-RUN npm run build
-
-# Final production image
+# Simplified Railway Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -19,31 +8,38 @@ RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     curl \
-    nginx \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python requirements
-COPY backend/requirements.txt .
+# Copy backend requirements and install
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
+# Copy frontend and build
+COPY frontend/package*.json ./frontend/
+WORKDIR /app/frontend
+RUN npm ci --only=production || npm install
+COPY frontend/ ./
+RUN npm run build
+
 # Copy backend code
+WORKDIR /app
 COPY backend/ ./backend/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 COPY config/ ./config/
 
-# Copy built frontend
-COPY --from=frontend-builder /frontend/dist /app/static
+# Move built frontend to backend static folder
+RUN mkdir -p /app/backend/static && cp -r /app/frontend/dist/* /app/backend/static/
 
-# Copy nginx config for static files
-COPY nginx-railway.conf /etc/nginx/sites-available/default
+WORKDIR /app/backend
 
-# Copy startup script
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
-
-# Expose port (Railway uses PORT env var)
+# Expose port
 EXPOSE 8000
 
-# Run startup script
-CMD ["/app/start.sh"]
+# Set environment variable for production
+ENV PRODUCTION=true
+
+# Run the application
+CMD ["sh", "-c", "python -c 'from models import Base, engine; Base.metadata.create_all(bind=engine)' && gunicorn main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000}"]
