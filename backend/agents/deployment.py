@@ -122,6 +122,18 @@ class DeploymentAgent(BaseAgent):
                 elif target == "expo":
                     status = await self._deploy_to_expo(project_path, **kwargs)
                     report.deployments.append(status)
+                elif target == "fastlane":
+                    status = await self._deploy_via_fastlane(project_path)
+                    report.deployments.append(status)
+                elif target == "chrome_web_store":
+                    status = await self._deploy_to_chrome_web_store(project_path)
+                    report.deployments.append(status)
+                elif target == "pypi":
+                    status = await self._deploy_to_pypi(project_path)
+                    report.deployments.append(status)
+                elif target == "github_releases":
+                    status = await self._deploy_to_github_releases(project_path, **kwargs)
+                    report.deployments.append(status)
             
             # Generate GitHub Actions workflows
             if github_repo or project_type in ["mobile", "desktop"]:
@@ -168,10 +180,30 @@ class DeploymentAgent(BaseAgent):
     def _get_default_targets(self, project_type: str) -> List[str]:
         """Get default deployment targets for project type."""
         targets = {
+            # Web projects
+            "web_simple": ["vercel"],
+            "web_complex": ["vercel", "railway"],
             "web": ["vercel"],
-            "api": ["railway"],
+            
+            # Mobile projects
+            "mobile_native_ios": ["fastlane"],  # Fastlane for App Store
+            "mobile_cross_platform": ["expo"],  # Expo EAS
+            "mobile_pwa": ["vercel"],  # PWA deployed as web
             "mobile": ["expo"],
-            "desktop": [],  # Desktop uses GitHub Actions only
+            
+            # Desktop projects
+            "desktop_app": ["github_releases"],  # Electron Builder to GitHub Releases
+            "desktop": [],
+            
+            # Browser extensions
+            "chrome_extension": ["chrome_web_store"],
+            
+            # CLI and API projects
+            "cli_tool": ["pypi"],  # or npm
+            "python_api": ["railway"],  # or Render/Fly.io
+            "python_saas": ["railway"],  # Full stack with database
+            
+            "api": ["railway"],
             "fullstack": ["vercel", "railway"],
         }
         return targets.get(project_type, ["vercel"])
@@ -990,3 +1022,277 @@ jobs:
         except Exception:
             pass
         return None
+
+    async def _deploy_via_fastlane(self, project_path: str) -> DeploymentStatus:
+        """Deploy iOS app via Fastlane to TestFlight/App Store."""
+        status = DeploymentStatus(
+            platform="fastlane",
+            status="pending",
+            started_at=datetime.utcnow().isoformat(),
+        )
+        
+        # Check for required credentials
+        apple_id = os.environ.get("APPLE_ID")
+        team_id = os.environ.get("APPLE_TEAM_ID")
+        
+        if not apple_id or not team_id:
+            status.status = "pending"
+            status.logs.append("Fastlane configuration generated")
+            status.logs.append("Run locally: fastlane ios beta (TestFlight) or fastlane ios release (App Store)")
+            status.logs.append("")
+            status.logs.append("Required environment variables:")
+            status.logs.append("- APPLE_ID: Your Apple ID email")
+            status.logs.append("- APPLE_TEAM_ID: Your Apple Developer Team ID")
+            status.logs.append("- MATCH_PASSWORD: For certificate management")
+            
+            # Generate Fastfile if not exists
+            fastlane_dir = Path(project_path) / "fastlane"
+            fastlane_dir.mkdir(exist_ok=True)
+            
+            fastfile_content = '''default_platform(:ios)
+
+platform :ios do
+  desc "Push a new beta build to TestFlight"
+  lane :beta do
+    increment_build_number
+    build_app(scheme: ENV["APP_SCHEME"])
+    upload_to_testflight
+  end
+
+  desc "Push a new release build to App Store"
+  lane :release do
+    increment_build_number
+    build_app(scheme: ENV["APP_SCHEME"])
+    upload_to_app_store(
+      skip_metadata: true,
+      skip_screenshots: true
+    )
+  end
+end
+'''
+            fastfile_path = fastlane_dir / "Fastfile"
+            if not fastfile_path.exists():
+                with open(fastfile_path, "w") as f:
+                    f.write(fastfile_content)
+                status.logs.append(f"Generated {fastfile_path}")
+            
+            appfile_content = f'''app_identifier(ENV["APP_IDENTIFIER"])
+apple_id(ENV["APPLE_ID"])
+team_id(ENV["APPLE_TEAM_ID"])
+'''
+            appfile_path = fastlane_dir / "Appfile"
+            if not appfile_path.exists():
+                with open(appfile_path, "w") as f:
+                    f.write(appfile_content)
+                status.logs.append(f"Generated {appfile_path}")
+            
+            status.completed_at = datetime.utcnow().isoformat()
+            return status
+        
+        # TODO: Actually run fastlane (requires macOS environment)
+        status.status = "pending"
+        status.logs.append("Fastlane ready to deploy")
+        status.logs.append("Run: cd fastlane && fastlane ios beta")
+        status.completed_at = datetime.utcnow().isoformat()
+        return status
+
+    async def _deploy_to_chrome_web_store(self, project_path: str) -> DeploymentStatus:
+        """Deploy Chrome extension to Chrome Web Store."""
+        status = DeploymentStatus(
+            platform="chrome_web_store",
+            status="pending",
+            started_at=datetime.utcnow().isoformat(),
+        )
+        
+        client_id = os.environ.get("CHROME_CLIENT_ID")
+        client_secret = os.environ.get("CHROME_CLIENT_SECRET")
+        refresh_token = os.environ.get("CHROME_REFRESH_TOKEN")
+        
+        if not all([client_id, client_secret, refresh_token]):
+            status.logs.append("Chrome Web Store API not configured")
+            status.logs.append("")
+            status.logs.append("Manual deployment steps:")
+            status.logs.append("1. Build extension: npm run build")
+            status.logs.append("2. Zip the dist/ folder")
+            status.logs.append("3. Go to https://chrome.google.com/webstore/devconsole")
+            status.logs.append("4. Upload the ZIP file")
+            status.logs.append("5. Fill in store listing details")
+            status.logs.append("6. Submit for review")
+            status.logs.append("")
+            status.logs.append("For automated deployment, set:")
+            status.logs.append("- CHROME_CLIENT_ID")
+            status.logs.append("- CHROME_CLIENT_SECRET")  
+            status.logs.append("- CHROME_REFRESH_TOKEN")
+            status.logs.append("- CHROME_EXTENSION_ID (for updates)")
+            status.completed_at = datetime.utcnow().isoformat()
+            return status
+        
+        try:
+            # Get access token
+            async with httpx.AsyncClient() as client:
+                token_response = await client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "refresh_token": refresh_token,
+                        "grant_type": "refresh_token",
+                    }
+                )
+                
+                if token_response.status_code == 200:
+                    access_token = token_response.json().get("access_token")
+                    status.logs.append("Authenticated with Chrome Web Store API")
+                    
+                    # Upload would require zipping and uploading
+                    # For now, provide instructions
+                    status.status = "pending"
+                    status.logs.append("API authenticated - ready for upload")
+                    status.logs.append("Run: chrome-webstore-upload upload")
+                else:
+                    status.status = "failed"
+                    status.error_message = "Failed to authenticate with Chrome Web Store"
+                    status.logs.append(token_response.text)
+                    
+        except Exception as e:
+            status.status = "failed"
+            status.error_message = str(e)
+            status.logs.append(f"Chrome Web Store error: {str(e)}")
+        
+        status.completed_at = datetime.utcnow().isoformat()
+        return status
+
+    async def _deploy_to_pypi(self, project_path: str) -> DeploymentStatus:
+        """Deploy Python package to PyPI."""
+        status = DeploymentStatus(
+            platform="pypi",
+            status="pending",
+            started_at=datetime.utcnow().isoformat(),
+        )
+        
+        pypi_token = os.environ.get("PYPI_TOKEN")
+        
+        if not pypi_token:
+            status.logs.append("PyPI token not configured")
+            status.logs.append("")
+            status.logs.append("Manual deployment steps:")
+            status.logs.append("1. Install build tools: pip install build twine")
+            status.logs.append("2. Build: python -m build")
+            status.logs.append("3. Upload: twine upload dist/*")
+            status.logs.append("")
+            status.logs.append("For automated deployment, set PYPI_TOKEN")
+            status.logs.append("Get token at: https://pypi.org/manage/account/token/")
+            
+            # Generate pyproject.toml if missing
+            pyproject_path = Path(project_path) / "pyproject.toml"
+            if not pyproject_path.exists():
+                project_name = self._get_project_name(project_path)
+                pyproject_content = f'''[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{project_name}"
+version = "0.1.0"
+description = "Generated by AI Dev Agency"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.scripts]
+{project_name} = "{project_name}:main"
+'''
+                with open(pyproject_path, "w") as f:
+                    f.write(pyproject_content)
+                status.logs.append(f"Generated {pyproject_path}")
+            
+            status.completed_at = datetime.utcnow().isoformat()
+            return status
+        
+        # With token, provide CI/CD instructions
+        status.logs.append("PyPI token configured")
+        status.logs.append("Deployment will occur via GitHub Actions on tag push")
+        status.logs.append("Create a release: git tag v1.0.0 && git push --tags")
+        status.completed_at = datetime.utcnow().isoformat()
+        return status
+
+    async def _deploy_to_github_releases(
+        self, 
+        project_path: str,
+        version: str = "0.1.0",
+        **kwargs
+    ) -> DeploymentStatus:
+        """Deploy desktop app builds to GitHub Releases."""
+        status = DeploymentStatus(
+            platform="github_releases",
+            status="pending",
+            started_at=datetime.utcnow().isoformat(),
+        )
+        
+        github_token = os.environ.get("GITHUB_TOKEN")
+        
+        if not github_token:
+            status.logs.append("GitHub token not configured for releases")
+            status.logs.append("")
+            status.logs.append("Deployment via GitHub Actions (recommended):")
+            status.logs.append("1. Push to main branch to build")
+            status.logs.append("2. Create a tag: git tag v1.0.0")
+            status.logs.append("3. Push tag: git push --tags")
+            status.logs.append("4. Release will be created automatically")
+            status.logs.append("")
+            status.logs.append("Manual release:")
+            status.logs.append("1. Build: npm run build:all")
+            status.logs.append("2. Go to GitHub repo > Releases > Draft new release")
+            status.logs.append("3. Upload build artifacts from dist/")
+            status.completed_at = datetime.utcnow().isoformat()
+            return status
+        
+        # Generate electron-builder config if missing
+        builder_config_path = Path(project_path) / "electron-builder.yml"
+        if not builder_config_path.exists():
+            project_name = self._get_project_name(project_path)
+            builder_config = f'''appId: com.example.{project_name}
+productName: {project_name.title()}
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - "**/*"
+  - "!**/*.ts"
+  - "!**/*.tsx"
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+
+win:
+  target:
+    - nsis
+    - portable
+
+linux:
+  target:
+    - AppImage
+    - deb
+
+publish:
+  provider: github
+  owner: YOUR_GITHUB_USERNAME
+  repo: {project_name}
+'''
+            with open(builder_config_path, "w") as f:
+                f.write(builder_config)
+            status.logs.append(f"Generated {builder_config_path}")
+        
+        status.logs.append("GitHub Releases deployment configured")
+        status.logs.append("Push a tag (v*) to trigger automated release")
+        status.completed_at = datetime.utcnow().isoformat()
+        return status

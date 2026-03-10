@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import projects_router, agents_router, costs_router, health_router
+from api.routes import revisions_router
 from models import engine, Base
 
 
@@ -43,6 +44,7 @@ app.include_router(health_router)
 app.include_router(projects_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(costs_router, prefix="/api")
+app.include_router(revisions_router)  # Already has /api prefix in router
 
 
 @app.get("/")

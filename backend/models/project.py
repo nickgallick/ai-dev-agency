@@ -11,8 +11,25 @@ from .database import Base
 
 class ProjectType(str, enum.Enum):
     """Supported project types."""
+    # Web projects
     WEB_SIMPLE = "web_simple"
     WEB_COMPLEX = "web_complex"
+    
+    # Mobile projects
+    MOBILE_NATIVE_IOS = "mobile_native_ios"         # Swift/SwiftUI apps
+    MOBILE_CROSS_PLATFORM = "mobile_cross_platform" # React Native (Expo) or Flutter
+    MOBILE_PWA = "mobile_pwa"                       # Progressive Web Apps
+    
+    # Desktop projects
+    DESKTOP_APP = "desktop_app"                     # Electron, Tauri, or PyQt
+    
+    # Browser extensions
+    CHROME_EXTENSION = "chrome_extension"           # Chrome extensions (manifest v3)
+    
+    # CLI and API projects
+    CLI_TOOL = "cli_tool"                           # Python Click/Typer or Node Commander
+    PYTHON_API = "python_api"                       # FastAPI or Flask REST APIs
+    PYTHON_SAAS = "python_saas"                     # Full-stack Python SaaS
 
 
 class ProjectStatus(str, enum.Enum):
@@ -73,6 +90,7 @@ class Project(Base):
     agent_outputs = Column(JSONB, default=dict)
     project_metadata = Column(JSONB, default=dict)  # For reference_urls, tech_stack, etc.
     revision_history = Column(JSONB, default=list)  # For project versioning
+    cost_breakdown = Column(JSONB, default=dict)    # Per-agent cost breakdown
     
     # Relationships
     agent_logs = relationship("AgentLog", back_populates="project", cascade="all, delete-orphan")

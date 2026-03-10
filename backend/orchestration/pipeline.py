@@ -14,7 +14,9 @@ from agents.qa_testing import QATestingAgent
 from agents.deployment import DeploymentAgent
 from agents.analytics_monitoring import AnalyticsMonitoringAgent
 from agents.coding_standards import CodingStandardsAgent
+from agents.revision_handler import RevisionHandlerAgent
 from config.settings import Settings
+from utils.cost_optimizer import get_cost_optimizer, CostProfile
 
 
 class NodeStatus(Enum):
@@ -55,6 +57,70 @@ class PipelineConfig:
     timeout_per_node: int = 600
     continue_on_failure: bool = True
     skip_on_dependency_failure: bool = True
+    cost_profile: str = "balanced"
+    revision_mode: bool = False
+    revision_scope: str = "medium_feature"  # small_tweak, medium_feature, major_addition
+    project_type: str = "web_simple"
+    cost_alert_threshold: float = 50.0
+
+
+# Project type configurations
+PROJECT_TYPE_CONFIGS = {
+    # Web projects - full pipeline
+    "web_simple": {
+        "skip_agents": [],
+        "required_agents": ["intake", "code_generation", "deployment"],
+    },
+    "web_complex": {
+        "skip_agents": [],
+        "required_agents": ["intake", "architect", "code_generation", "security", "deployment"],
+    },
+    # Mobile projects - skip web-specific agents
+    "mobile_native_ios": {
+        "skip_agents": ["seo"],  # SEO not relevant for native apps
+        "required_agents": ["intake", "architect", "code_generation", "security", "deployment"],
+    },
+    "mobile_cross_platform": {
+        "skip_agents": ["seo"],
+        "required_agents": ["intake", "architect", "code_generation", "security", "deployment"],
+    },
+    "mobile_pwa": {
+        "skip_agents": [],  # PWA benefits from SEO
+        "required_agents": ["intake", "code_generation", "seo", "deployment"],
+    },
+    # Desktop apps
+    "desktop_app": {
+        "skip_agents": ["seo"],
+        "required_agents": ["intake", "architect", "code_generation", "security", "deployment"],
+    },
+    # Chrome extensions
+    "chrome_extension": {
+        "skip_agents": ["seo"],
+        "required_agents": ["intake", "code_generation", "security", "deployment"],
+    },
+    # CLI tools
+    "cli_tool": {
+        "skip_agents": ["seo", "accessibility", "design_system"],
+        "required_agents": ["intake", "code_generation", "deployment"],
+    },
+    # Python projects
+    "python_api": {
+        "skip_agents": ["seo", "accessibility", "design_system"],
+        "required_agents": ["intake", "architect", "code_generation", "security", "deployment"],
+    },
+    "python_saas": {
+        "skip_agents": [],
+        "required_agents": ["intake", "architect", "code_generation", "security", "deployment"],
+    },
+}
+
+
+# Revision scope agent mapping
+REVISION_AGENT_MAPPING = {
+    "small_tweak": ["code_generation"],
+    "medium_feature": ["architect", "code_generation", "qa"],
+    "major_addition": ["intake", "architect", "design_system", "code_generation", "security", "qa", "deployment"],
+}
 
 
 class Pipeline:
@@ -70,7 +136,69 @@ class Pipeline:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.nodes: Dict[str, PipelineNode] = {}
         self.context: Dict[str, Any] = {}
+        self.cost_optimizer = get_cost_optimizer()
+        self.total_cost: float = 0.0
+        self.cost_breakdown: Dict[str, float] = {}
         self._setup_default_pipeline()
+    
+    def configure_for_project_type(self, project_type: str) -> None:
+        """Configure pipeline for a specific project type."""
+        self.config.project_type = project_type
+        type_config = PROJECT_TYPE_CONFIGS.get(project_type, PROJECT_TYPE_CONFIGS["web_simple"])
+        
+        # Skip agents that aren't relevant for this project type
+        for agent_id in type_config.get("skip_agents", []):
+            if agent_id in self.nodes:
+                self.nodes[agent_id].status = NodeStatus.SKIPPED
+                self.logger.info(f"Skipping {agent_id} for project type {project_type}")
+    
+    def configure_for_revision(self, revision_scope: str) -> None:
+        """Configure pipeline for revision mode."""
+        self.config.revision_mode = True
+        self.config.revision_scope = revision_scope
+        
+        # Get agents needed for this revision scope
+        needed_agents = REVISION_AGENT_MAPPING.get(revision_scope, ["code_generation"])
+        
+        # Skip agents not needed for this revision
+        for node_id, node in self.nodes.items():
+            if node_id not in needed_agents:
+                node.status = NodeStatus.SKIPPED
+                self.logger.info(f"Skipping {node_id} for revision scope {revision_scope}")
+    
+    def get_cost_estimate(self) -> Dict[str, Any]:
+        """Get cost estimate for the pipeline execution."""
+        estimate = self.cost_optimizer.estimate_project_cost(
+            project_type=self.config.project_type,
+            cost_profile=CostProfile(self.config.cost_profile),
+            complexity_score=5,  # Default complexity
+        )
+        
+        return {
+            "min_cost": estimate.min_cost,
+            "max_cost": estimate.max_cost,
+            "expected_cost": estimate.expected_cost,
+            "breakdown": estimate.breakdown,
+            "confidence": estimate.confidence,
+        }
+    
+    def track_agent_cost(self, agent_name: str, cost: float) -> None:
+        """Track cost for an agent execution."""
+        self.total_cost += cost
+        self.cost_breakdown[agent_name] = self.cost_breakdown.get(agent_name, 0) + cost
+        
+        # Check for cost alerts
+        alert = self.cost_optimizer.check_cost_alert(
+            project_id=self.context.get("project_id", "unknown"),
+            current_cost=self.total_cost,
+            budget_limit=self.config.cost_alert_threshold,
+        )
+        
+        if alert:
+            self.logger.warning(
+                f"Cost alert: Project {alert.project_id} at ${alert.current_cost:.2f} "
+                f"({alert.percentage:.0f}% of ${alert.threshold:.2f} threshold)"
+            )
 
     def _setup_default_pipeline(self) -> None:
         """Setup the default pipeline with all agents."""
@@ -154,6 +282,15 @@ class Pipeline:
             agent_class=CodingStandardsAgent,
             dependencies=["deployment"],
             parallel_group="phase6",
+        ))
+        
+        # Revision Handler (only activated in revision mode)
+        self.add_node(PipelineNode(
+            id="revision_handler",
+            name="Revision Handler",
+            agent_class=RevisionHandlerAgent,
+            dependencies=[],  # Entry point for revisions
+            status=NodeStatus.SKIPPED,  # Skipped by default, enabled in revision mode
         ))
 
     def add_node(self, node: PipelineNode) -> None:
@@ -421,6 +558,16 @@ class Pipeline:
                     1 for n in self.nodes.values()
                     if n.status == NodeStatus.SKIPPED
                 ),
+            },
+            "cost": {
+                "total": round(self.total_cost, 4),
+                "breakdown": self.cost_breakdown,
+                "profile": self.config.cost_profile,
+            },
+            "config": {
+                "project_type": self.config.project_type,
+                "revision_mode": self.config.revision_mode,
+                "revision_scope": self.config.revision_scope if self.config.revision_mode else None,
             },
         }
 

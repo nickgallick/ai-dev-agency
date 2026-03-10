@@ -26,6 +26,9 @@ from .deployment import DeploymentAgent
 from .analytics_monitoring import AnalyticsMonitoringAgent
 from .coding_standards import CodingStandardsAgent
 
+# Phase 7: Revision Handler
+from .revision_handler import RevisionHandlerAgent
+
 __all__ = [
     # Base
     "BaseAgent",
@@ -49,4 +52,6 @@ __all__ = [
     # Phase 6
     "AnalyticsMonitoringAgent",
     "CodingStandardsAgent",
+    # Phase 7
+    "RevisionHandlerAgent",
 ]

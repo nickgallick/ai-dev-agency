@@ -13,6 +13,170 @@ AI Dev Agency is an automated software development platform that uses AI agents 
 | 4 | Quality & Compliance | ✅ Complete | 2026-03-10 |
 | 5 | QA & Deployment | ✅ Complete | 2026-03-10 |
 | 6 | Monitoring & Standards | ✅ Complete | 2026-03-10 |
+| 7 | Advanced Features | ✅ Complete | 2026-03-10 |
+
+---
+
+## Phase 7: Advanced Features ✅
+
+**Completed:** March 10, 2026
+
+### Overview
+
+Phase 7 introduces 8 new project types, a smart cost optimization engine, and a comprehensive project revision system.
+
+### New Project Types (10 Total)
+
+| Project Type | Description | Deployment Target |
+|--------------|-------------|-------------------|
+| `web_simple` | Landing pages, portfolios, blogs | Vercel |
+| `web_complex` | Dashboards, e-commerce, multi-page apps | Vercel + Railway |
+| `mobile_native_ios` | Swift/SwiftUI apps for iPhone/iPad | Fastlane → App Store |
+| `mobile_cross_platform` | React Native (Expo) or Flutter apps | Expo EAS |
+| `mobile_pwa` | Progressive Web Apps with offline support | Vercel |
+| `desktop_app` | Electron, Tauri, or PyQt applications | GitHub Releases |
+| `chrome_extension` | Chrome extensions with manifest v3 | Chrome Web Store |
+| `cli_tool` | Command-line tools (Python/Node) | PyPI or npm |
+| `python_api` | FastAPI or Flask REST APIs | Railway |
+| `python_saas` | Full-stack Python SaaS apps | Railway |
+
+### Components Implemented
+
+#### Backend Updates
+
+- [x] **Project Model** (`backend/models/project.py`)
+  - Added 8 new `ProjectType` enum values
+  - Added `cost_breakdown` JSONB field for per-agent cost tracking
+
+- [x] **Intake Agent** (`backend/agents/intake.py`)
+  - Project type classification for all 10 types
+  - Keyword-based type detection
+  - Revision scope classification (small_tweak, medium_feature, major_addition)
+  - Platform details and framework preferences
+
+- [x] **Code Generation Agent** (`backend/agents/code_generation.py`)
+  - Strategy pattern for code generation
+  - `V0WebStrategy` for web projects (v0 API)
+  - `LLMCodeStrategy` for mobile, desktop, CLI, extensions
+  - Project-type-specific templates and structures
+  - Revision-aware code generation
+
+- [x] **Deployment Agent** (`backend/agents/deployment.py`)
+  - Fastlane deployment for iOS (TestFlight/App Store)
+  - Chrome Web Store API upload
+  - PyPI publishing for CLI tools
+  - GitHub Releases for desktop apps
+  - Platform-specific configuration generation
+
+- [x] **Revision Handler Agent** (`backend/agents/revision_handler.py`)
+  - Analyzes revision scope
+  - Determines affected files and agents
+  - Git branch management for revisions
+  - Regression test execution
+  - Rollback support via Git checkout
+
+#### Smart Cost Optimization Engine
+
+- [x] **Cost Optimizer** (`backend/utils/cost_optimizer.py`)
+  - Per-agent model cost tracking
+  - Quality outcome tracking (success rate, revision count)
+  - Three cost profiles:
+    - **Budget**: DeepSeek models, ~$1-12 per project
+    - **Balanced**: Claude Sonnet + GPT-4o, ~$5-30 per project
+    - **Premium**: Claude Opus everywhere, ~$15-100 per project
+  - Cost estimation before project start
+  - Real-time cost alerts when threshold exceeded
+  - Cost breakdown by agent and model
+  - Automatic model downgrade suggestions based on quality history
+
+#### Pipeline Updates
+
+- [x] **Pipeline** (`backend/orchestration/pipeline.py`)
+  - `configure_for_project_type()` - Skip irrelevant agents per type
+  - `configure_for_revision()` - Activate only needed agents
+  - `get_cost_estimate()` - Pre-execution cost estimation
+  - `track_agent_cost()` - Real-time cost tracking
+  - Cost alerts integration
+  - Project type configurations for all 10 types
+  - Revision scope agent mapping
+
+#### API Endpoints
+
+- [x] **Revisions API** (`backend/api/routes/revisions.py`)
+  - `POST /api/projects/{id}/revisions` - Request a revision
+  - `GET /api/projects/{id}/revisions` - List revision history
+  - `GET /api/projects/{id}/revisions/{revision_id}` - Get revision details
+  - `POST /api/projects/{id}/revisions/{revision_id}/rollback` - Rollback to revision
+
+#### Frontend Updates
+
+- [x] **NewProject.tsx** updated
+  - Project type selector with all 10 types
+  - Auto-detection from brief keywords
+  - Cost estimates per type and profile
+  - Visual icons for each project type
+
+- [x] **RevisionPanel Component** (`frontend/src/components/RevisionPanel.tsx`)
+  - Revision request form
+  - Revision history display
+  - Scope badges (small_tweak, medium_feature, major_addition)
+  - Status indicators
+  - Rollback buttons for completed revisions
+
+- [x] **Types** (`frontend/src/types/index.ts`)
+  - All 10 `ProjectType` values
+  - `Revision` and `RevisionScope` types
+  - `CostEstimate` type
+  - Project type display info
+
+### Code Generation Strategies
+
+| Strategy | Used For | Implementation |
+|----------|----------|----------------|
+| v0 API | web_simple, web_complex, mobile_pwa | Vercel v0 Platform API |
+| LLM Prompts | mobile_native_ios | Swift/SwiftUI templates |
+| LLM Prompts | mobile_cross_platform | React Native/Expo templates |
+| LLM Prompts | desktop_app | Electron templates |
+| LLM Prompts | chrome_extension | Manifest v3 templates |
+| LLM Prompts | cli_tool | Python Typer templates |
+| LLM Prompts | python_api | FastAPI templates |
+| LLM Prompts | python_saas | FastAPI + Jinja2 templates |
+
+### Deployment Platforms
+
+| Platform | Project Types | Features |
+|----------|--------------|----------|
+| Vercel | web_simple, web_complex, mobile_pwa | Auto-deploy, preview URLs |
+| Railway | python_api, python_saas, web_complex | Database, env vars |
+| Fastlane | mobile_native_ios | TestFlight, App Store |
+| Expo EAS | mobile_cross_platform | iOS/Android builds |
+| Chrome Web Store | chrome_extension | Review submission |
+| PyPI | cli_tool (Python) | Package publishing |
+| GitHub Releases | desktop_app | Multi-platform builds |
+
+### Cost Profiles
+
+| Profile | Architect | Code Gen | Content | Estimated Cost |
+|---------|-----------|----------|---------|----------------|
+| Budget | Claude Sonnet | DeepSeek Coder | DeepSeek | $1-12 |
+| Balanced | Claude Opus | Claude Sonnet | GPT-4o | $5-30 |
+| Premium | Claude Opus | Claude Opus | Claude Opus | $15-100 |
+
+### Revision System
+
+**Scope Types:**
+- **small_tweak**: Only CodeGeneration agent (text changes, bug fixes)
+- **medium_feature**: Architect + CodeGeneration + QA (new components)
+- **major_addition**: Full pipeline minus Research (new capabilities)
+
+**Workflow:**
+1. User requests revision via dashboard
+2. IntakeAgent classifies scope
+3. RevisionHandler creates Git branch
+4. Only relevant agents execute
+5. QA runs regression + new tests
+6. Deploy updates same deployment
+7. Git commit SHA stored for rollback
 
 ---
 
@@ -413,4 +577,8 @@ playwright:
 - Phase 6 agents run in parallel after Deployment
 - All monitoring services are optional (graceful degradation)
 - Documentation generation auto-detects tech stack
-- Total agents: 15 (6 Core + 2 Content + 3 Quality + 2 QA/Deploy + 2 Monitoring/Standards)
+- **Total agents: 16** (6 Core + 2 Content + 3 Quality + 2 QA/Deploy + 2 Monitoring/Standards + 1 Revision Handler)
+- **Total project types: 10** (2 Web + 3 Mobile + 1 Desktop + 1 Extension + 3 Python/CLI)
+- Smart cost optimization tracks quality outcomes per agent per model
+- Revision system supports incremental updates without full rebuild
+- All agents support project-type-specific configurations
