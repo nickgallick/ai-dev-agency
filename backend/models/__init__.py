@@ -24,3 +24,6 @@ __all__ = [
     "QAFailurePattern",
     "CostAccuracyTracking",
 ]
+
+# Note: Auth models (User, RefreshToken) are in backend/auth/models.py
+# and imported separately via the auth module

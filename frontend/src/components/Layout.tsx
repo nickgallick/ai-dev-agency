@@ -1,7 +1,8 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { Home, PlusCircle, FolderOpen, Settings, Activity, DollarSign, Menu, X } from 'lucide-react'
+import { Home, PlusCircle, FolderOpen, Settings, Activity, DollarSign, Menu, X, LogOut, User } from 'lucide-react'
 import { useState } from 'react'
 import { clsx } from 'clsx'
+import { useAuth } from '@/contexts/AuthContext'
 
 const navItems = [
   { path: '/', icon: Home, label: 'Home' },
@@ -18,6 +19,11 @@ const secondaryNav = [
 export default function Layout() {
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { user, logout } = useAuth()
+
+  const handleLogout = async () => {
+    await logout()
+  }
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
@@ -67,6 +73,30 @@ export default function Layout() {
             ))}
           </div>
         </nav>
+        
+        {/* User Info & Logout */}
+        <div className="p-3 border-t border-border-subtle">
+          <div className="flex items-center gap-3 px-3 py-2">
+            <div className="w-8 h-8 rounded-full bg-accent-primary/20 flex items-center justify-center">
+              <User className="w-4 h-4 text-accent-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-text-primary truncate">
+                {user?.name || 'Admin'}
+              </p>
+              <p className="text-xs text-text-tertiary truncate">
+                {user?.email}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg text-sm font-medium text-text-secondary hover:bg-background-tertiary hover:text-accent-error transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            Sign Out
+          </button>
+        </div>
       </aside>
 
       {/* Mobile Header */}
@@ -104,6 +134,30 @@ export default function Layout() {
                 {item.label}
               </NavLink>
             ))}
+            
+            {/* Mobile User Info & Logout */}
+            <div className="pt-3 mt-3 border-t border-border-subtle">
+              <div className="flex items-center gap-3 px-3 py-2">
+                <div className="w-8 h-8 rounded-full bg-accent-primary/20 flex items-center justify-center">
+                  <User className="w-4 h-4 text-accent-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-primary truncate">
+                    {user?.name || 'Admin'}
+                  </p>
+                  <p className="text-xs text-text-tertiary truncate">
+                    {user?.email}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-base font-medium text-text-secondary hover:text-accent-error"
+              >
+                <LogOut className="w-5 h-5" />
+                Sign Out
+              </button>
+            </div>
           </nav>
         </div>
       )}
