@@ -1,7 +1,15 @@
-"""Analytics & Monitoring Setup Agent - Comprehensive monitoring and analytics configuration."""
+"""Analytics & Monitoring Setup Agent - Comprehensive monitoring and analytics configuration.
+
+Phase 11E Enhancement:
+- Deployment-aware setup (Vercel, Railway, Cloudflare)
+- Integration monitoring (Stripe webhooks, auth failures, email delivery, R2 usage)
+- Theme-aware analytics (track theme preference)
+- Write monitoring config to KB
+"""
 
 import asyncio
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -11,6 +19,15 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from .base import AgentResult, BaseAgent
+
+# Import knowledge base
+try:
+    from ..knowledge import store_knowledge, KnowledgeEntryType
+    KB_AVAILABLE = True
+except ImportError:
+    KB_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -73,16 +90,46 @@ class MonitoringReport:
 
 
 class AnalyticsMonitoringAgent(BaseAgent):
-    """Agent for setting up analytics and monitoring services."""
+    """Agent for setting up analytics and monitoring services.
+    
+    Phase 11E: Enhanced with integration monitoring and theme tracking.
+    """
 
     # API endpoints
     PLAUSIBLE_API = "https://plausible.io/api/v1"
     SENTRY_API = "https://sentry.io/api/0"
     UPTIMEROBOT_API = "https://api.uptimerobot.com/v2"
+    
+    # Integration monitoring events
+    INTEGRATION_EVENTS = {
+        "stripe": ["payment_succeeded", "payment_failed", "webhook_error", "subscription_created"],
+        "resend": ["email_sent", "email_failed", "bounce", "complaint"],
+        "supabase": ["auth_success", "auth_failure", "db_error"],
+        "r2": ["upload_success", "upload_failed", "storage_quota"],
+    }
 
     @property
     def name(self) -> str:
         return "Analytics & Monitoring Agent"
+    
+    async def _write_to_kb(self, report: 'MonitoringReport', project_type: str):
+        """Write monitoring config to KB."""
+        if not KB_AVAILABLE:
+            return
+        
+        try:
+            await store_knowledge(
+                entry_type=KnowledgeEntryType.CODE_PATTERN,
+                content=f"Monitoring setup: {report.total_configured}/{report.total_available} services",
+                metadata={
+                    "project_type": project_type,
+                    "services": [s.name for s in report.services if s.configured],
+                    "lighthouse_ci": report.lighthouse_ci_configured,
+                    "agent": "analytics_monitoring",
+                },
+            )
+        except Exception as e:
+            logger.warning(f"KB write failed: {e}")
 
     async def execute(
         self,
@@ -90,6 +137,8 @@ class AnalyticsMonitoringAgent(BaseAgent):
         project_name: str,
         site_url: Optional[str] = None,
         project_type: str = "web",
+        requirements: Optional[Dict[str, Any]] = None,
+        deployment_platform: Optional[str] = None,
         **kwargs
     ) -> AgentResult:
         """
@@ -165,9 +214,31 @@ class AnalyticsMonitoringAgent(BaseAgent):
             report.total_available = len(report.services)
             report.total_configured = sum(1 for s in report.services if s.configured)
             
+            # Setup integration monitoring (Phase 11E)
+            requirements = requirements or {}
+            integrations = self._extract_integrations(requirements)
+            if integrations:
+                await self._setup_integration_monitoring(
+                    project_path, integrations, report
+                )
+            
+            # Setup theme tracking (Phase 11E)
+            color_scheme = requirements.get("color_scheme", "dark")
+            if color_scheme in ["both", "system"]:
+                await self._setup_theme_tracking(project_path, report)
+            
+            # Setup deployment-platform-specific monitoring
+            if deployment_platform:
+                await self._setup_platform_monitoring(
+                    project_path, deployment_platform, site_url, report
+                )
+            
             # Save report to file
             report_path = Path(project_path) / "monitoring_report.json"
             self.write_file(str(report_path), json.dumps(report.to_dict(), indent=2))
+            
+            # Write to KB
+            await self._write_to_kb(report, project_type)
             
             execution_time = time.time() - start_time
             
@@ -180,19 +251,164 @@ class AnalyticsMonitoringAgent(BaseAgent):
                         "configured": report.total_configured,
                         "available": report.total_available,
                         "lighthouse_ci": report.lighthouse_ci_configured,
+                        "integrations_monitored": integrations,
                     },
                 },
                 warnings=report.warnings,
                 execution_time=execution_time,
             )
+    
+    def _extract_integrations(self, requirements: Dict[str, Any]) -> List[str]:
+        """Extract integrations from requirements."""
+        integrations = []
+        
+        for integration in requirements.get("integrations", []):
+            int_lower = integration.lower()
+            if "stripe" in int_lower:
+                integrations.append("stripe")
+            if "resend" in int_lower:
+                integrations.append("resend")
+            if "supabase" in int_lower:
+                integrations.append("supabase")
+            if "r2" in int_lower:
+                integrations.append("r2")
+        
+        return list(set(integrations))
+    
+    async def _setup_integration_monitoring(
+        self,
+        project_path: str,
+        integrations: List[str],
+        report: MonitoringReport
+    ) -> None:
+        """Setup monitoring for specific integrations."""
+        path = Path(project_path)
+        
+        monitoring_config = {
+            "integrations": {},
+            "alerts": [],
+        }
+        
+        for integration in integrations:
+            events = self.INTEGRATION_EVENTS.get(integration, [])
+            monitoring_config["integrations"][integration] = {
+                "events": events,
+                "alert_on_failure": True,
+            }
             
-        except Exception as e:
-            self.logger.error(f"Monitoring setup failed: {e}")
-            return AgentResult(
-                success=False,
-                agent_name=self.name,
-                errors=[str(e)],
-                execution_time=time.time() - start_time,
+            # Add alerts for critical events
+            if integration == "stripe":
+                monitoring_config["alerts"].append({
+                    "name": f"{integration}_payment_failed",
+                    "event": "payment_failed",
+                    "threshold": 3,
+                    "window": "1h",
+                    "severity": "critical",
+                })
+                monitoring_config["alerts"].append({
+                    "name": f"{integration}_webhook_error",
+                    "event": "webhook_error",
+                    "threshold": 1,
+                    "window": "5m",
+                    "severity": "critical",
+                })
+            
+            if integration == "supabase":
+                monitoring_config["alerts"].append({
+                    "name": f"{integration}_auth_failure_spike",
+                    "event": "auth_failure",
+                    "threshold": 10,
+                    "window": "5m",
+                    "severity": "warning",
+                })
+        
+        # Write monitoring config
+        config_path = path / "monitoring" / "integrations.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(str(config_path), json.dumps(monitoring_config, indent=2))
+    
+    async def _setup_theme_tracking(
+        self,
+        project_path: str,
+        report: MonitoringReport
+    ) -> None:
+        """Setup theme preference tracking."""
+        path = Path(project_path)
+        
+        # Generate theme tracking snippet
+        theme_tracking_code = '''// Theme Preference Tracking
+export function trackThemeChange(theme: 'light' | 'dark') {
+  // For Plausible
+  if (typeof window !== 'undefined' && window.plausible) {
+    window.plausible('Theme Change', { props: { theme } });
+  }
+  
+  // For GA4
+  if (typeof window !== 'undefined' && window.gtag) {
+    window.gtag('event', 'theme_change', {
+      theme_preference: theme,
+    });
+  }
+}
+
+// Track initial theme on load
+export function trackInitialTheme() {
+  const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+  trackThemeChange(theme);
+}
+'''
+        
+        tracking_path = path / "src" / "lib" / "theme-tracking.ts"
+        tracking_path.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(str(tracking_path), theme_tracking_code)
+        
+        report.warnings.append("Theme tracking code generated - integrate with ThemeProvider")
+    
+    async def _setup_platform_monitoring(
+        self,
+        project_path: str,
+        platform: str,
+        site_url: Optional[str],
+        report: MonitoringReport
+    ) -> None:
+        """Setup platform-specific monitoring."""
+        path = Path(project_path)
+        
+        if platform.lower() == "vercel":
+            # Vercel Analytics setup
+            vercel_config = {
+                "analytics": True,
+                "speedInsights": True,
+            }
+            self.write_file(
+                str(path / "vercel-monitoring.json"),
+                json.dumps(vercel_config, indent=2)
+            )
+            report.warnings.append("Enable Vercel Analytics in dashboard for full monitoring")
+        
+        elif platform.lower() == "railway":
+            # Railway monitoring setup
+            railway_config = {
+                "healthcheck": {
+                    "path": "/api/health",
+                    "interval": 30,
+                },
+                "metrics": True,
+            }
+            self.write_file(
+                str(path / "railway-monitoring.json"),
+                json.dumps(railway_config, indent=2)
+            )
+        
+        elif platform.lower() == "cloudflare":
+            # Cloudflare monitoring
+            cf_config = {
+                "workers_analytics": True,
+                "web_analytics": True,
+            }
+            self.write_file(
+                str(path / "cloudflare-monitoring.json"),
+                json.dumps(cf_config, indent=2)
             )
 
     async def _setup_plausible(

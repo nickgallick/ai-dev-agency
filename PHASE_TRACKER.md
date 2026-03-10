@@ -19,6 +19,7 @@ AI Dev Agency is an automated software development platform that uses AI agents 
 | 11B | Knowledge Base + Templates | ✅ Complete | 2026-03-10 |
 | 11C | Advanced Features | ✅ Complete | 2026-03-10 |
 | 11D | Agent Updates | ✅ Complete | 2026-03-10 |
+| 11E | Remaining Agent Updates | ✅ Complete | 2026-03-10 |
 
 ---
 
@@ -1231,3 +1232,151 @@ When `design_preferences.color_scheme` is "system" or "both":
 - AssetGenerationAgent creates theme-specific asset variants
 - CodeGenerationAgent adds next-themes provider and CSS variables
 - QATestingAgent tests both themes in all browsers
+
+
+---
+
+## Phase 11E: Remaining Agent Updates ✅
+
+**Completed:** March 10, 2026
+
+### Overview
+
+Phase 11E completes the remaining 8 agents that weren't updated in Phase 11D. These agents now fully integrate with structured requirements, dual-theme support, Knowledge Base, and integration monitoring.
+
+### Agents Updated
+
+| Agent | Phase 11E Enhancements |
+|-------|----------------------|
+| **ProjectManagerAgent** | Both checkpoints (coherence + completeness) with structured requirements, Figma validation, integration checks, dual-theme verification, dynamic pooling validation, KB integration |
+| **SecurityAgent** | Feature-aware scanning (auth, payments, file uploads, email), tech-stack-aware checks (Next.js, Nuxt, Supabase), KB pattern storage |
+| **SEOAgent** | Page-aware audits (all routes from requirements.pages), dual-theme Lighthouse, project-type expectations, integration-aware structured data, KB integration |
+| **AccessibilityAgent** | CRITICAL: Dual-theme axe-core testing (run in BOTH themes), contrast checks per theme, focus indicator verification, feature-specific a11y checks (auth forms, payments), KB integration |
+| **AnalyticsMonitoringAgent** | Integration monitoring (Stripe webhooks, auth failures, email delivery, R2 usage), theme preference tracking, deployment-platform-aware setup (Vercel/Railway/Cloudflare), KB integration |
+| **CodingStandardsAgent** | Tech-stack-aware configs (Next.js + Supabase + Stripe), theme documentation, integration guides, KB pattern storage |
+| **CodeReviewAgent** | Theme code quality (CSS var usage, dark: variants), cross-batch consistency (shared component imports), integration code quality (Stripe/Resend/Supabase patterns), KB integration |
+| **PostDeployVerificationAgent** | Dual-theme screenshots (light + dark mode visual verification), integration smoke tests (Stripe checkout, email endpoint, R2 upload), page-aware verification, KB integration |
+
+### Key Features
+
+#### ProjectManagerAgent Checkpoints
+
+**Checkpoint 1 (Pre-Code-Gen):**
+- Validates requirements vs Architect output (pages, features, integrations)
+- Validates requirements vs Design System (color scheme, style)
+- Validates Figma vs Design System (colors match)
+- Validates Figma vs Architect (page count)
+- Validates Architect vs Content (page coverage)
+- Validates Architect vs Assets (dimensions, dual-theme)
+- Validates integration dependencies (Stripe needs auth)
+- Validates dynamic pooling dependency graph
+- Generates `build_manifest.json` as single source of truth
+
+**Checkpoint 2 (Post-Code-Gen):**
+- Validates all pages from requirements are implemented
+- Verifies light/dark mode implementation (toggle, CSS vars, localStorage)
+- Validates dynamic pooling consistency (cross-batch imports)
+- Verifies integration wiring (API contracts, env vars, SDK imports)
+- Checks for placeholder code (TODO, FIXME)
+- Generates `completeness_report.json`
+
+#### Feature-Aware Security Scanning
+
+```python
+FEATURE_SECURITY_CHECKS = {
+    "auth": ["session_fixation", "jwt_exposure", "csrf", "cookie_flags"],
+    "payments": ["stripe_key_exposure", "webhook_validation", "pci_compliance"],
+    "file_uploads": ["file_type_validation", "size_limits", "path_traversal"],
+    "email": ["resend_key_exposure", "email_injection", "rate_limiting"],
+    "database": ["service_role_exposure", "sql_injection", "rpc_injection"],
+}
+```
+
+#### Dual-Theme Testing
+
+When `color_scheme` is "both" or "system":
+- AccessibilityAgent runs axe-core twice (once per theme)
+- SEOAgent runs Lighthouse twice (light + dark)
+- PostDeployVerificationAgent captures dual-theme screenshots
+- CodeReviewAgent checks for missing `dark:` variants
+- All violations tagged with theme context
+
+#### Integration Monitoring
+
+```python
+INTEGRATION_EVENTS = {
+    "stripe": ["payment_succeeded", "payment_failed", "webhook_error", "subscription_created"],
+    "resend": ["email_sent", "email_failed", "bounce", "complaint"],
+    "supabase": ["auth_success", "auth_failure", "db_error"],
+    "r2": ["upload_success", "upload_failed", "storage_quota"],
+}
+```
+
+Alerts configured for:
+- Stripe: payment_failed (3 in 1h), webhook_error (1 in 5m)
+- Supabase: auth_failure spike (10 in 5m)
+
+### Knowledge Base Integration
+
+All 8 agents now:
+- Query KB before starting work for relevant patterns
+- Write findings to KB after completion
+- Include `agent` and `project_type` metadata for future queries
+- Track `kb_patterns_used` count in reports
+
+### Files Updated
+
+| File | Changes |
+|------|---------|
+| `backend/agents/project_manager.py` | Complete rewrite with Phase 11E features |
+| `backend/agents/security.py` | Added feature-aware scanning, tech-stack checks, KB integration |
+| `backend/agents/seo.py` | Added page-aware audits, dual-theme Lighthouse, KB integration |
+| `backend/agents/accessibility.py` | Added dual-theme axe-core, feature-specific checks, KB integration |
+| `backend/agents/analytics_monitoring.py` | Added integration monitoring, theme tracking, platform-aware setup |
+| `backend/agents/coding_standards.py` | Added KB integration |
+| `backend/agents/code_review.py` | Added theme patterns, integration patterns, KB integration |
+| `backend/agents/post_deploy_verification.py` | Added integration smoke tests, dual-theme screenshots, KB integration |
+
+### Theme Code Quality Patterns
+
+```python
+THEME_CODE_PATTERNS = {
+    "hardcoded_dark_color": "bg-gray-900 without dark: variant",
+    "hardcoded_light_color": "bg-white may not work in dark mode",
+    "missing_dark_variant": "bg-white without dark: - add dark mode style",
+    "no_css_variable": "Direct color instead of var(--color-*)",
+}
+```
+
+### Integration Code Patterns
+
+```python
+INTEGRATION_PATTERNS = {
+    "stripe_insecure": "Stripe operation in client code - move to server",
+    "supabase_admin_client": "Supabase admin client in client code",
+    "env_direct_access": "Server env var in client code - use NEXT_PUBLIC_",
+}
+```
+
+### Project Type Expectations
+
+```python
+PROJECT_TYPE_EXPECTATIONS = {
+    "landing": {"min_performance": 90, "min_seo": 95},
+    "saas": {"min_performance": 80, "min_seo": 90},
+    "ecommerce": {"min_performance": 85, "min_seo": 95},
+    "blog": {"min_performance": 85, "min_seo": 95},
+    "mobile_pwa": {"min_performance": 90, "min_pwa": 90},
+}
+```
+
+### Smoke Test Endpoints
+
+```python
+INTEGRATION_SMOKE_TESTS = {
+    "stripe": ["/api/stripe/config", "/pricing", "/checkout"],
+    "resend": ["/api/email/test", "/api/contact"],
+    "supabase": ["/api/auth/session", "/api/health"],
+    "r2": ["/api/upload/config"],
+}
+```

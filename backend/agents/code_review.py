@@ -1,5 +1,11 @@
 """Code Review Agent - Automated code quality checks.
 
+Phase 11E Enhancement:
+- Theme code quality (CSS var usage, no hardcoded theme colors)
+- Cross-batch consistency (shared component imports, naming patterns)
+- Integration code quality (Stripe/Resend/Supabase patterns)
+- KB integration for pattern learning
+
 Checks for:
 - Code smells: duplication, god components, prop drilling
 - TypeScript strictness (no 'any' types)
@@ -14,13 +20,23 @@ Uses Claude Sonnet 4 model.
 """
 
 import json
+import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 
 from .base import BaseAgent, AgentResult
+
+# Import knowledge base
+try:
+    from ..knowledge import query_knowledge, store_knowledge, KnowledgeEntryType
+    KB_AVAILABLE = True
+except ImportError:
+    KB_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -156,6 +172,56 @@ DESIGN_SYSTEM_PATTERNS = {
     },
 }
 
+# Phase 11E: Theme-specific patterns
+THEME_CODE_PATTERNS = {
+    "hardcoded_dark_color": {
+        "pattern": r"(?:bg|text|border)-(?:gray|slate|zinc)-(?:[7-9]00|950)",
+        "message": "Hardcoded dark theme color - use dark: variant for theme support",
+        "severity": "medium",
+        "auto_fix": False,
+    },
+    "hardcoded_light_color": {
+        "pattern": r"(?:bg|text|border)-(?:white|gray-50|slate-50)",
+        "message": "Hardcoded light color - may not work in dark mode",
+        "severity": "medium",
+        "auto_fix": False,
+    },
+    "missing_dark_variant": {
+        "pattern": r"className=['\"][^'\"]*bg-white[^'\"]*['\"](?![^>]*dark:)",
+        "message": "bg-white without dark: variant - add dark mode style",
+        "severity": "high",
+        "auto_fix": False,
+    },
+    "no_css_variable": {
+        "pattern": r"color:\s*(?!var\(--)[^;]+;",
+        "message": "Direct color value instead of CSS variable - use var(--color-*)",
+        "severity": "low",
+        "auto_fix": False,
+    },
+}
+
+# Phase 11E: Integration code patterns
+INTEGRATION_PATTERNS = {
+    "stripe_insecure": {
+        "pattern": r"stripe\.(?:charges|customers|subscriptions)\.(?:create|update)\([^)]*\)",
+        "check_file": r"client|page|component",  # Should not be in client code
+        "message": "Stripe operation in client code - move to server action/API route",
+        "severity": "critical",
+    },
+    "supabase_admin_client": {
+        "pattern": r"createClient.*service_role",
+        "check_file": r"client|page|component",
+        "message": "Supabase admin client in client code - use anon key",
+        "severity": "critical",
+    },
+    "env_direct_access": {
+        "pattern": r"process\.env\.[A-Z_]+(?!.*NEXT_PUBLIC)",
+        "check_file": r"client|page\.tsx$|component",
+        "message": "Server env var accessed in client code - use NEXT_PUBLIC_ prefix",
+        "severity": "high",
+    },
+}
+
 PYTHON_PATTERNS = {
     "missing_type_hint": {
         "pattern": r"def\s+\w+\s*\([^)]*\)\s*:",
@@ -204,7 +270,10 @@ CODE_SMELL_PATTERNS = {
 
 
 class CodeReviewAgent(BaseAgent):
-    """Code Review Agent that checks code quality and applies auto-fixes."""
+    """Code Review Agent that checks code quality and applies auto-fixes.
+    
+    Phase 11E: Enhanced with theme code quality, integration patterns, and KB integration.
+    """
     
     name = "code_review"
     description = "Code Review - Checks quality and applies fixes"
@@ -220,14 +289,54 @@ class CodeReviewAgent(BaseAgent):
     def name(self) -> str:
         return "code_review"
     
+    async def _query_kb_for_patterns(self, project_type: str) -> List[Dict]:
+        """Query KB for known code quality patterns."""
+        if not KB_AVAILABLE:
+            return []
+        
+        try:
+            results = await query_knowledge(
+                query=f"code quality patterns for {project_type}",
+                entry_types=[KnowledgeEntryType.CODE_PATTERN],
+                limit=15,
+            )
+            return results
+        except Exception as e:
+            logger.warning(f"KB query failed: {e}")
+            return []
+    
+    async def _write_findings_to_kb(self, issues: List[CodeIssue], project_type: str):
+        """Write code review findings to KB."""
+        if not KB_AVAILABLE:
+            return
+        
+        try:
+            # Store patterns for future reference
+            for issue in issues:
+                if issue.severity in ["critical", "high"]:
+                    await store_knowledge(
+                        entry_type=KnowledgeEntryType.CODE_PATTERN,
+                        content=f"Code issue: {issue.message}",
+                        metadata={
+                            "project_type": project_type,
+                            "category": issue.category,
+                            "rule": issue.rule,
+                            "severity": issue.severity,
+                            "agent": "code_review",
+                        },
+                    )
+        except Exception as e:
+            logger.warning(f"KB write failed: {e}")
+    
     async def execute(self, context: Dict[str, Any]) -> AgentResult:
-        """Execute code review on the project."""
-        self.logger.info("Starting code review")
+        """Execute code review on the project with Phase 11E enhancements."""
+        logger.info("Starting code review")
         
         project_id = context.get("project_id", "unknown")
         project_path = context.get("project_path", "/tmp/project")
         auto_fix_enabled = context.get("auto_fix", True)
         project_type = context.get("project_type", "web_simple")
+        requirements = context.get("requirements", {})
         
         self.issues = []
         self.auto_fixes = []
@@ -240,12 +349,28 @@ class CodeReviewAgent(BaseAgent):
                 errors=[f"Project path does not exist: {project_path}"],
             )
         
+        # Query KB for patterns
+        kb_patterns = await self._query_kb_for_patterns(project_type)
+        
         # Determine which patterns to use based on project type
         is_python_project = project_type in ["python_api", "python_saas", "cli_tool"]
         is_typescript_project = project_type in ["web_simple", "web_complex", "mobile_cross_platform", "mobile_pwa", "desktop_app", "chrome_extension"]
         
+        # Determine theme mode
+        color_scheme = requirements.get("color_scheme", "dark")
+        check_dual_theme = color_scheme in ["both", "system"]
+        
         # Scan codebase
         self._scan_directory(project_path, is_python_project, is_typescript_project)
+        
+        # Phase 11E: Check theme code quality
+        if check_dual_theme:
+            self._scan_theme_patterns(project_path)
+        
+        # Phase 11E: Check integration code quality
+        integrations = requirements.get("integrations", [])
+        if integrations:
+            self._scan_integration_patterns(project_path, integrations)
         
         # Apply auto-fixes if enabled
         if auto_fix_enabled:
@@ -719,3 +844,95 @@ class CodeReviewAgent(BaseAgent):
             summary=summary,
             pass_threshold=pass_threshold,
         )
+
+    def _scan_theme_patterns(self, project_path: str) -> None:
+        """Phase 11E: Scan for theme-related code quality issues."""
+        code_extensions = [".tsx", ".jsx", ".ts", ".js"]
+        skip_dirs = ["node_modules", ".git", "__pycache__", ".next", "dist"]
+        
+        for root, dirs, files in os.walk(project_path):
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
+            
+            for file in files:
+                if not any(file.endswith(ext) for ext in code_extensions):
+                    continue
+                
+                file_path = os.path.join(root, file)
+                
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                        lines = content.split('\n')
+                except Exception:
+                    continue
+                
+                # Check theme patterns
+                for rule_name, rule in THEME_CODE_PATTERNS.items():
+                    pattern = rule.get("pattern")
+                    if not pattern:
+                        continue
+                    
+                    for i, line in enumerate(lines):
+                        if re.search(pattern, line):
+                            self.issues.append(CodeIssue(
+                                severity=rule["severity"],
+                                category="theme",
+                                rule=rule_name,
+                                message=rule["message"],
+                                file_path=file_path,
+                                line_number=i + 1,
+                                code_snippet=line.strip()[:100],
+                            ))
+    
+    def _scan_integration_patterns(self, project_path: str, integrations: List[str]) -> None:
+        """Phase 11E: Scan for integration-related code quality issues."""
+        code_extensions = [".tsx", ".jsx", ".ts", ".js"]
+        skip_dirs = ["node_modules", ".git", "__pycache__", ".next", "dist"]
+        
+        # Determine which patterns to check based on integrations
+        patterns_to_check = []
+        for integration in integrations:
+            int_lower = integration.lower()
+            if "stripe" in int_lower:
+                patterns_to_check.append(("stripe_insecure", INTEGRATION_PATTERNS["stripe_insecure"]))
+            if "supabase" in int_lower:
+                patterns_to_check.append(("supabase_admin_client", INTEGRATION_PATTERNS["supabase_admin_client"]))
+        
+        # Always check env access
+        patterns_to_check.append(("env_direct_access", INTEGRATION_PATTERNS["env_direct_access"]))
+        
+        for root, dirs, files in os.walk(project_path):
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
+            
+            for file in files:
+                if not any(file.endswith(ext) for ext in code_extensions):
+                    continue
+                
+                file_path = os.path.join(root, file)
+                
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                        lines = content.split('\n')
+                except Exception:
+                    continue
+                
+                for rule_name, rule in patterns_to_check:
+                    pattern = rule.get("pattern")
+                    check_file = rule.get("check_file", "")
+                    
+                    # Only check if file matches the check_file pattern
+                    if check_file and not re.search(check_file, file_path, re.IGNORECASE):
+                        continue
+                    
+                    for i, line in enumerate(lines):
+                        if re.search(pattern, line):
+                            self.issues.append(CodeIssue(
+                                severity=rule["severity"],
+                                category="integration",
+                                rule=rule_name,
+                                message=rule["message"],
+                                file_path=file_path,
+                                line_number=i + 1,
+                                code_snippet=line.strip()[:100],
+                            ))

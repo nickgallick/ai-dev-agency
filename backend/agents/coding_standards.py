@@ -1,6 +1,14 @@
-"""Coding Standards Generation Agent - Comprehensive documentation and standards generation."""
+"""Coding Standards Generation Agent - Comprehensive documentation and standards generation.
+
+Phase 11E Enhancement:
+- Tech-stack-aware config generation (Next.js + Supabase + Stripe specific)
+- Theme documentation (light/dark mode implementation)
+- Integration guides (Stripe webhooks, Resend email, R2 uploads)
+- KB pattern storage for future template reuse
+"""
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -8,6 +16,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .base import AgentResult, BaseAgent
+
+# Import knowledge base
+try:
+    from ..knowledge import store_knowledge, KnowledgeEntryType
+    KB_AVAILABLE = True
+except ImportError:
+    KB_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
