@@ -17,6 +17,7 @@ AI Dev Agency is an automated software development platform that uses AI agents 
 | 10 | Integrations | ✅ Complete | 2026-03-10 |
 | 11A | Smart Adaptive Intake | ✅ Complete | 2026-03-10 |
 | 11B | Knowledge Base + Templates | ✅ Complete | 2026-03-10 |
+| 11C | Advanced Features | ✅ Complete | 2026-03-10 |
 
 ---
 
@@ -948,3 +949,212 @@ Phase 11B adds a RAG-powered knowledge base that learns from completed projects 
 | PUT | /api/knowledge/entry/{id}/quality | Update quality |
 | DELETE | /api/knowledge/entry/{id} | Delete entry |
 | GET | /api/knowledge/types | Get entry types |
+
+
+
+---
+
+## Phase 11C: Advanced Features ✅
+
+**Completed:** March 10, 2026
+
+### Overview
+
+Phase 11C adds advanced operational features including mid-build intervention (checkpoints), Redis caching layer, project queue with concurrency control, and comprehensive export/backup functionality.
+
+### Components Implemented
+
+#### Database Schema Updates
+
+- [x] **project.py** - Added checkpoint and queue fields:
+  - `checkpoint_mode` - auto/supervised/manual
+  - `checkpoint_state` - JSONB for checkpoint data and history
+  - `paused_at` - Timestamp when paused at checkpoint
+  - `queue_priority` - urgent/normal/background
+  - `queue_position` - Position in queue
+  - `queued_at` - When added to queue
+
+#### Backend Orchestration
+
+- [x] **checkpoints.py** - CheckpointManager:
+  - `CheckpointMode` enum (auto, supervised, manual)
+  - `CheckpointState` enum (running, paused, waiting_user, editing, resuming)
+  - `CheckpointData` class for checkpoint storage
+  - `pause_at_checkpoint()` - Pause execution at checkpoint
+  - `resume_from_checkpoint()` - Resume with optional edited output
+  - `edit_and_replay()` - Modify output and replay from agent
+  - `restart_from_agent()` - Abort and restart from specific agent
+  - Auto-continue timeout (5 minutes)
+
+#### Backend Cache Layer
+
+- [x] **cache/__init__.py** - Module exports
+- [x] **cache/manager.py** - CacheManager:
+  - Redis-based singleton cache
+  - TTL configurations (research: 7d, LLM: 24h, embeddings: 30d)
+  - Cache key prefixes for namespacing
+  - `get()`, `set()`, `delete()`, `exists()` methods
+  - `clear_type()`, `clear_all()` for bulk operations
+  - `get_stats()` for monitoring
+
+- [x] **cache/decorators.py** - Caching decorator:
+  - `@cached()` decorator for function caching
+  - Supports async and sync functions
+  - Configurable cache type and TTL
+  - Skip args filtering (db, self, cls)
+
+- [x] **cache/rate_limiter.py** - Rate limiter:
+  - Redis-based sliding window algorithm
+  - Default limits (OpenRouter: 60/min, v0: 20/min, GitHub: 30/min)
+  - `acquire()` and `acquire_async()` methods
+  - `@rate_limited()` decorator
+  - Fallback to local counting without Redis
+
+#### Backend Queue Module
+
+- [x] **queue/__init__.py** - Module exports
+- [x] **queue/manager.py** - QueueManager:
+  - Redis-based FIFO queue with priority
+  - `QueuePriority` enum (urgent, normal, background)
+  - Priority-weighted scoring for sort order
+  - `enqueue_project()` - Add to queue with priority
+  - `dequeue_project()` - Get next item if under concurrency limit
+  - `reprioritize()` - Change project priority
+  - `get_queue_status()` - Full queue state
+  - Max 2 concurrent projects (configurable)
+
+- [x] **queue/worker.py** - QueueWorker:
+  - Background process for queue processing
+  - Poll interval: 5 seconds
+  - Graceful shutdown handling
+  - Statistics tracking (processed, failed)
+  - Signal handlers for SIGINT/SIGTERM
+
+#### Backend Export Module
+
+- [x] **export/__init__.py** - Module exports
+- [x] **export/project.py** - Project export/import:
+  - `export_project_zip()` - Export as ZIP with code, assets, configs, reports
+  - `import_project_zip()` - Import from ZIP, create project and records
+  - `list_exportable_files()` - Preview files before export
+
+- [x] **export/system.py** - System backup:
+  - `backup_system()` - Full backup to local/S3/R2
+  - `restore_system()` - Restore from backup
+  - `export_knowledge_base()` - Export as JSON
+  - `import_knowledge_base()` - Import with merge option
+  - Backup includes: all tables, assets, templates
+
+#### Backend API Routes
+
+- [x] **checkpoints.py** - Checkpoint endpoints:
+  - `GET /api/checkpoints/{id}/status` - Get checkpoint status
+  - `POST /api/checkpoints/{id}/mode` - Set checkpoint mode
+  - `POST /api/checkpoints/{id}/pause` - Pause project
+  - `POST /api/checkpoints/{id}/resume` - Resume project
+  - `POST /api/checkpoints/{id}/edit-and-replay` - Edit and replay
+  - `POST /api/checkpoints/{id}/restart-from/{agent}` - Restart from agent
+  - `DELETE /api/checkpoints/{id}/checkpoints` - Clear checkpoints
+
+- [x] **queue.py** - Queue endpoints:
+  - `GET /api/queue/status` - Full queue status
+  - `GET /api/queue/{id}/status` - Project queue status
+  - `POST /api/queue/enqueue` - Add to queue
+  - `DELETE /api/queue/{id}` - Remove from queue
+  - `POST /api/queue/{id}/reprioritize` - Change priority
+  - `GET /api/queue/stats` - Queue statistics
+
+- [x] **export.py** - Export endpoints:
+  - `GET /api/export/projects/{id}/files` - List exportable files
+  - `GET /api/export/projects/{id}` - Export project as ZIP
+  - `POST /api/export/projects/import` - Import project from ZIP
+  - `POST /api/export/system/backup` - Create system backup
+  - `GET /api/export/system/backups` - List local backups
+  - `POST /api/export/system/restore` - Restore from backup
+  - `GET /api/export/knowledge` - Export knowledge base
+  - `POST /api/export/knowledge/import` - Import knowledge base
+
+#### Frontend Pages
+
+- [x] **Queue.tsx** - Queue dashboard:
+  - Stats cards (in queue, active, urgent, avg wait)
+  - Capacity indicator with progress bar
+  - Active projects list
+  - Queue list with filtering by priority
+  - Reprioritize and remove actions
+  - Priority legend
+
+- [x] **SystemBackup.tsx** - Backup page:
+  - Create backup (local/S3/R2 destination)
+  - Include projects toggle
+  - Backup status display
+  - Knowledge base export/import
+  - Backup history list with restore
+
+#### Frontend Updates
+
+- [x] **ProjectView.tsx** - Checkpoint controls:
+  - Build Controls card (when project active)
+  - Pause/Resume buttons
+  - Checkpoint mode selector (auto/supervised/manual)
+  - Current checkpoint info with paused agent
+  - Auto-continue warning
+
+- [x] **ProjectHistory.tsx** - Export features:
+  - Export button on each project card
+  - Import Project button in header
+  - File input for ZIP import
+
+- [x] **Layout.tsx** - Navigation:
+  - Added Queue nav item
+  - Added Backup nav item
+
+- [x] **api.ts** - API methods and types:
+  - Checkpoint APIs (status, mode, pause, resume, edit, restart)
+  - Queue APIs (status, enqueue, remove, reprioritize)
+  - Export APIs (files, export, import)
+  - Backup APIs (create, list, restore)
+  - Knowledge export/import
+  - All TypeScript interfaces
+
+- [x] **App.tsx** - Routes:
+  - `/queue` - Queue page
+  - `/backup` - SystemBackup page
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| Mid-Build Intervention | Pause at checkpoints, edit output, resume/replay |
+| Checkpoint Modes | Auto (none), Supervised (key points), Manual (custom) |
+| Default Checkpoints | Research, Architect, Code Generation |
+| Auto-Continue | 5 minute timeout if not resumed |
+| Redis Caching | Research 7d, LLM 24h, Embeddings 30d TTLs |
+| Rate Limiting | OpenRouter 60/min, v0 20/min, GitHub 30/min |
+| Priority Queue | Urgent (immediate), Normal (FIFO), Background (yields) |
+| Concurrency | Max 2 concurrent projects (configurable) |
+| Project Export | ZIP with code, assets, configs, reports, logs |
+| System Backup | Database + files to local/S3/R2 |
+| Knowledge Export | JSON format with optional embeddings |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /api/checkpoints/{id}/status | Checkpoint status |
+| POST | /api/checkpoints/{id}/mode | Set mode |
+| POST | /api/checkpoints/{id}/pause | Pause project |
+| POST | /api/checkpoints/{id}/resume | Resume project |
+| POST | /api/checkpoints/{id}/edit-and-replay | Edit and replay |
+| POST | /api/checkpoints/{id}/restart-from/{agent} | Restart from agent |
+| GET | /api/queue/status | Queue status |
+| POST | /api/queue/enqueue | Enqueue project |
+| DELETE | /api/queue/{id} | Remove from queue |
+| POST | /api/queue/{id}/reprioritize | Change priority |
+| GET | /api/export/projects/{id} | Export project |
+| POST | /api/export/projects/import | Import project |
+| POST | /api/export/system/backup | Create backup |
+| GET | /api/export/system/backups | List backups |
+| POST | /api/export/system/restore | Restore backup |
+| GET | /api/export/knowledge | Export knowledge |
+| POST | /api/export/knowledge/import | Import knowledge |
