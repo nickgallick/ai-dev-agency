@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MCPServerCard } from '../components/MCPServerCard';
 import { CredentialModal } from '../components/CredentialModal';
 import { AddCustomServerModal } from '../components/AddCustomServerModal';
+import { useTheme, ThemeMode } from '../contexts/ThemeContext';
 import { 
   RefreshCw, Plus, Server, CheckCircle, AlertTriangle, XCircle, HelpCircle,
-  Figma, Globe, Mail, HardDrive, Zap, Settings2, ExternalLink
+  Figma, Globe, Mail, HardDrive, Zap, Settings2, ExternalLink,
+  Monitor, Sun, Moon, Palette
 } from 'lucide-react';
 
 interface MCPServerStatus {
@@ -91,7 +93,65 @@ const INTEGRATION_META: Record<string, { icon: any; docsUrl: string; color: stri
   },
 };
 
+// Theme toggle component with sliding pill animation
+function ThemeToggle() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [pillStyle, setPillStyle] = useState({ left: 0, width: 0 });
+
+  const options: { value: ThemeMode; label: string; icon: typeof Monitor }[] = [
+    { value: 'system', label: 'System', icon: Monitor },
+    { value: 'light', label: 'Light', icon: Sun },
+    { value: 'dark', label: 'Dark', icon: Moon },
+  ];
+
+  // Update pill position when theme changes
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const activeIndex = options.findIndex(opt => opt.value === theme);
+    const buttons = containerRef.current.querySelectorAll('.theme-toggle-option');
+    const activeButton = buttons[activeIndex] as HTMLElement;
+    
+    if (activeButton) {
+      setPillStyle({
+        left: activeButton.offsetLeft,
+        width: activeButton.offsetWidth,
+      });
+    }
+  }, [theme]);
+
+  return (
+    <div 
+      ref={containerRef}
+      className="theme-toggle"
+      style={{ position: 'relative' }}
+    >
+      {/* Sliding pill */}
+      <div
+        className="theme-toggle-pill"
+        style={{
+          left: pillStyle.left,
+          width: pillStyle.width,
+        }}
+      />
+      
+      {/* Options */}
+      {options.map(({ value, label, icon: Icon }) => (
+        <button
+          key={value}
+          onClick={() => setTheme(value)}
+          className={`theme-toggle-option ${theme === value ? 'active' : ''}`}
+        >
+          <Icon className="w-4 h-4" />
+          <span>{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Settings() {
+  const { theme, resolvedTheme } = useTheme();
   const [servers, setServers] = useState<Record<string, MCPServerStatus>>({});
   const [stats, setStats] = useState({ total: 0, connected: 0, degraded: 0, disconnected: 0, disabled: 0 });
   const [loading, setLoading] = useState(true);
@@ -100,7 +160,7 @@ export function Settings() {
   // Phase 10: Integration state
   const [integrations, setIntegrations] = useState<Record<string, IntegrationStatus>>({});
   const [integrationsLoading, setIntegrationsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'mcp' | 'integrations'>('integrations');
+  const [activeTab, setActiveTab] = useState<'appearance' | 'mcp' | 'integrations'>('appearance');
   
   // Modal states
   const [credentialModal, setCredentialModal] = useState<{
@@ -304,7 +364,19 @@ export function Settings() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-6 flex-wrap">
+        <button
+          onClick={() => setActiveTab('appearance')}
+          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+            activeTab === 'appearance' 
+              ? 'bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white'
+              : 'glass-card'
+          }`}
+          style={activeTab !== 'appearance' ? { color: 'var(--text-secondary)' } : {}}
+        >
+          <Palette className="w-4 h-4 inline-block mr-2" />
+          Appearance
+        </button>
         <button
           onClick={() => setActiveTab('integrations')}
           className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
@@ -330,6 +402,108 @@ export function Settings() {
           MCP Servers
         </button>
       </div>
+
+      {/* Appearance Tab */}
+      {activeTab === 'appearance' && (
+        <div className="space-y-6">
+          {/* Theme Section */}
+          <section className="glass-card">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Palette className="w-5 h-5" style={{ color: 'var(--accent-primary)' }} />
+                Theme
+              </h2>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
+                Choose how AI Dev Agency looks to you
+              </p>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                  {theme === 'system' 
+                    ? `System preference (currently ${resolvedTheme})`
+                    : theme === 'light'
+                    ? 'Light mode - frosted daylight glass'
+                    : 'Dark mode - deep space glass'
+                  }
+                </p>
+              </div>
+              <ThemeToggle />
+            </div>
+          </section>
+
+          {/* Theme Preview */}
+          <section>
+            <h3 className="text-base font-medium mb-3" style={{ color: 'var(--text-primary)' }}>
+              Preview
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Sample Glass Card */}
+              <div className="glass-card">
+                <div className="flex items-center gap-3 mb-3">
+                  <div 
+                    className="w-10 h-10 rounded-lg flex items-center justify-center"
+                    style={{ background: 'var(--glass-bg-elevated)' }}
+                  >
+                    <Sun className="w-5 h-5" style={{ color: 'var(--accent-primary)' }} />
+                  </div>
+                  <div>
+                    <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Glass Card</p>
+                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Translucent surface</p>
+                  </div>
+                </div>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Frosted glass with subtle bloom effects
+                </p>
+              </div>
+
+              {/* Sample Stat Card */}
+              <div className="stat-card">
+                <div className="stat-card-icon">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div className="stat-card-value">42</div>
+                <div className="stat-card-label">Sample Metric</div>
+                <div className="stat-card-change positive">+12.5%</div>
+              </div>
+
+              {/* Sample Badges */}
+              <div className="glass-card">
+                <p className="font-medium mb-3" style={{ color: 'var(--text-primary)' }}>Status Badges</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="badge badge-success">Success</span>
+                  <span className="badge badge-running">Running</span>
+                  <span className="badge badge-warning">Warning</span>
+                  <span className="badge badge-error">Error</span>
+                  <span className="badge badge-default">Default</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Design Philosophy */}
+          <section className="glass-card" style={{ 
+            background: `var(--gradient-cool)`,
+            borderColor: 'rgba(91, 158, 244, 0.2)'
+          }}>
+            <div className="flex items-start gap-3">
+              <Moon className="w-5 h-5 mt-0.5" style={{ color: 'var(--accent-secondary)' }} />
+              <div>
+                <h3 className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+                  Glassmorphic Design
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                  {resolvedTheme === 'dark' 
+                    ? 'Dark mode features deep space backgrounds with luminous glass panels catching ethereal light blooms. Inspired by premium dashboard interfaces.'
+                    : 'Light mode feels like a clean modern office with floor-to-ceiling windows - bright, airy, with glass panels catching daylight. Same premium quality, inverted for daylight use.'
+                  }
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Integrations Tab */}
       {activeTab === 'integrations' && (
