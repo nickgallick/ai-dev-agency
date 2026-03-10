@@ -12,6 +12,7 @@ from api.routes.knowledge import router as knowledge_router  # Phase 11B
 from api.routes.checkpoints import router as checkpoints_router  # Phase 11C
 from api.routes.queue import router as queue_router  # Phase 11C
 from api.routes.export import router as export_router  # Phase 11C
+from api.activity import router as activity_router  # Real-time activity streaming
 from auth import auth_router
 from models import engine, Base
 
@@ -61,6 +62,7 @@ app.include_router(knowledge_router)  # Phase 11B: Knowledge - Already has /api 
 app.include_router(checkpoints_router, prefix="/api")  # Phase 11C: Checkpoints
 app.include_router(queue_router, prefix="/api")  # Phase 11C: Queue
 app.include_router(export_router, prefix="/api")  # Phase 11C: Export
+app.include_router(activity_router, prefix="/api")  # Real-time activity streaming
 
 
 @app.get("/")

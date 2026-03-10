@@ -4,6 +4,7 @@ import { Card } from '@/components/Card'
 import { Badge } from '@/components/Badge'
 import { PipelineVisualization } from '@/components/PipelineVisualization'
 import { ScoreGauge } from '@/components/ScoreGauge'
+import { ActivityFeed } from '@/components/ActivityFeed'
 import { api } from '@/lib/api'
 import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2 } from 'lucide-react'
 import { Button } from '@/components/Button'
@@ -128,6 +129,20 @@ export default function ProjectView() {
         <h3 className="font-medium text-text-primary mb-4">Pipeline Progress</h3>
         <PipelineVisualization agents={agents} />
       </Card>
+
+      {/* Real-time Activity Feed */}
+      {project.status !== 'completed' && project.status !== 'failed' && (
+        <Card>
+          <h3 className="font-medium text-text-primary mb-4 flex items-center gap-2">
+            <Activity className="w-5 h-5 text-accent-primary" />
+            Live Activity
+          </h3>
+          <ActivityFeed 
+            projectId={id!} 
+            isActive={project.status !== 'completed' && project.status !== 'failed'} 
+          />
+        </Card>
+      )}
 
       {/* Phase 11C: Checkpoint Controls */}
       {project.status !== 'completed' && project.status !== 'failed' && (
