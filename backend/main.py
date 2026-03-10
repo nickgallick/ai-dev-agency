@@ -41,15 +41,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware
+# CORS middleware - allow all origins in production for Railway
+allowed_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
+# Add Railway and other production domains
+railway_url = os.getenv("RAILWAY_STATIC_URL", "")
+if railway_url:
+    allowed_origins.append(railway_url)
+    allowed_origins.append(railway_url.replace("http://", "https://"))
+
+# Allow all origins if in production
+if os.getenv("PRODUCTION", "").lower() == "true":
+    allowed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
