@@ -1,0 +1,28 @@
+databases:
+  - name: ai-dev-agency-db
+    databaseName: aidevagency
+    user: aidev
+    plan: free
+
+services:
+  - type: web
+    name: ai-dev-agency
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PRODUCTION
+        value: "true"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-dev-agency-db
+          property: connectionString
