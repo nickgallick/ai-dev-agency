@@ -1,140 +1,269 @@
-"""Base agent class with common functionality."""
+"""Base Agent class for all AI Dev Agency agents."""
+
+import asyncio
+import logging
 import os
-import time
-import httpx
+import subprocess
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
 from datetime import datetime
-import uuid
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
+
+try:
+    import docker
+    DOCKER_SDK_AVAILABLE = True
+except ImportError:
+    DOCKER_SDK_AVAILABLE = False
+
+from ..config.settings import Settings
+
+
+class AgentStatus(Enum):
+    """Agent execution status."""
+    IDLE = "idle"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class AgentResult:
+    """Result from an agent execution."""
+    success: bool
+    agent_name: str
+    data: Dict[str, Any] = field(default_factory=dict)
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    execution_time: float = 0.0
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert result to dictionary."""
+        return {
+            "success": self.success,
+            "agent_name": self.agent_name,
+            "data": self.data,
+            "errors": self.errors,
+            "warnings": self.warnings,
+            "execution_time": self.execution_time,
+            "timestamp": self.timestamp,
+        }
 
 
 class BaseAgent(ABC):
-    """Base class for all agents in the pipeline."""
-    
-    name: str = "base"
-    description: str = "Base agent"
-    step_number: int = 0
-    
-    def __init__(self, project_id: str, db_session=None):
-        self.project_id = project_id
-        self.db = db_session
-        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-        self.openrouter_base_url = "https://openrouter.ai/api/v1"
-    
+    """Abstract base class for all agents."""
+
+    def __init__(self, settings: Optional[Settings] = None):
+        """Initialize the agent."""
+        self.settings = settings or Settings()
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.status = AgentStatus.IDLE
+        self._docker_client: Optional[Any] = None
+        self._setup_logging()
+
+    def _setup_logging(self) -> None:
+        """Configure logging for the agent."""
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter(
+                f"[%(asctime)s] [{self.__class__.__name__}] %(levelname)s: %(message)s"
+            )
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+            self.logger.setLevel(logging.INFO)
+
+    @property
+    def docker_client(self) -> Optional[Any]:
+        """Get or create Docker client."""
+        if self._docker_client is None and DOCKER_SDK_AVAILABLE:
+            try:
+                self._docker_client = docker.from_env()
+                self._docker_client.ping()
+            except Exception as e:
+                self.logger.warning(f"Docker SDK not available: {e}")
+                self._docker_client = None
+        return self._docker_client
+
+    @property
+    def use_docker_sdk(self) -> bool:
+        """Check if Docker SDK should be used."""
+        if self.settings.docker_integration_mode == "subprocess":
+            return False
+        return self.docker_client is not None
+
+    @property
     @abstractmethod
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def name(self) -> str:
+        """Return the agent name."""
+        pass
+
+    @abstractmethod
+    async def execute(self, context: Dict[str, Any]) -> AgentResult:
         """Execute the agent's main task."""
         pass
-    
-    async def call_llm(
-        self,
-        prompt: str,
-        model: str = "anthropic/claude-sonnet-4",
-        system_prompt: Optional[str] = None,
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
-    ) -> Dict[str, Any]:
-        """Call OpenRouter API for LLM inference."""
+
+    async def run(self, context: Dict[str, Any]) -> AgentResult:
+        """Run the agent with status tracking and timing."""
+        import time
         start_time = time.time()
+        self.status = AgentStatus.RUNNING
         
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-        
-        headers = {
-            "Authorization": f"Bearer {self.openrouter_api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://ai-dev-agency.local",
-            "X-Title": "AI Dev Agency"
-        }
-        
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                f"{self.openrouter_base_url}/chat/completions",
-                headers=headers,
-                json=payload
+        try:
+            self.logger.info(f"Starting {self.name} agent")
+            result = await self.execute(context)
+            self.status = AgentStatus.COMPLETED if result.success else AgentStatus.FAILED
+            result.execution_time = time.time() - start_time
+            self.logger.info(
+                f"{self.name} agent completed in {result.execution_time:.2f}s"
             )
-            response.raise_for_status()
-            result = response.json()
-        
-        duration_ms = int((time.time() - start_time) * 1000)
-        
-        # Extract token usage
-        usage = result.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        
-        # Calculate cost (rough estimates per model)
-        cost = self._calculate_cost(model, prompt_tokens, completion_tokens)
-        
-        return {
-            "content": result["choices"][0]["message"]["content"],
-            "model": model,
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": prompt_tokens + completion_tokens,
-            "cost": cost,
-            "duration_ms": duration_ms,
-        }
-    
-    def _calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
-        """Calculate cost based on model pricing."""
-        # Pricing per 1M tokens (input/output)
-        pricing = {
-            "anthropic/claude-sonnet-4": (3.0, 15.0),
-            "anthropic/claude-opus-4": (15.0, 75.0),
-            "openai/gpt-4o": (5.0, 15.0),
-            "openai/gpt-4o-mini": (0.15, 0.60),
-            "deepseek/deepseek-chat": (0.14, 0.28),
-            "deepseek/deepseek-coder": (0.14, 0.28),
-        }
-        
-        input_rate, output_rate = pricing.get(model, (1.0, 2.0))
-        cost = (prompt_tokens * input_rate + completion_tokens * output_rate) / 1_000_000
-        return round(cost, 6)
-    
-    async def log_execution(
+            return result
+        except asyncio.CancelledError:
+            self.status = AgentStatus.CANCELLED
+            self.logger.warning(f"{self.name} agent cancelled")
+            return AgentResult(
+                success=False,
+                agent_name=self.name,
+                errors=["Agent execution cancelled"],
+                execution_time=time.time() - start_time,
+            )
+        except Exception as e:
+            self.status = AgentStatus.FAILED
+            self.logger.error(f"{self.name} agent failed: {e}")
+            return AgentResult(
+                success=False,
+                agent_name=self.name,
+                errors=[str(e)],
+                execution_time=time.time() - start_time,
+            )
+
+    def run_docker_container(
         self,
-        input_data: Dict[str, Any],
-        output_data: Dict[str, Any],
-        model: str,
-        prompt_tokens: int,
-        completion_tokens: int,
-        cost: float,
-        duration_ms: int,
-        status: str = "completed",
-        error_message: Optional[str] = None,
-    ):
-        """Log agent execution to database."""
-        if not self.db:
-            return
-        
-        from models import AgentLog
-        
-        log = AgentLog(
-            id=uuid.uuid4(),
-            project_id=self.project_id,
-            agent_name=self.name,
-            agent_step=self.step_number,
-            model_used=model,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens,
-            cost=cost,
-            duration_ms=duration_ms,
-            timestamp=datetime.utcnow(),
-            input_data=input_data,
-            output_data=output_data,
-            status=status,
-            error_message=error_message,
-        )
-        self.db.add(log)
-        self.db.commit()
+        image: str,
+        command: Optional[Union[str, List[str]]] = None,
+        volumes: Optional[Dict[str, Dict[str, str]]] = None,
+        environment: Optional[Dict[str, str]] = None,
+        network: Optional[str] = None,
+        remove: bool = True,
+        timeout: int = 300,
+    ) -> tuple[int, str, str]:
+        """Run a Docker container and return exit code, stdout, stderr."""
+        if self.use_docker_sdk:
+            return self._run_docker_sdk(
+                image, command, volumes, environment, network, remove, timeout
+            )
+        else:
+            return self._run_subprocess(
+                image, command, volumes, environment, timeout
+            )
+
+    def _run_docker_sdk(
+        self,
+        image: str,
+        command: Optional[Union[str, List[str]]],
+        volumes: Optional[Dict[str, Dict[str, str]]],
+        environment: Optional[Dict[str, str]],
+        network: Optional[str],
+        remove: bool,
+        timeout: int,
+    ) -> tuple[int, str, str]:
+        """Run container using Docker SDK."""
+        try:
+            # Pull image if not available
+            try:
+                self.docker_client.images.get(image)
+            except docker.errors.ImageNotFound:
+                self.logger.info(f"Pulling image: {image}")
+                self.docker_client.images.pull(image)
+
+            # Run container
+            container = self.docker_client.containers.run(
+                image=image,
+                command=command,
+                volumes=volumes,
+                environment=environment,
+                network=network,
+                remove=False,
+                detach=True,
+            )
+
+            try:
+                result = container.wait(timeout=timeout)
+                exit_code = result.get("StatusCode", 1)
+                logs = container.logs(stdout=True, stderr=True).decode("utf-8")
+                stdout = container.logs(stdout=True, stderr=False).decode("utf-8")
+                stderr = container.logs(stdout=False, stderr=True).decode("utf-8")
+            finally:
+                if remove:
+                    try:
+                        container.remove(force=True)
+                    except:
+                        pass
+
+            return exit_code, stdout, stderr
+        except Exception as e:
+            self.logger.error(f"Docker SDK error: {e}")
+            return 1, "", str(e)
+
+    def _run_subprocess(
+        self,
+        image: str,
+        command: Optional[Union[str, List[str]]],
+        volumes: Optional[Dict[str, Dict[str, str]]],
+        environment: Optional[Dict[str, str]],
+        timeout: int,
+    ) -> tuple[int, str, str]:
+        """Run container using subprocess (fallback)."""
+        cmd = ["docker", "run", "--rm"]
+
+        if volumes:
+            for host_path, config in volumes.items():
+                bind = config.get("bind", host_path)
+                mode = config.get("mode", "rw")
+                cmd.extend(["-v", f"{host_path}:{bind}:{mode}"])
+
+        if environment:
+            for key, value in environment.items():
+                cmd.extend(["-e", f"{key}={value}"])
+
+        cmd.append(image)
+
+        if command:
+            if isinstance(command, str):
+                cmd.extend(command.split())
+            else:
+                cmd.extend(command)
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            return result.returncode, result.stdout, result.stderr
+        except subprocess.TimeoutExpired:
+            return 1, "", "Container execution timed out"
+        except Exception as e:
+            return 1, "", str(e)
+
+    def read_file(self, path: str) -> Optional[str]:
+        """Read file contents."""
+        try:
+            with open(path, "r") as f:
+                return f.read()
+        except Exception as e:
+            self.logger.error(f"Failed to read file {path}: {e}")
+            return None
+
+    def write_file(self, path: str, content: str) -> bool:
+        """Write content to file."""
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(content)
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to write file {path}: {e}")
+            return False

@@ -1,38 +1,69 @@
-"""Application settings."""
+"""Configuration settings for AI Dev Agency."""
+
 import os
+from dataclasses import dataclass, field
 from typing import Optional
-from pydantic_settings import BaseSettings
 
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment."""
+@dataclass
+class Settings:
+    """Application settings."""
     
-    # Database
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/ai_dev_agency"
+    # Docker Integration
+    docker_integration_mode: str = field(
+        default_factory=lambda: os.getenv("DOCKER_INTEGRATION_MODE", "sdk")
+    )
     
-    # Security
-    secret_key: str = "change-me-in-production"
+    # Semgrep Configuration
+    semgrep_api_token: Optional[str] = field(
+        default_factory=lambda: os.getenv("SEMGREP_API_TOKEN")
+    )
+    semgrep_image: str = "semgrep/semgrep:latest"
+    semgrep_timeout: int = 300
     
-    # LLM APIs
-    openrouter_api_key: Optional[str] = None
+    # Lighthouse Configuration
+    lighthouse_image: str = "femtopixel/google-lighthouse:latest"
+    lighthouse_timeout: int = 300
     
-    # Code Generation
-    vercel_v0_api_key: Optional[str] = None
+    # Playwright Configuration
+    playwright_host: str = field(
+        default_factory=lambda: os.getenv("PLAYWRIGHT_HOST", "localhost")
+    )
+    playwright_port: int = field(
+        default_factory=lambda: int(os.getenv("PLAYWRIGHT_PORT", "3200"))
+    )
+    playwright_image: str = "mcr.microsoft.com/playwright:v1.51.0-noble"
     
-    # GitHub
-    github_token: Optional[str] = None
+    # Project Configuration
+    project_temp_dir: str = "/tmp/ai-dev-agency"
+    scan_timeout: int = 600
     
-    # Deployment Platforms
-    vercel_token: Optional[str] = None
-    railway_token: Optional[str] = None
+    # Auto-fix Configuration
+    auto_fix_enabled: bool = field(
+        default_factory=lambda: os.getenv("AUTO_FIX_ENABLED", "true").lower() == "true"
+    )
+    auto_fix_severities: list = field(
+        default_factory=lambda: ["critical", "high"]
+    )
     
-    # Optional Services
-    slack_webhook_url: Optional[str] = None
-    sentry_dsn: Optional[str] = None
+    # API Configuration
+    api_host: str = field(
+        default_factory=lambda: os.getenv("API_HOST", "0.0.0.0")
+    )
+    api_port: int = field(
+        default_factory=lambda: int(os.getenv("API_PORT", "8000"))
+    )
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    # Database Configuration
+    database_url: str = field(
+        default_factory=lambda: os.getenv(
+            "DATABASE_URL", "postgresql://postgres:postgres@db:5432/aidevagency"
+        )
+    )
 
-
-settings = Settings()
+    def __post_init__(self):
+        """Validate settings after initialization."""
+        if self.docker_integration_mode not in ["sdk", "subprocess"]:
+            raise ValueError(
+                f"Invalid DOCKER_INTEGRATION_MODE: {self.docker_integration_mode}"
+            )
