@@ -15,6 +15,128 @@ AI Dev Agency is an automated software development platform that uses AI agents 
 | 6 | Monitoring & Standards | ✅ Complete | 2026-03-10 |
 | 7 | Advanced Features | ✅ Complete | 2026-03-10 |
 | 10 | Integrations | ✅ Complete | 2026-03-10 |
+| 11A | Smart Adaptive Intake | ✅ Complete | 2026-03-10 |
+
+---
+
+## Phase 11A: Smart Adaptive Intake System ✅
+
+**Completed:** March 10, 2026
+
+### Overview
+
+Phase 11A replaces the basic text-only project brief input with a multi-step, conditional intake form that generates structured requirements for all downstream agents. The system provides real-time brief analysis, voice input support, and preset templates for quick project creation.
+
+### Components Implemented
+
+#### Backend Models (`backend/models/`)
+
+- [x] **requirements.py** - Structured Pydantic models:
+  - `ProjectRequirements` - Complete structured requirements
+  - `DesignPreferences` - Color scheme, design style, animations
+  - `TechStack` - Frontend, backend, database preferences
+  - `DeploymentConfig` - Platform, auto-deploy, store submission
+  - `WebComplexFields`, `WebSimpleFields`, `MobileFields`, `CLIFields`, `DesktopFields`
+  - `BriefAnalysis` - Real-time analysis response
+
+- [x] **preset.py** - Project preset SQLAlchemy model:
+  - Name, description, icon, config (JSONB)
+  - Use count tracking for popularity
+
+#### Backend Agents (`backend/agents/`)
+
+- [x] **intake.py** - Enhanced with:
+  - `COST_ESTIMATES` - Cost ranges for all 10 project types
+  - `INDUSTRY_KEYWORDS` - Auto-detect industry from brief
+  - `FEATURE_KEYWORDS` - Suggest features based on brief
+  - `analyze_brief()` - Real-time keyword-based analysis (no LLM call)
+  - Returns: detected_project_type, confidence, suggested_features, suggested_pages, cost_estimate
+
+#### Backend API Routes
+
+- [x] **projects.py** - New endpoint:
+  - `POST /api/projects/analyze-brief` - Real-time brief analysis
+  - Updated `create_project` to accept structured requirements
+
+- [x] **routes/presets.py** - Preset CRUD:
+  - `GET /api/presets` - List all presets (includes 5 default templates)
+  - `POST /api/presets` - Create new preset
+  - `PUT /api/presets/{id}` - Update preset
+  - `DELETE /api/presets/{id}` - Delete preset
+  - `POST /api/presets/{id}/use` - Increment usage count
+
+#### Database Migration
+
+- [x] **11a01_smart_intake_system.py**:
+  - Creates `project_presets` table
+  - Adds `requirements` JSONB column to `projects` table
+
+#### Frontend Components
+
+- [x] **VoiceInput.tsx** - Voice input component:
+  - Web Speech API (SpeechRecognition) integration
+  - Pulsing animation when listening
+  - Graceful fallback if browser doesn't support
+
+- [x] **NewProject.tsx** - Complete rewrite with multi-step form:
+  - **Step 1: Basics** - Brief textarea with voice input, project type pills, cost profile cards
+  - **Step 2: Conditional Fields** - Different fields per project type:
+    - Web Complex/SaaS: Key features checkboxes, pages list
+    - Web Simple: Number of pages, sections, contact form toggle
+    - Mobile: Platform selection, framework, app store submission
+    - CLI: Language selection, registry publishing
+    - Desktop: Target platforms, framework
+  - **Step 3: Advanced Options** (collapsible):
+    - Design preferences (color scheme, primary color, style)
+    - Tech stack (frontend framework, CSS, database)
+    - Build mode (full auto, step approval, preview only)
+    - Custom instructions
+    - Save as preset button
+  - **Step 4: Build Summary** (sticky at bottom):
+    - Expandable summary with project details
+    - Cost estimate display
+    - Start Building button
+
+#### Frontend API Client
+
+- [x] **api.ts** - New methods:
+  - `analyzeBrief(brief)` - Real-time brief analysis
+  - `getPresets()` - List presets
+  - `createPreset(data)` - Create preset
+  - `deletePreset(id)` - Delete preset
+  - `usePreset(id)` - Track preset usage
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| Real-time Brief Analysis | Analyzes brief as user types (debounced 1s), auto-detects project type |
+| Voice Input | Browser speech-to-text API for dictating project briefs |
+| Preset Templates | 5 default presets + custom user presets for quick project setup |
+| Form Persistence | Draft auto-saved to localStorage, survives page refresh |
+| Conditional Fields | Different form fields based on selected project type |
+| Feature Suggestions | Auto-suggests features and pages based on brief keywords |
+| Cost Estimates | Shows estimated cost by profile for detected project type |
+
+### Default Presets
+
+1. **SaaS Starter** - Full-stack SaaS with auth, billing, dashboard
+2. **Landing Page** - Simple, beautiful landing page
+3. **Mobile App** - Cross-platform mobile app with Expo
+4. **REST API** - FastAPI backend with PostgreSQL
+5. **Chrome Extension** - Browser extension with manifest v3
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/projects/analyze-brief` | Analyze brief text, return suggestions |
+| GET | `/api/presets` | List all presets |
+| GET | `/api/presets/{id}` | Get specific preset |
+| POST | `/api/presets` | Create new preset |
+| PUT | `/api/presets/{id}` | Update preset |
+| DELETE | `/api/presets/{id}` | Delete preset |
+| POST | `/api/presets/{id}/use` | Increment usage count |
 
 ---
 
