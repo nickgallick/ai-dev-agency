@@ -22,6 +22,10 @@ from .accessibility import AccessibilityAgent
 from .qa_testing import QATestingAgent
 from .deployment import DeploymentAgent
 
+# Phase 6: Monitoring & Standards Agents
+from .analytics_monitoring import AnalyticsMonitoringAgent
+from .coding_standards import CodingStandardsAgent
+
 __all__ = [
     # Base
     "BaseAgent",
@@ -42,4 +46,7 @@ __all__ = [
     # Phase 5
     "QATestingAgent",
     "DeploymentAgent",
+    # Phase 6
+    "AnalyticsMonitoringAgent",
+    "CodingStandardsAgent",
 ]

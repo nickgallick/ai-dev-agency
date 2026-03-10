@@ -5,7 +5,7 @@ import { Badge } from '@/components/Badge'
 import { PipelineVisualization } from '@/components/PipelineVisualization'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { api } from '@/lib/api'
-import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube } from 'lucide-react'
+import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge } from 'lucide-react'
 import { Button } from '@/components/Button'
 
 export default function ProjectView() {
@@ -45,11 +45,17 @@ export default function ProjectView() {
     { name: 'Code Gen', status: getAgentStatus(project.status, 'code_generation') },
     { name: 'QA Test', status: getAgentStatus(project.status, 'qa') },
     { name: 'Deploy', status: getAgentStatus(project.status, 'deployment') },
+    { name: 'Monitoring', status: getAgentStatus(project.status, 'analytics_monitoring') },
+    { name: 'Standards', status: getAgentStatus(project.status, 'coding_standards') },
   ]
 
   // Extract QA and deployment data from outputs
   const qaReport = outputs?.agent_outputs?.qa?.report
   const deploymentReport = outputs?.agent_outputs?.deployment?.report
+  
+  // Extract Phase 6 data from outputs
+  const monitoringReport = outputs?.agent_outputs?.analytics_monitoring?.report
+  const codingStandardsReport = outputs?.agent_outputs?.coding_standards?.report
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
@@ -298,6 +304,141 @@ export default function ProjectView() {
         </Card>
       )}
 
+      {/* Monitoring Status - Phase 6 */}
+      {monitoringReport && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-5 h-5 text-accent-primary" />
+            <h3 className="font-medium text-text-primary">Monitoring & Analytics</h3>
+          </div>
+
+          {/* Services Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            {monitoringReport.services?.map((service: any, idx: number) => (
+              <div 
+                key={idx} 
+                className={`p-3 rounded-lg ${service.configured ? 'bg-green-500/10' : 'bg-background-tertiary'}`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  {service.configured ? (
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-text-tertiary" />
+                  )}
+                  <span className="text-sm font-medium text-text-primary">{service.name}</span>
+                </div>
+                {service.configured && service.dashboard_url && (
+                  <a
+                    href={service.dashboard_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-accent-primary hover:underline flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    Dashboard
+                  </a>
+                )}
+                {!service.configured && service.error_message && (
+                  <p className="text-xs text-text-tertiary">{service.error_message}</p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Lighthouse CI Status */}
+          {monitoringReport.lighthouse_ci_configured && (
+            <div className="p-3 bg-blue-500/10 rounded-lg mb-4">
+              <div className="flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-blue-400" />
+                <span className="text-sm font-medium text-blue-400">Lighthouse CI Configured</span>
+              </div>
+              <p className="text-xs text-text-secondary mt-1">
+                Performance monitoring runs on every push to main branch
+              </p>
+            </div>
+          )}
+
+          {/* Dashboard Links */}
+          <div className="flex flex-wrap gap-2">
+            {monitoringReport.services?.filter((s: any) => s.configured && s.dashboard_url).map((service: any, idx: number) => (
+              <a
+                key={idx}
+                href={service.dashboard_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-background-tertiary rounded text-xs text-text-secondary hover:text-text-primary transition-colors"
+              >
+                <BarChart3 className="w-3 h-3" />
+                {service.name}
+              </a>
+            ))}
+          </div>
+
+          {/* Summary */}
+          <div className="mt-4 p-3 bg-background-tertiary rounded-lg">
+            <p className="text-sm text-text-secondary">
+              Configured: <span className="text-text-primary font-medium">{monitoringReport.total_configured || 0}</span> / {monitoringReport.total_available || 0} services
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {/* Documentation Status - Phase 6 */}
+      {codingStandardsReport && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <FileText className="w-5 h-5 text-accent-primary" />
+            <h3 className="font-medium text-text-primary">Documentation & Standards</h3>
+          </div>
+
+          {/* Generated Documents */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {codingStandardsReport.documents?.filter((d: any) => d.generated).map((doc: any, idx: number) => (
+              <div key={idx} className="p-3 bg-green-500/10 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  <span className="text-sm text-text-primary">{doc.name}</span>
+                </div>
+                <span className="text-xs text-text-tertiary capitalize">{doc.type.replace('_', ' ')}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Style Configs */}
+          {codingStandardsReport.style_configs?.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-text-secondary mb-2">Code Style Configurations</h4>
+              <div className="flex flex-wrap gap-2">
+                {codingStandardsReport.style_configs.map((config: string, idx: number) => (
+                  <span key={idx} className="px-2 py-1 bg-background-tertiary rounded text-xs text-text-secondary">
+                    {config}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ADRs */}
+          {codingStandardsReport.adrs_generated > 0 && (
+            <div className="p-3 bg-purple-500/10 rounded-lg mb-4">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-purple-400" />
+                <span className="text-sm text-purple-400">
+                  {codingStandardsReport.adrs_generated} Architecture Decision Records Generated
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
+          <div className="p-3 bg-background-tertiary rounded-lg">
+            <p className="text-sm text-text-secondary">
+              Total Documents: <span className="text-text-primary font-medium">{codingStandardsReport.total_generated || 0}</span> files generated
+            </p>
+          </div>
+        </Card>
+      )}
+
       {/* Brief */}
       <Card>
         <h3 className="font-medium text-text-primary mb-2">Project Brief</h3>
@@ -312,7 +453,7 @@ export default function ProjectView() {
           <h3 className="font-medium text-text-primary mb-4">Agent Outputs</h3>
           <div className="space-y-4">
             {Object.entries(outputs.agent_outputs)
-              .filter(([agent]) => !['qa', 'deployment'].includes(agent))
+              .filter(([agent]) => !['qa', 'deployment', 'analytics_monitoring', 'coding_standards'].includes(agent))
               .map(([agent, output]) => (
               <details key={agent} className="group">
                 <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
@@ -346,7 +487,7 @@ function DeploymentStatusBadge({ status }: { status: string }) {
 }
 
 function getAgentStatus(projectStatus: string, agent: string): 'queued' | 'active' | 'completed' | 'failed' {
-  const order = ['pending', 'intake', 'research', 'architect', 'design', 'code_generation', 'qa', 'deployment', 'completed']
+  const order = ['pending', 'intake', 'research', 'architect', 'design', 'code_generation', 'qa', 'deployment', 'analytics_monitoring', 'coding_standards', 'completed']
   const currentIndex = order.indexOf(projectStatus)
   const agentIndex = order.indexOf(agent)
 
@@ -367,6 +508,8 @@ function StatusBadge({ status }: { status: string }) {
     code_generation: 'info',
     qa: 'info',
     deployment: 'info',
+    analytics_monitoring: 'info',
+    coding_standards: 'info',
     failed: 'error',
     pending: 'default',
   }

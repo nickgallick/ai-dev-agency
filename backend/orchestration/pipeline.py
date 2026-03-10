@@ -12,6 +12,8 @@ from agents.seo import SEOAgent
 from agents.accessibility import AccessibilityAgent
 from agents.qa_testing import QATestingAgent
 from agents.deployment import DeploymentAgent
+from agents.analytics_monitoring import AnalyticsMonitoringAgent
+from agents.coding_standards import CodingStandardsAgent
 from config.settings import Settings
 
 
@@ -135,6 +137,23 @@ class Pipeline:
             name="Deployment",
             agent_class=DeploymentAgent,
             dependencies=["qa"],
+        ))
+
+        # Phase 6: Monitoring & Standards - Run in parallel after Deployment
+        self.add_node(PipelineNode(
+            id="analytics_monitoring",
+            name="Analytics & Monitoring",
+            agent_class=AnalyticsMonitoringAgent,
+            dependencies=["deployment"],
+            parallel_group="phase6",
+        ))
+
+        self.add_node(PipelineNode(
+            id="coding_standards",
+            name="Coding Standards",
+            agent_class=CodingStandardsAgent,
+            dependencies=["deployment"],
+            parallel_group="phase6",
         ))
 
     def add_node(self, node: PipelineNode) -> None:
@@ -468,9 +487,32 @@ class PipelineState:
         self.failed_nodes: List[str] = []
         self.context: Dict[str, Any] = {}
         self.errors: List[str] = []
+        # Phase 6 additions
+        self.monitoring_config: Dict[str, Any] = {}
+        self.documentation_links: Dict[str, str] = {}
+    
+    def update_monitoring_config(self, config: Dict[str, Any]) -> None:
+        """Update monitoring configuration from Analytics & Monitoring agent."""
+        self.monitoring_config.update(config)
+    
+    def update_documentation_links(self, links: Dict[str, str]) -> None:
+        """Update documentation links from Coding Standards agent."""
+        self.documentation_links.update(links)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert state to dictionary."""
+        return {
+            "project_id": self.project_id,
+            "current_node": self.current_node,
+            "completed_nodes": self.completed_nodes,
+            "failed_nodes": self.failed_nodes,
+            "errors": self.errors,
+            "monitoring_config": self.monitoring_config,
+            "documentation_links": self.documentation_links,
+        }
 
 
-def create_pipeline(project_id: str = "", config: Optional[PipelineConfig] = None) -> Pipeline:
+def create_pipeline(settings: Optional[Settings] = None, config: Optional[PipelineConfig] = None) -> Pipeline:
     """Factory function to create a configured pipeline instance."""
-    pipeline = Pipeline(project_id=project_id, config=config)
+    pipeline = Pipeline(settings=settings, config=config)
     return pipeline
