@@ -407,7 +407,7 @@ const AccessibilitySection: React.FC<{ report: AccessibilityReport }> = ({ repor
                 outerRadius={80}
                 paddingAngle={5}
                 dataKey="value"
-                label={({ name, value }) => `${name}: ${value}`}
+                label={({ name, value }: { name: string; value: number }) => `${name}: ${value}`}
               >
                 {impactData.map((entry) => (
                   <Cell key={entry.impact} fill={impactColors[entry.impact]} />

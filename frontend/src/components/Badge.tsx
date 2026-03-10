@@ -1,13 +1,14 @@
 import { ReactNode } from 'react'
 import { clsx } from 'clsx'
 
-interface BadgeProps {
+export interface BadgeProps {
   children: ReactNode
   variant?: 'default' | 'success' | 'warning' | 'error' | 'info' | 'running'
   className?: string
+  pulse?: boolean
 }
 
-export function Badge({ children, variant = 'default', className }: BadgeProps) {
+export function Badge({ children, variant = 'default', className, pulse }: BadgeProps) {
   const variantClass = {
     default: 'badge-default',
     success: 'badge-success',
@@ -18,7 +19,7 @@ export function Badge({ children, variant = 'default', className }: BadgeProps) 
   }[variant]
 
   return (
-    <span className={clsx('badge', variantClass, className)}>
+    <span className={clsx('badge', variantClass, pulse && 'animate-pulse', className)}>
       {children}
     </span>
   )

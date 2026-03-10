@@ -120,7 +120,7 @@ export function RevisionPanel({ projectId, revisions, onRevisionCreated }: Revis
             <Button
               type="submit"
               size="sm"
-              loading={createRevision.isPending}
+              isLoading={createRevision.isPending}
               disabled={!revisionBrief.trim()}
             >
               Submit Revision

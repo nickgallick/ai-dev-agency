@@ -18,8 +18,8 @@ export default function ProjectView() {
   const { data: project, isLoading, refetch } = useQuery({
     queryKey: ['project', id],
     queryFn: () => api.getProject(id!),
-    refetchInterval: (data) => 
-      data?.status === 'completed' || data?.status === 'failed' ? false : 3000,
+    refetchInterval: (query) => 
+      query.state.data?.status === 'completed' || query.state.data?.status === 'failed' ? false : 3000,
   })
 
   const { data: outputs } = useQuery({
