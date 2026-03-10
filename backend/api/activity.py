@@ -184,6 +184,31 @@ async def get_activity(project_id: str, limit: int = 50) -> List[dict]:
     return [e.model_dump() for e in events]
 
 
+@router.post("/{project_id}/test-emit")
+async def test_emit_activity(project_id: str) -> Dict[str, Any]:
+    """Test endpoint to emit sample activity events."""
+    emit_activity(
+        project_id, "pipeline_start",
+        "🚀 Pipeline started - building your project!",
+        progress=0
+    )
+    await asyncio.sleep(0.3)
+    emit_activity(
+        project_id, "agent_start",
+        "Analyzing project requirements...",
+        agent_name="intake",
+        progress=5
+    )
+    await asyncio.sleep(0.3)
+    emit_activity(
+        project_id, "agent_thinking",
+        "Understanding project scope and requirements...",
+        agent_name="intake",
+        progress=7
+    )
+    return {"success": True, "message": "Test events emitted"}
+
+
 @router.get("/{project_id}/status")
 async def get_pipeline_status(project_id: str) -> Dict[str, Any]:
     """Get current pipeline status summary."""
