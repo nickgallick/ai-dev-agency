@@ -1,8 +1,26 @@
-"""Intake & Classification Agent - Step 1."""
+"""Intake & Classification Agent - Step 1.
+
+Phase 11A: Enhanced with real-time brief analysis for Smart Adaptive Intake System.
+"""
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent
+
+
+# Cost estimates by project type and profile
+COST_ESTIMATES = {
+    "web_simple": {"budget": "$1-3", "balanced": "$5-10", "premium": "$15-30"},
+    "web_complex": {"budget": "$3-8", "balanced": "$10-20", "premium": "$30-60"},
+    "mobile_native_ios": {"budget": "$4-10", "balanced": "$12-25", "premium": "$40-80"},
+    "mobile_cross_platform": {"budget": "$3-8", "balanced": "$10-20", "premium": "$35-70"},
+    "mobile_pwa": {"budget": "$2-5", "balanced": "$6-12", "premium": "$20-40"},
+    "desktop_app": {"budget": "$3-8", "balanced": "$8-18", "premium": "$30-60"},
+    "chrome_extension": {"budget": "$1-3", "balanced": "$4-8", "premium": "$12-25"},
+    "cli_tool": {"budget": "$0.5-2", "balanced": "$2-5", "premium": "$8-15"},
+    "python_api": {"budget": "$1-4", "balanced": "$5-12", "premium": "$15-35"},
+    "python_saas": {"budget": "$4-12", "balanced": "$15-30", "premium": "$50-100"},
+}
 
 
 class IntakeAgent(BaseAgent):
@@ -24,6 +42,34 @@ class IntakeAgent(BaseAgent):
         "python_saas": ["saas", "software as a service", "subscription", "multi-tenant", "billing", "full-stack python"],
         "web_complex": ["dashboard", "admin panel", "e-commerce", "authentication", "database", "multi-page app", "web app"],
         "web_simple": ["landing page", "portfolio", "blog", "brochure", "static site", "simple website"],
+    }
+    
+    # Industry keywords for detection
+    INDUSTRY_KEYWORDS = {
+        "healthcare": ["healthcare", "medical", "hospital", "clinic", "patient", "doctor", "health"],
+        "fintech": ["fintech", "banking", "finance", "payment", "trading", "investment", "crypto", "wallet"],
+        "ecommerce": ["e-commerce", "ecommerce", "shop", "store", "cart", "product", "checkout", "retail"],
+        "education": ["education", "learning", "course", "student", "school", "university", "training"],
+        "real_estate": ["real estate", "property", "listing", "rental", "apartment", "house"],
+        "food_delivery": ["food", "restaurant", "delivery", "menu", "order", "catering"],
+        "travel": ["travel", "hotel", "booking", "flight", "vacation", "tour"],
+        "fitness": ["fitness", "gym", "workout", "exercise", "health", "yoga"],
+        "social": ["social", "community", "network", "chat", "messaging", "forum"],
+        "productivity": ["productivity", "task", "project management", "todo", "calendar", "scheduling"],
+    }
+    
+    # Feature keywords for suggestions
+    FEATURE_KEYWORDS = {
+        "authentication": ["login", "auth", "user", "account", "register", "sign up", "sign in"],
+        "dashboard": ["dashboard", "admin", "analytics", "metrics", "reports"],
+        "payments": ["payment", "stripe", "billing", "subscription", "checkout", "pricing"],
+        "notifications": ["notification", "alert", "email", "push", "reminder"],
+        "search": ["search", "filter", "find", "query"],
+        "file_upload": ["upload", "file", "image", "attachment", "media"],
+        "chat": ["chat", "message", "conversation", "real-time"],
+        "api": ["api", "integration", "webhook", "endpoint"],
+        "social_login": ["google login", "oauth", "social login", "github login"],
+        "dark_mode": ["dark mode", "theme", "light mode"],
     }
     
     SYSTEM_PROMPT = """You are the Intake & Classification Agent for an AI development agency.
@@ -172,3 +218,186 @@ Provide your classification as JSON."""
                     break
         
         return detected
+    
+    def _detect_industry(self, brief: str) -> Optional[str]:
+        """Detect industry from keywords in the brief."""
+        brief_lower = brief.lower()
+        
+        for industry, keywords in self.INDUSTRY_KEYWORDS.items():
+            for keyword in keywords:
+                if keyword in brief_lower:
+                    return industry
+        
+        return None
+    
+    def _detect_features(self, brief: str) -> List[str]:
+        """Detect suggested features from keywords in the brief."""
+        brief_lower = brief.lower()
+        features = []
+        
+        for feature, keywords in self.FEATURE_KEYWORDS.items():
+            for keyword in keywords:
+                if keyword in brief_lower:
+                    features.append(feature)
+                    break
+        
+        return features
+    
+    def _estimate_complexity(self, brief: str, detected_type: Optional[str], features: List[str]) -> str:
+        """Estimate project complexity based on brief analysis."""
+        # Simple heuristics
+        word_count = len(brief.split())
+        feature_count = len(features)
+        
+        # Complex types
+        complex_types = ["python_saas", "web_complex", "mobile_native_ios", "desktop_app"]
+        
+        if detected_type in complex_types or feature_count >= 4 or word_count > 200:
+            return "complex"
+        elif feature_count >= 2 or word_count > 80:
+            return "medium"
+        else:
+            return "simple"
+    
+    def _suggest_pages(self, detected_type: Optional[str], features: List[str], brief: str) -> List[str]:
+        """Suggest pages/screens based on project type and features."""
+        pages = []
+        brief_lower = brief.lower()
+        
+        # Base pages by type
+        if detected_type in ["web_simple", "web_complex", "python_saas"]:
+            pages.append("Home")
+            if "about" in brief_lower:
+                pages.append("About")
+            if "contact" in brief_lower:
+                pages.append("Contact")
+        
+        # Feature-based pages
+        if "authentication" in features:
+            pages.extend(["Login", "Register", "Profile"])
+        if "dashboard" in features:
+            pages.append("Dashboard")
+        if "payments" in features:
+            pages.extend(["Pricing", "Checkout"])
+        
+        # Mobile-specific screens
+        if detected_type in ["mobile_native_ios", "mobile_cross_platform", "mobile_pwa"]:
+            if not pages:
+                pages = ["Home", "Settings"]
+            if "authentication" in features and "Login" not in pages:
+                pages.extend(["Login", "Profile"])
+        
+        return pages[:8]  # Limit to 8 suggestions
+    
+    async def analyze_brief(self, brief: str) -> Dict[str, Any]:
+        """
+        Phase 11A: Real-time brief analysis for the Smart Adaptive Intake form.
+        
+        Uses fast/cheap model (deepseek) for quick response times.
+        Returns auto-detected values without fully classifying the project.
+        
+        Args:
+            brief: The project description text to analyze
+            
+        Returns:
+            Dict with detected_project_type, confidence, suggested_features,
+            suggested_pages, detected_industry, complexity_estimate, cost_estimate
+        """
+        if not brief or len(brief.strip()) < 10:
+            return {
+                "detected_project_type": None,
+                "confidence": 0.0,
+                "suggested_features": [],
+                "suggested_pages": [],
+                "detected_industry": None,
+                "complexity_estimate": "simple",
+                "cost_estimate": COST_ESTIMATES.get("web_simple", {}),
+                "warnings": []
+            }
+        
+        # Keyword-based detection (fast, no LLM call)
+        detected_types = self._detect_project_type_hints(brief)
+        detected_type = detected_types[0] if detected_types else "web_simple"
+        confidence = 0.9 if detected_types else 0.5
+        
+        detected_industry = self._detect_industry(brief)
+        detected_features = self._detect_features(brief)
+        complexity = self._estimate_complexity(brief, detected_type, detected_features)
+        suggested_pages = self._suggest_pages(detected_type, detected_features, brief)
+        
+        # Get cost estimates for detected type
+        cost_estimate = COST_ESTIMATES.get(detected_type, COST_ESTIMATES["web_simple"])
+        
+        # Generate warnings
+        warnings = []
+        if len(brief.split()) < 20:
+            warnings.append("Brief is quite short. Add more details for better results.")
+        if not detected_types:
+            warnings.append("Could not confidently detect project type. Please select manually.")
+        if complexity == "complex" and "authentication" not in detected_features:
+            warnings.append("Complex project detected. Consider adding authentication.")
+        
+        # For longer briefs, optionally use LLM for better suggestions
+        # (disabled by default to keep it fast)
+        use_llm_enhancement = False
+        if use_llm_enhancement and len(brief.split()) > 50:
+            try:
+                enhanced = await self._llm_enhance_analysis(brief, detected_type, detected_features)
+                if enhanced.get("suggested_features"):
+                    detected_features = list(set(detected_features + enhanced["suggested_features"]))
+                if enhanced.get("suggested_pages"):
+                    suggested_pages = list(set(suggested_pages + enhanced["suggested_pages"]))
+            except Exception:
+                pass  # Silently fail, use keyword-based results
+        
+        return {
+            "detected_project_type": detected_type,
+            "confidence": confidence,
+            "suggested_features": detected_features,
+            "suggested_pages": suggested_pages,
+            "detected_industry": detected_industry,
+            "complexity_estimate": complexity,
+            "cost_estimate": cost_estimate,
+            "warnings": warnings
+        }
+    
+    async def _llm_enhance_analysis(
+        self, 
+        brief: str, 
+        detected_type: str, 
+        detected_features: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Optional LLM-based enhancement for brief analysis.
+        Uses fast/cheap model for quick responses.
+        """
+        prompt = f"""Analyze this project brief and suggest additional features and pages.
+Current detected type: {detected_type}
+Current detected features: {', '.join(detected_features) if detected_features else 'none'}
+
+Brief:
+{brief}
+
+Respond with JSON only:
+{{
+    "suggested_features": ["feature1", "feature2"],
+    "suggested_pages": ["Page1", "Page2"]
+}}"""
+        
+        result = await self.call_llm(
+            prompt=prompt,
+            model="deepseek/deepseek-chat",  # Fast, cheap model
+            temperature=0.3,
+            max_tokens=200,
+        )
+        
+        try:
+            content = result["content"]
+            start = content.find("{")
+            end = content.rfind("}") + 1
+            if start != -1 and end != 0:
+                return json.loads(content[start:end])
+        except Exception:
+            pass
+        
+        return {}

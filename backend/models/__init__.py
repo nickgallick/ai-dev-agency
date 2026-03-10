@@ -6,6 +6,8 @@ from .deployment_record import DeploymentRecord
 from .mcp_credentials import MCPCredential
 # Phase 9A: Agent Performance Analytics
 from .agent_performance import AgentPerformance, QAFailurePattern, CostAccuracyTracking
+# Phase 11A: Project Presets
+from .preset import ProjectPreset
 
 __all__ = [
     "Base",
@@ -23,6 +25,8 @@ __all__ = [
     "AgentPerformance",
     "QAFailurePattern",
     "CostAccuracyTracking",
+    # Phase 11A
+    "ProjectPreset",
 ]
 
 # Note: Auth models (User, RefreshToken) are in backend/auth/models.py

@@ -145,15 +145,132 @@ export interface AnalyticsSummary {
   projects_tracked: number
 }
 
+// Phase 11A: Smart Intake Types
+export interface BriefAnalysis {
+  detected_project_type: string | null
+  confidence: number
+  suggested_features: string[]
+  suggested_pages: string[]
+  detected_industry: string | null
+  complexity_estimate: string
+  cost_estimate: Record<string, string>
+  warnings: string[]
+}
+
+export interface Preset {
+  id: string
+  name: string
+  description: string | null
+  icon: string | null
+  config: Record<string, any>
+  use_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PresetCreate {
+  name: string
+  description?: string
+  icon?: string
+  config: Record<string, any>
+}
+
+export interface ProjectRequirements {
+  brief: string
+  project_type: string
+  name?: string
+  cost_profile?: string
+  industry?: string
+  target_audience?: string
+  reference_urls?: string[]
+  design_preferences?: {
+    color_scheme?: string
+    primary_color?: string
+    secondary_color?: string
+    design_style?: string
+    font_preference?: string
+    enable_animations?: boolean
+    glassmorphism?: boolean
+  }
+  figma_url?: string
+  tech_stack?: {
+    frontend_framework?: string
+    css_framework?: string
+    backend_framework?: string
+    database?: string
+    mobile_framework?: string
+    desktop_framework?: string
+    auth_provider?: string
+    file_storage?: string
+  }
+  deployment?: {
+    platform?: string
+    auto_deploy?: boolean
+    domain?: string
+    submit_to_app_store?: boolean
+    submit_to_play_store?: boolean
+    build_for_mac?: boolean
+    build_for_windows?: boolean
+    build_for_linux?: boolean
+    publish_to_npm?: boolean
+    publish_to_pypi?: boolean
+  }
+  web_complex_options?: {
+    key_features?: string[]
+    pages?: string[]
+    include_auth?: boolean
+    include_dashboard?: boolean
+    include_billing?: boolean
+    include_email?: boolean
+  }
+  web_simple_options?: {
+    num_pages?: number
+    sections?: string[]
+    include_contact_form?: boolean
+    include_blog?: boolean
+  }
+  mobile_options?: {
+    platforms?: string[]
+    framework?: string
+    submit_to_stores?: boolean
+    include_push_notifications?: boolean
+    include_offline_support?: boolean
+  }
+  cli_options?: {
+    language?: string
+    package_name?: string
+    publish_to_registry?: boolean
+  }
+  desktop_options?: {
+    target_platforms?: string[]
+    framework?: string
+    include_auto_update?: boolean
+  }
+  custom_instructions?: string
+  template_id?: string
+  build_mode?: string
+  integration_config?: Record<string, any>
+}
+
 export const api = {
   // Projects
   createProject: async (data: {
     brief: string
     name?: string
     cost_profile?: string
+    project_type?: string
     reference_urls?: string[]
+    figma_url?: string
+    integration_config?: Record<string, any>
+    requirements?: Partial<ProjectRequirements>
   }): Promise<Project> => {
     const response = await apiClient.post('/projects/', data)
+    return response.data
+  },
+
+  // Phase 11A: Brief Analysis
+  analyzeBrief: async (brief: string): Promise<BriefAnalysis> => {
+    const response = await apiClient.post('/projects/analyze-brief', { brief })
     return response.data
   },
 
@@ -169,6 +286,36 @@ export const api = {
 
   getProjectOutputs: async (id: string): Promise<{ project_id: string; agent_outputs: Record<string, any> }> => {
     const response = await apiClient.get(`/projects/${id}/outputs`)
+    return response.data
+  },
+
+  // Phase 11A: Presets
+  getPresets: async (includeDefaults: boolean = true): Promise<Preset[]> => {
+    const response = await apiClient.get('/presets/', { params: { include_defaults: includeDefaults } })
+    return response.data
+  },
+
+  getPreset: async (id: string): Promise<Preset> => {
+    const response = await apiClient.get(`/presets/${id}`)
+    return response.data
+  },
+
+  createPreset: async (data: PresetCreate): Promise<Preset> => {
+    const response = await apiClient.post('/presets/', data)
+    return response.data
+  },
+
+  updatePreset: async (id: string, data: Partial<PresetCreate>): Promise<Preset> => {
+    const response = await apiClient.put(`/presets/${id}`, data)
+    return response.data
+  },
+
+  deletePreset: async (id: string): Promise<void> => {
+    await apiClient.delete(`/presets/${id}`)
+  },
+
+  usePreset: async (id: string): Promise<Preset> => {
+    const response = await apiClient.post(`/presets/${id}/use`)
     return response.data
   },
 

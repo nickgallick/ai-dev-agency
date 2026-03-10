@@ -1,15 +1,39 @@
-"""Project API routes."""
+"""Project API routes.
+
+Phase 11A: Enhanced with Smart Adaptive Intake System.
+"""
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from models import get_db, Project, ProjectType, ProjectStatus, CostProfile
+from models.requirements import ProjectRequirements, BriefAnalysis
 from orchestration import PipelineExecutor
+from agents.intake import IntakeAgent
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+# ============ Request/Response Models ============
+
+class BriefAnalysisRequest(BaseModel):
+    """Request model for brief analysis."""
+    brief: str = Field(..., min_length=1, description="Project brief to analyze")
+
+
+class BriefAnalysisResponse(BaseModel):
+    """Response model for brief analysis."""
+    detected_project_type: Optional[str] = None
+    confidence: float = 0.0
+    suggested_features: List[str] = []
+    suggested_pages: List[str] = []
+    detected_industry: Optional[str] = None
+    complexity_estimate: str = "simple"
+    cost_estimate: Dict[str, str] = {}
+    warnings: List[str] = []
 
 
 class ProjectCreate(BaseModel):
@@ -17,11 +41,14 @@ class ProjectCreate(BaseModel):
     brief: str = Field(..., min_length=10, description="Project description")
     name: Optional[str] = Field(None, description="Optional project name")
     cost_profile: str = Field("balanced", description="Cost profile: budget, balanced, premium")
+    project_type: Optional[str] = Field(None, description="Project type override")
     reference_urls: Optional[List[str]] = Field(None, description="Reference URLs for inspiration")
     tech_stack_override: Optional[dict] = Field(None, description="Override tech stack")
     # Phase 10: Integration fields
     figma_url: Optional[str] = Field(None, description="Optional Figma design file URL")
     integration_config: Optional[dict] = Field(None, description="Integration configuration")
+    # Phase 11A: Structured requirements
+    requirements: Optional[dict] = Field(None, description="Full structured requirements")
 
 
 class ProjectResponse(BaseModel):
@@ -46,6 +73,31 @@ class ProjectResponse(BaseModel):
         from_attributes = True
 
 
+# ============ Brief Analysis Endpoint (Phase 11A) ============
+
+@router.post("/analyze-brief", response_model=BriefAnalysisResponse)
+async def analyze_brief(request: BriefAnalysisRequest):
+    """
+    Phase 11A: Real-time brief analysis for the Smart Adaptive Intake form.
+    
+    This endpoint is called as the user types their project brief (debounced).
+    It returns auto-detected project type, suggested features, pages, and cost estimates.
+    Uses fast keyword-based detection (no LLM call) for quick response times.
+    """
+    intake_agent = IntakeAgent()
+    
+    try:
+        analysis = await intake_agent.analyze_brief(request.brief)
+        return BriefAnalysisResponse(**analysis)
+    except Exception as e:
+        # Return empty analysis on error
+        return BriefAnalysisResponse(
+            warnings=[f"Analysis failed: {str(e)}"]
+        )
+
+
+# ============ Project CRUD Endpoints ============
+
 @router.post("/", response_model=ProjectResponse, status_code=201)
 async def create_project(
     project: ProjectCreate,
@@ -56,16 +108,32 @@ async def create_project(
     # Create project record
     project_id = uuid.uuid4()
     
+    # Determine project type from requirements or explicit field
+    project_type = None
+    if project.project_type:
+        try:
+            project_type = ProjectType(project.project_type)
+        except ValueError:
+            pass
+    elif project.requirements and project.requirements.get("project_type"):
+        try:
+            project_type = ProjectType(project.requirements["project_type"])
+        except ValueError:
+            pass
+    
     db_project = Project(
         id=project_id,
         brief=project.brief,
         name=project.name,
+        project_type=project_type,
         status=ProjectStatus.PENDING,
         cost_profile=CostProfile(project.cost_profile),
         created_at=datetime.utcnow(),
         # Phase 10: Integration fields
         figma_url=project.figma_url,
         integration_config=project.integration_config or {},
+        # Phase 11A: Store structured requirements
+        requirements=project.requirements or {},
         project_metadata={
             "reference_urls": project.reference_urls or [],
             "tech_stack_override": project.tech_stack_override,

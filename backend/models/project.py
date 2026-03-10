@@ -95,6 +95,8 @@ class Project(Base):
     project_metadata = Column(JSONB, default=dict)  # For reference_urls, tech_stack, etc.
     revision_history = Column(JSONB, default=list)  # For project versioning
     cost_breakdown = Column(JSONB, default=dict)    # Per-agent cost breakdown
+    # Phase 11A: Structured requirements (full ProjectRequirements object)
+    requirements = Column(JSONB, default=dict)      # Complete structured requirements
     
     # Relationships
     agent_logs = relationship("AgentLog", back_populates="project", cascade="all, delete-orphan")
