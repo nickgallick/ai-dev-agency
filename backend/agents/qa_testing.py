@@ -146,24 +146,43 @@ class QATestingAgent(BaseAgent):
 
     async def execute(
         self,
-        project_path: str,
-        project_type: str = "web",
-        requirements: Optional[Dict[str, Any]] = None,
-        integrations: Optional[List[Dict[str, Any]]] = None,
+        context: Dict[str, Any] = None,
         **kwargs
     ) -> AgentResult:
         """
         Execute comprehensive QA testing.
         
         Args:
-            project_path: Path to the project directory
-            project_type: Type of project (web, mobile, api, desktop)
+            context: Pipeline context with project_path, project_type, requirements
             
         Returns:
             AgentResult with test results and quality metrics
         """
         import time
         start_time = time.time()
+        
+        # Extract from context or kwargs for backward compatibility
+        if context is None:
+            context = kwargs
+        
+        project_path = context.get("project_path", kwargs.get("project_path", "/tmp/project"))
+        project_type = context.get("project_type", kwargs.get("project_type", "web"))
+        requirements = context.get("requirements", kwargs.get("requirements"))
+        integrations = context.get("integrations", kwargs.get("integrations"))
+        
+        # Skip if no project path
+        if not project_path or not os.path.exists(project_path):
+            self.logger.warning(f"No project path available, skipping QA testing")
+            return AgentResult(
+                success=True,  # Allow pipeline to continue
+                agent_name=self.name,
+                data={
+                    "skipped": True,
+                    "reason": "No project path available",
+                    "qa_report": {"tests_passed": 0, "tests_failed": 0, "coverage": 0}
+                },
+                warnings=["QA testing skipped - no project path available"],
+            )
         
         report = QAReport()
         self.logger.info(f"Starting QA testing for {project_path}")

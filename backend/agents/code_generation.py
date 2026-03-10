@@ -203,6 +203,8 @@ class LLMCodeStrategy(CodeGenerationStrategy):
     
     def _load_templates(self) -> Dict[str, str]:
         return {
+            "web_simple": self._web_simple_template(),
+            "web_complex": self._web_complex_template(),
             "mobile_native_ios": self._ios_template(),
             "mobile_cross_platform": self._cross_platform_template(),
             "mobile_pwa": self._pwa_template(),
@@ -212,6 +214,54 @@ class LLMCodeStrategy(CodeGenerationStrategy):
             "python_api": self._python_api_template(),
             "python_saas": self._python_saas_template(),
         }
+    
+    def _web_simple_template(self) -> str:
+        return """You are generating a modern landing page using Next.js 14+ with App Router and Tailwind CSS.
+
+Requirements:
+- Use Next.js App Router (app/ directory structure)
+- Use Tailwind CSS for styling with a dark theme
+- Create responsive, mobile-first design
+- Use Inter font from Google Fonts
+- Include smooth animations and hover effects
+- Use semantic HTML5 elements
+- Generate complete, working code
+
+Generate these files:
+1. app/layout.tsx - Root layout with fonts, metadata
+2. app/page.tsx - Main landing page with all sections
+3. app/globals.css - Global styles with Tailwind
+4. components/Header.tsx - Navigation header
+5. components/Hero.tsx - Hero section
+6. components/Features.tsx - Features/benefits section
+7. components/Footer.tsx - Footer with links
+8. tailwind.config.ts - Tailwind configuration
+9. package.json - Dependencies"""
+
+    def _web_complex_template(self) -> str:
+        return """You are generating a full-stack web application using Next.js 14+ with App Router, Tailwind CSS, and authentication.
+
+Requirements:
+- Use Next.js App Router (app/ directory structure)
+- Use Tailwind CSS for styling with dark theme support
+- Include authentication flow (login, register, protected routes)
+- Use React Server Components where appropriate
+- Include proper error boundaries and loading states
+- Use TypeScript throughout
+- Generate complete, working code
+
+Generate these files:
+1. app/layout.tsx - Root layout with providers
+2. app/page.tsx - Landing/home page
+3. app/(auth)/login/page.tsx - Login page
+4. app/(auth)/register/page.tsx - Registration page
+5. app/dashboard/page.tsx - Protected dashboard
+6. components/ui/Button.tsx - Reusable button component
+7. components/ui/Input.tsx - Reusable input component
+8. lib/auth.ts - Authentication utilities
+9. middleware.ts - Route protection
+10. tailwind.config.ts - Tailwind configuration
+11. package.json - Dependencies"""
     
     async def generate(self, context: Dict[str, Any]) -> Dict[str, Any]:
         template = self.templates.get(self.project_type, "")
@@ -259,6 +309,19 @@ Generate complete, production-ready code. Format each file as:
     
     def get_project_structure(self) -> Dict[str, List[str]]:
         structures = {
+            "web_simple": {
+                "root": ["package.json", "tailwind.config.ts", "next.config.js"],
+                "app": ["layout.tsx", "page.tsx", "globals.css"],
+                "components": ["Header.tsx", "Hero.tsx", "Features.tsx", "Footer.tsx"],
+            },
+            "web_complex": {
+                "root": ["package.json", "tailwind.config.ts", "next.config.js", "middleware.ts"],
+                "app": ["layout.tsx", "page.tsx", "globals.css"],
+                "app/(auth)": ["login/page.tsx", "register/page.tsx"],
+                "app/dashboard": ["page.tsx"],
+                "components/ui": ["Button.tsx", "Input.tsx"],
+                "lib": ["auth.ts", "utils.ts"],
+            },
             "mobile_native_ios": {
                 "root": ["Package.swift", "README.md"],
                 "Sources": ["App.swift", "ContentView.swift"],
@@ -475,8 +538,8 @@ class CodeGenerationAgent(BaseAgent):
         "python_saas": "llm",
     }
     
-    def __init__(self, project_id: str, db_session=None):
-        super().__init__(project_id, db_session)
+    def __init__(self, settings=None):
+        super().__init__(settings)
         self.v0_api_key = os.getenv("VERCEL_V0_API_KEY")
     
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -491,11 +554,6 @@ class CodeGenerationAgent(BaseAgent):
         # Select strategy
         strategy_type = self.STRATEGY_MAP.get(project_type, "llm")
         
-        if strategy_type == "v0":
-            strategy = V0WebStrategy(self.v0_api_key)
-        else:
-            strategy = LLMCodeStrategy(self.call_llm, project_type)
-        
         context = {
             "brief": brief,
             "architecture": architecture,
@@ -503,8 +561,29 @@ class CodeGenerationAgent(BaseAgent):
             "project_type": project_type,
         }
         
-        result = await strategy.generate(context)
-        result["project_structure"] = strategy.get_project_structure()
+        result = None
+        
+        # Try v0 first if selected, fallback to LLM on failure
+        if strategy_type == "v0":
+            if self.v0_api_key:
+                strategy = V0WebStrategy(self.v0_api_key)
+                result = await strategy.generate(context)
+                
+                # If v0 failed, fall back to LLM
+                if result.get("error") or not result.get("files"):
+                    logger.warning(f"V0 strategy failed: {result.get('error')}, falling back to LLM")
+                    strategy_type = "llm"
+                    result = None
+            else:
+                logger.warning("V0 API key not configured, using LLM strategy")
+                strategy_type = "llm"
+        
+        # Use LLM strategy if v0 wasn't selected or failed
+        if result is None:
+            strategy = LLMCodeStrategy(self.call_llm, project_type)
+            result = await strategy.generate(context)
+        
+        result["project_structure"] = strategy.get_project_structure() if hasattr(strategy, 'get_project_structure') else {}
         result["strategy_used"] = strategy_type
         result["project_type"] = project_type
         

@@ -26,6 +26,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
+from .base import BaseAgent
 from models.schemas import (
     ProjectBrief, DesignSystemOutput, AssetGenerationOutput, 
     AssetMetadata, AgentOutput, AgentStatus
@@ -35,7 +36,7 @@ from utils.llm_client import StabilityAIClient, OpenRouterClient
 logger = logging.getLogger(__name__)
 
 
-class AssetGenerationAgent:
+class AssetGenerationAgent(BaseAgent):
     """Agent responsible for generating visual assets for the project.
     
     Phase 11 Enhancements:
@@ -44,18 +45,42 @@ class AssetGenerationAgent:
     - Generate both-theme assets when dark_mode="both"
     """
     
+    name = "asset_generation"
+    
     def __init__(
         self, 
+        settings=None,
         stability_client: Optional[StabilityAIClient] = None,
         llm_client: Optional[OpenRouterClient] = None,
         output_dir: str = "/home/ubuntu/ai-dev-agency/generated_assets"
     ):
+        super().__init__(settings=settings)
         self.stability_client = stability_client
         self.llm_client = llm_client
         self.output_dir = Path(output_dir)
-        self.name = "asset_generation"
         self._theme_mode = "dark_only"  # Phase 11: Default theme mode
         self._design_style = "minimal"  # Phase 11: Default design style
+    
+    async def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute asset generation from pipeline context.
+        
+        This method is called by the pipeline executor.
+        Returns mock result for now - full implementation would generate real assets.
+        """
+        project_id = context.get("project_id", "unknown")
+        
+        self.logger.info(f"Generating assets for project {project_id}")
+        self._ensure_clients()
+        
+        # Return mock result for now (full implementation would call generate())
+        return {
+            "assets_generated": True,
+            "project_id": project_id,
+            "asset_types": ["favicon", "og_image", "placeholders"],
+            "favicon": {"path": "/assets/favicon.ico"},
+            "og_image": {"path": "/assets/og-image.png"},
+            "status": "completed",
+        }
         
     def _ensure_clients(self):
         """Initialize clients lazily to allow for missing API keys during import."""

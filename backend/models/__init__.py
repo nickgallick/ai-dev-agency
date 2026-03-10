@@ -1,4 +1,4 @@
-from .database import Base, get_db, engine
+from .database import Base, get_db, engine, SessionLocal
 from .project import Project, ProjectType, ProjectStatus, CostProfile
 from .agent_log import AgentLog
 from .cost_tracking import CostTracking
@@ -16,6 +16,7 @@ __all__ = [
     "Base",
     "get_db",
     "engine",
+    "SessionLocal",
     "Project",
     "ProjectType",
     "ProjectStatus",

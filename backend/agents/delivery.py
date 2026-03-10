@@ -38,8 +38,8 @@ class DeliveryAgent(BaseAgent):
     description = "Delivery Agent"
     step_number = 6
     
-    def __init__(self, project_id: str, db_session=None):
-        super().__init__(project_id, db_session)
+    def __init__(self, settings=None):
+        super().__init__(settings)
         self.github_token = os.getenv("GITHUB_TOKEN")
         self.github_api_url = "https://api.github.com"
     

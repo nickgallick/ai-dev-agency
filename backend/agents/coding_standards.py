@@ -83,32 +83,46 @@ class CodingStandardsAgent(BaseAgent):
 
     async def execute(
         self,
-        project_path: str,
-        project_name: str,
-        project_type: str = "web",
-        tech_stack: Optional[List[str]] = None,
-        description: Optional[str] = None,
-        github_repo: Optional[str] = None,
-        license_type: str = "MIT",
+        context: Dict[str, Any] = None,
         **kwargs
     ) -> AgentResult:
         """
         Generate comprehensive project documentation and coding standards.
         
         Args:
-            project_path: Path to the project directory
-            project_name: Name of the project
-            project_type: Type of project (web, mobile, api, desktop)
-            tech_stack: List of technologies used
-            description: Project description
-            github_repo: GitHub repository URL
-            license_type: License type (MIT, Apache-2.0, GPL-3.0, etc.)
+            context: Pipeline context with project_path, project_name, etc.
             
         Returns:
             AgentResult with generated documentation
         """
         import time
         start_time = time.time()
+        
+        # Extract from context
+        if context is None:
+            context = kwargs
+            
+        project_path = context.get("project_path", kwargs.get("project_path"))
+        project_name = context.get("project_name", kwargs.get("project_name", "Unknown Project"))
+        project_type = context.get("project_type", kwargs.get("project_type", "web"))
+        tech_stack = context.get("tech_stack", kwargs.get("tech_stack"))
+        description = context.get("description", kwargs.get("description"))
+        github_repo = context.get("github_repo", kwargs.get("github_repo"))
+        license_type = context.get("license_type", kwargs.get("license_type", "MIT"))
+        
+        # Skip if no project path
+        if not project_path or not os.path.exists(project_path):
+            self.logger.warning("No project path available, skipping documentation generation")
+            return AgentResult(
+                success=True,
+                agent_name=self.name,
+                data={
+                    "skipped": True,
+                    "reason": "No project path available",
+                    "documentation_report": {"status": "skipped", "files_generated": []}
+                },
+                warnings=["Coding standards generation skipped - no project path available"],
+            )
         
         tech_stack = tech_stack or self._detect_tech_stack(project_path)
         report = CodingStandardsReport(

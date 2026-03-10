@@ -94,26 +94,43 @@ class DeploymentAgent(BaseAgent):
 
     async def execute(
         self,
-        project_path: str,
-        project_type: str = "web",
-        deployment_targets: Optional[List[str]] = None,
-        github_repo: Optional[str] = None,
+        context: Dict[str, Any] = None,
         **kwargs
     ) -> AgentResult:
         """
         Execute deployment based on project type.
         
         Args:
-            project_path: Path to the project directory
-            project_type: Type of project (web, mobile, api, desktop)
-            deployment_targets: List of deployment targets (vercel, railway, expo)
-            github_repo: GitHub repository URL for CI/CD workflows
+            context: Pipeline context with project_path, project_type, etc.
             
         Returns:
             AgentResult with deployment status and URLs
         """
         import time
         start_time = time.time()
+        
+        # Extract from context
+        if context is None:
+            context = kwargs
+            
+        project_path = context.get("project_path", kwargs.get("project_path"))
+        project_type = context.get("project_type", kwargs.get("project_type", "web"))
+        deployment_targets = context.get("deployment_targets", kwargs.get("deployment_targets"))
+        github_repo = context.get("github_repo", kwargs.get("github_repo"))
+        
+        # Skip if no project path
+        if not project_path or not os.path.exists(project_path):
+            self.logger.warning("No project path available, skipping deployment")
+            return AgentResult(
+                success=True,
+                agent_name=self.name,
+                data={
+                    "skipped": True,
+                    "reason": "No project path available",
+                    "deployment_report": {"status": "skipped", "deployments": []}
+                },
+                warnings=["Deployment skipped - no project path available"],
+            )
         
         report = DeploymentReport(project_type=project_type)
         self.logger.info(f"Starting deployment for {project_type} project")

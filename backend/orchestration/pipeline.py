@@ -30,6 +30,14 @@ from sqlalchemy.orm import Session
 from agents.base import AgentResult, BaseAgent
 # Phase 11B: Knowledge capture
 from knowledge.capture import capture_agent_knowledge, auto_generate_template
+# Import all actual agents
+from agents.intake import IntakeAgent
+from agents.research import ResearchAgent
+from agents.architect import ArchitectAgent
+from agents.design_system import DesignSystemAgent
+from agents.asset_generation import AssetGenerationAgent
+from agents.content_generation import ContentGenerationAgent
+from agents.code_generation import CodeGenerationAgent
 from agents.security import SecurityAgent
 from agents.seo import SEOAgent
 from agents.accessibility import AccessibilityAgent
@@ -41,6 +49,7 @@ from agents.revision_handler import RevisionHandlerAgent
 from agents.project_manager import ProjectManagerAgent, COMPLEX_PROJECT_TYPES
 from agents.code_review import CodeReviewAgent
 from agents.post_deploy_verification import PostDeployVerificationAgent
+from agents.delivery import DeliveryAgent
 from config.settings import Settings
 from utils.cost_optimizer import get_cost_optimizer, CostProfile
 from utils.agent_analytics import log_agent_performance, get_agent_analytics
@@ -250,32 +259,32 @@ class Pipeline:
         13-14. Monitoring/Standards (parallel)
         15. Delivery
         """
-        # Placeholders for Phase 1-2 agents (intake, research, architect, etc.)
+        # Core agents with real implementations
         self.add_node(PipelineNode(
             id="intake",
             name="Intake & Classification",
-            agent_class=BaseAgent,  # Placeholder
+            agent_class=IntakeAgent,
             dependencies=[],
         ))
         
         self.add_node(PipelineNode(
             id="research",
             name="Research",
-            agent_class=BaseAgent,  # Placeholder
+            agent_class=ResearchAgent,
             dependencies=["intake"],
         ))
         
         self.add_node(PipelineNode(
             id="architect",
             name="Architect",
-            agent_class=BaseAgent,  # Placeholder
+            agent_class=ArchitectAgent,
             dependencies=["research"],
         ))
         
         self.add_node(PipelineNode(
             id="design_system",
             name="Design System",
-            agent_class=BaseAgent,  # Placeholder
+            agent_class=DesignSystemAgent,
             dependencies=["architect"],
         ))
         
@@ -283,7 +292,7 @@ class Pipeline:
         self.add_node(PipelineNode(
             id="asset_generation",
             name="Asset Generation",
-            agent_class=BaseAgent,  # Placeholder
+            agent_class=AssetGenerationAgent,
             dependencies=["architect"],
             parallel_group="content_assets",
         ))
@@ -291,7 +300,7 @@ class Pipeline:
         self.add_node(PipelineNode(
             id="content_generation",
             name="Content Generation",
-            agent_class=BaseAgent,  # Placeholder
+            agent_class=ContentGenerationAgent,
             dependencies=["architect"],
             parallel_group="content_assets",
         ))
@@ -309,7 +318,7 @@ class Pipeline:
         self.add_node(PipelineNode(
             id="code_generation",
             name="Code Generation",
-            agent_class=BaseAgent,  # Placeholder - actual implementation uses v0 API
+            agent_class=CodeGenerationAgent,
             dependencies=["pm_checkpoint_1"],
         ))
         
@@ -398,11 +407,11 @@ class Pipeline:
             parallel_group="phase6",
         ))
         
-        # Delivery Agent (placeholder)
+        # Delivery Agent
         self.add_node(PipelineNode(
             id="delivery",
             name="Delivery",
-            agent_class=BaseAgent,  # Placeholder
+            agent_class=DeliveryAgent,
             dependencies=["analytics_monitoring", "coding_standards"],
         ))
         

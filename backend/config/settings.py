@@ -62,6 +62,50 @@ class Settings:
     )
     
     # ===========================================
+    # LLM API Configuration
+    # ===========================================
+    
+    # OpenRouter API Key (required for all LLM calls)
+    openrouter_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("OPENROUTER_API_KEY")
+    )
+    
+    # Vercel v0 API for code generation
+    vercel_v0_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("VERCEL_V0_API_KEY")
+    )
+    
+    # GitHub Token for repository operations
+    github_token: Optional[str] = field(
+        default_factory=lambda: os.getenv("GITHUB_TOKEN")
+    )
+    
+    # Tavily API for research
+    tavily_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("TAVILY_API_KEY")
+    )
+    
+    # OpenAI API Key (for DALL-E image generation)
+    openai_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("OPENAI_API_KEY")
+    )
+    
+    # Vercel Token (for deployment)
+    vercel_token: Optional[str] = field(
+        default_factory=lambda: os.getenv("VERCEL_TOKEN")
+    )
+    
+    # Railway Token (for deployment)
+    railway_token: Optional[str] = field(
+        default_factory=lambda: os.getenv("RAILWAY_TOKEN")
+    )
+    
+    # Encryption Key for credentials
+    encryption_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("ENCRYPTION_KEY")
+    )
+    
+    # ===========================================
     # Phase 10: Integration Settings
     # ===========================================
     

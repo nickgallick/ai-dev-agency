@@ -117,12 +117,33 @@ class BaseAgent(ABC):
         try:
             self.logger.info(f"Starting {self.name} agent")
             result = await self.execute(context)
-            self.status = AgentStatus.COMPLETED if result.success else AgentStatus.FAILED
-            result.execution_time = time.time() - start_time
+            
+            # Handle both Dict and AgentResult returns from execute()
+            if isinstance(result, AgentResult):
+                agent_result = result
+            elif isinstance(result, dict):
+                # Wrap dict result in AgentResult
+                agent_result = AgentResult(
+                    success=not result.get("error"),
+                    agent_name=self.name,
+                    data=result,
+                    errors=result.get("errors", []) if isinstance(result.get("errors"), list) else [],
+                    warnings=result.get("warnings", []) if isinstance(result.get("warnings"), list) else [],
+                )
+            else:
+                # Unexpected return type
+                agent_result = AgentResult(
+                    success=True,
+                    agent_name=self.name,
+                    data={"result": result} if result else {},
+                )
+            
+            self.status = AgentStatus.COMPLETED if agent_result.success else AgentStatus.FAILED
+            agent_result.execution_time = time.time() - start_time
             self.logger.info(
-                f"{self.name} agent completed in {result.execution_time:.2f}s"
+                f"{self.name} agent completed in {agent_result.execution_time:.2f}s"
             )
-            return result
+            return agent_result
         except asyncio.CancelledError:
             self.status = AgentStatus.CANCELLED
             self.logger.warning(f"{self.name} agent cancelled")
@@ -141,6 +162,134 @@ class BaseAgent(ABC):
                 errors=[str(e)],
                 execution_time=time.time() - start_time,
             )
+
+    async def call_llm(
+        self,
+        prompt: str,
+        model: str = "anthropic/claude-3-haiku",
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> Dict[str, Any]:
+        """Call the LLM via OpenRouter API.
+        
+        Returns dict with: content, prompt_tokens, completion_tokens, total_tokens, cost, duration_ms
+        """
+        import httpx
+        import time
+        
+        api_key = self.settings.openrouter_api_key
+        if not api_key:
+            self.logger.warning("OpenRouter API key not configured, returning mock response")
+            return {
+                "content": f"Mock response for: {prompt[:100]}...",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "cost": 0.0,
+                "duration_ms": 0,
+            }
+        
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        
+        start_time = time.time()
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://ai-dev-agency.local",
+                        "X-Title": "AI Dev Agency",
+                    },
+                    json={
+                        "model": model,
+                        "messages": messages,
+                        "max_tokens": max_tokens,
+                        "temperature": temperature,
+                    },
+                    timeout=120.0,
+                )
+                
+                duration_ms = int((time.time() - start_time) * 1000)
+                
+                if response.status_code != 200:
+                    self.logger.error(f"LLM API error: {response.status_code} - {response.text}")
+                    return {
+                        "content": f"Error: API returned {response.status_code}",
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "total_tokens": 0,
+                        "cost": 0.0,
+                        "duration_ms": duration_ms,
+                        "error": response.text,
+                    }
+                
+                data = response.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                usage = data.get("usage", {})
+                
+                return {
+                    "content": content,
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                    "cost": self._calculate_cost(model, usage),
+                    "duration_ms": duration_ms,
+                }
+                
+        except Exception as e:
+            self.logger.error(f"LLM call failed: {e}")
+            return {
+                "content": f"Error: {str(e)}",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "cost": 0.0,
+                "duration_ms": int((time.time() - start_time) * 1000),
+                "error": str(e),
+            }
+    
+    def _calculate_cost(self, model: str, usage: Dict[str, int]) -> float:
+        """Calculate cost based on model and token usage."""
+        # Approximate costs per 1K tokens (input/output)
+        MODEL_COSTS = {
+            "anthropic/claude-3-haiku": (0.00025, 0.00125),
+            "anthropic/claude-3-sonnet": (0.003, 0.015),
+            "anthropic/claude-3-opus": (0.015, 0.075),
+            "openai/gpt-4-turbo": (0.01, 0.03),
+            "openai/gpt-4o": (0.005, 0.015),
+            "openai/gpt-3.5-turbo": (0.0005, 0.0015),
+            "deepseek/deepseek-coder": (0.0001, 0.0002),
+            "deepseek/deepseek-chat": (0.00014, 0.00028),
+        }
+        
+        input_cost, output_cost = MODEL_COSTS.get(model, (0.001, 0.002))
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        
+        return (prompt_tokens * input_cost + completion_tokens * output_cost) / 1000
+
+    async def log_execution(
+        self,
+        input_data: Dict[str, Any],
+        output_data: Dict[str, Any],
+        model: str,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost: float = 0.0,
+        duration_ms: int = 0,
+    ) -> None:
+        """Log agent execution details."""
+        self.logger.info(
+            f"Execution complete: model={model}, tokens={prompt_tokens+completion_tokens}, "
+            f"cost=${cost:.4f}, duration={duration_ms}ms"
+        )
 
     def run_docker_container(
         self,

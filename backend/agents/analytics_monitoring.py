@@ -133,28 +133,45 @@ class AnalyticsMonitoringAgent(BaseAgent):
 
     async def execute(
         self,
-        project_path: str,
-        project_name: str,
-        site_url: Optional[str] = None,
-        project_type: str = "web",
-        requirements: Optional[Dict[str, Any]] = None,
-        deployment_platform: Optional[str] = None,
+        context: Dict[str, Any] = None,
         **kwargs
     ) -> AgentResult:
         """
         Set up analytics and monitoring for the project.
         
         Args:
-            project_path: Path to the project directory
-            project_name: Name of the project
-            site_url: URL of the deployed site (for monitoring)
-            project_type: Type of project (web, mobile, api, desktop)
+            context: Pipeline context with project_path, project_name, etc.
             
         Returns:
             AgentResult with monitoring configuration
         """
         import time
         start_time = time.time()
+        
+        # Extract from context
+        if context is None:
+            context = kwargs
+            
+        project_path = context.get("project_path", kwargs.get("project_path"))
+        project_name = context.get("project_name", kwargs.get("project_name", "Unknown Project"))
+        site_url = context.get("site_url", kwargs.get("site_url"))
+        project_type = context.get("project_type", kwargs.get("project_type", "web"))
+        requirements = context.get("requirements", kwargs.get("requirements"))
+        deployment_platform = context.get("deployment_platform", kwargs.get("deployment_platform"))
+        
+        # Skip if no project path
+        if not project_path or not os.path.exists(project_path):
+            self.logger.warning("No project path available, skipping analytics setup")
+            return AgentResult(
+                success=True,
+                agent_name=self.name,
+                data={
+                    "skipped": True,
+                    "reason": "No project path available",
+                    "monitoring_report": {"status": "skipped", "services_configured": []}
+                },
+                warnings=["Analytics/Monitoring setup skipped - no project path available"],
+            )
         
         report = MonitoringReport(project_name=project_name)
         self.logger.info(f"Setting up monitoring for {project_name}")

@@ -1,5 +1,13 @@
 """FastAPI application for AI Dev Agency."""
 import os
+from pathlib import Path
+
+# Load environment variables from .env file before any other imports
+from dotenv import load_dotenv
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
