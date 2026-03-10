@@ -16,7 +16,7 @@ try:
 except ImportError:
     DOCKER_SDK_AVAILABLE = False
 
-from ..config.settings import Settings
+from config.settings import Settings
 
 
 class AgentStatus(Enum):

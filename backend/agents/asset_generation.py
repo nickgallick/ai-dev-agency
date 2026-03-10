@@ -17,11 +17,11 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
-from ..models.schemas import (
+from models.schemas import (
     ProjectBrief, DesignSystemOutput, AssetGenerationOutput, 
     AssetMetadata, AgentOutput, AgentStatus
 )
-from ..utils.llm_client import StabilityAIClient, OpenRouterClient
+from utils.llm_client import StabilityAIClient, OpenRouterClient
 
 
 class AssetGenerationAgent:

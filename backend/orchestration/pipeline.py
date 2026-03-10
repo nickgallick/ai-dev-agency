@@ -6,11 +6,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Type
 
-from ..agents.base import AgentResult, BaseAgent
-from ..agents.security import SecurityAgent
-from ..agents.seo import SEOAgent
-from ..agents.accessibility import AccessibilityAgent
-from ..config.settings import Settings
+from agents.base import AgentResult, BaseAgent
+from agents.security import SecurityAgent
+from agents.seo import SEOAgent
+from agents.accessibility import AccessibilityAgent
+from config.settings import Settings
 
 
 class NodeStatus(Enum):
@@ -453,3 +453,22 @@ class Pipeline:
                     lines.append(f"{indent}   └─ depends on: {deps}")
 
         return "\n".join(lines)
+
+
+# Factory function and state class for backwards compatibility
+class PipelineState:
+    """State object for pipeline execution tracking."""
+    
+    def __init__(self, project_id: str = ""):
+        self.project_id = project_id
+        self.current_node: Optional[str] = None
+        self.completed_nodes: List[str] = []
+        self.failed_nodes: List[str] = []
+        self.context: Dict[str, Any] = {}
+        self.errors: List[str] = []
+
+
+def create_pipeline(project_id: str = "", config: Optional[PipelineConfig] = None) -> Pipeline:
+    """Factory function to create a configured pipeline instance."""
+    pipeline = Pipeline(project_id=project_id, config=config)
+    return pipeline

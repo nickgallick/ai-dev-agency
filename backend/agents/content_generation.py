@@ -11,11 +11,11 @@ import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from ..models.schemas import (
+from models.schemas import (
     ProjectBrief, DesignSystemOutput, ContentGenerationOutput,
     ContentData, AgentOutput, AgentStatus, ProjectType
 )
-from ..utils.llm_client import OpenRouterClient
+from utils.llm_client import OpenRouterClient
 
 
 class ContentGenerationAgent:
