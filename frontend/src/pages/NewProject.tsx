@@ -4,7 +4,8 @@ import { useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { 
   Mic, ChevronDown, ChevronUp, Globe, Smartphone, Monitor, 
-  Chrome, Terminal, Server, Sparkles, ArrowRight, Zap, Shield, Crown 
+  Chrome, Terminal, Server, Sparkles, ArrowRight, Zap, Shield, Crown,
+  Figma, Info
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -112,6 +113,8 @@ export default function NewProject() {
   const [referenceUrls, setReferenceUrls] = useState('')
   const [selectedType, setSelectedType] = useState<string | null>(null)
   const [detectedType, setDetectedType] = useState<string | null>(null)
+  // Phase 10: Figma integration
+  const [figmaUrl, setFigmaUrl] = useState('')
 
   // Detect project type from brief
   useEffect(() => {
@@ -148,6 +151,8 @@ export default function NewProject() {
       cost_profile: costProfile,
       project_type: selectedType || detectedType || 'web_simple',
       reference_urls: referenceUrls ? referenceUrls.split('\n').filter(Boolean) : undefined,
+      // Phase 10: Figma integration
+      figma_url: figmaUrl || undefined,
     })
   }
 
@@ -335,6 +340,45 @@ export default function NewProject() {
                   placeholder="My Awesome Project"
                   className="glass-input"
                 />
+              </div>
+              
+              {/* Phase 10: Figma URL Input */}
+              <div>
+                <label className="flex items-center gap-2 mb-2 font-medium" 
+                       style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                  <Figma className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
+                  Figma Design URL (optional)
+                  <div className="relative group">
+                    <Info className="w-4 h-4 cursor-help" style={{ color: 'var(--text-tertiary)' }} />
+                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50">
+                      <div className="glass-card p-3 text-xs" style={{ 
+                        width: '250px', 
+                        background: 'var(--background-tertiary)',
+                        borderColor: 'var(--accent-primary)'
+                      }}>
+                        <p style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>
+                          <strong>Figma Integration</strong>
+                        </p>
+                        <p style={{ color: 'var(--text-secondary)' }}>
+                          Paste a Figma file URL to extract design tokens, layout structure, and component definitions. 
+                          Helps create more accurate code that matches your design.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+                <input
+                  type="url"
+                  value={figmaUrl}
+                  onChange={(e) => setFigmaUrl(e.target.value)}
+                  placeholder="https://www.figma.com/file/abc123/..."
+                  className="glass-input"
+                />
+                {figmaUrl && (
+                  <p className="mt-1 text-xs" style={{ color: 'var(--accent-success)' }}>
+                    ✓ Figma design will be analyzed for colors, typography, and layout
+                  </p>
+                )}
               </div>
               
               <div>

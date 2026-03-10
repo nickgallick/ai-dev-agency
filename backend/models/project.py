@@ -81,6 +81,10 @@ class Project(Base):
     github_repo = Column(String(500), nullable=True)
     live_url = Column(String(500), nullable=True)
     
+    # Phase 10: Integration fields
+    figma_url = Column(String(500), nullable=True)  # Optional Figma design file URL
+    integration_config = Column(JSONB, default=dict)  # Which integrations to use/inject
+    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

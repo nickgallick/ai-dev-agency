@@ -60,6 +60,78 @@ class Settings:
             "DATABASE_URL", "postgresql://postgres:postgres@db:5432/aidevagency"
         )
     )
+    
+    # ===========================================
+    # Phase 10: Integration Settings
+    # ===========================================
+    
+    # Figma MCP Integration (Agency System - used by agents during generation)
+    figma_access_token: Optional[str] = field(
+        default_factory=lambda: os.getenv("FIGMA_ACCESS_TOKEN")
+    )
+    
+    # BrowserStack Integration (Agency System - used by QA Agent)
+    browserstack_username: Optional[str] = field(
+        default_factory=lambda: os.getenv("BROWSERSTACK_USERNAME")
+    )
+    browserstack_access_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("BROWSERSTACK_ACCESS_KEY")
+    )
+    
+    # Resend Integration (Generated Project Defaults - for email in SaaS projects)
+    resend_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("RESEND_API_KEY")
+    )
+    
+    # Cloudflare R2 Integration (Generated Project Defaults - for file storage)
+    r2_access_key_id: Optional[str] = field(
+        default_factory=lambda: os.getenv("R2_ACCESS_KEY_ID")
+    )
+    r2_secret_access_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("R2_SECRET_ACCESS_KEY")
+    )
+    r2_bucket_name: Optional[str] = field(
+        default_factory=lambda: os.getenv("R2_BUCKET_NAME")
+    )
+    r2_account_id: Optional[str] = field(
+        default_factory=lambda: os.getenv("R2_ACCOUNT_ID")
+    )
+    
+    # Inngest Integration (Generated Project Defaults - for background jobs)
+    inngest_event_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("INNGEST_EVENT_KEY")
+    )
+    
+    # Helper properties for integration status
+    @property
+    def figma_configured(self) -> bool:
+        """Check if Figma MCP is configured."""
+        return bool(self.figma_access_token)
+    
+    @property
+    def browserstack_configured(self) -> bool:
+        """Check if BrowserStack is configured."""
+        return bool(self.browserstack_username and self.browserstack_access_key)
+    
+    @property
+    def resend_configured(self) -> bool:
+        """Check if Resend is configured."""
+        return bool(self.resend_api_key)
+    
+    @property
+    def r2_configured(self) -> bool:
+        """Check if Cloudflare R2 is configured."""
+        return bool(
+            self.r2_access_key_id and 
+            self.r2_secret_access_key and 
+            self.r2_bucket_name and 
+            self.r2_account_id
+        )
+    
+    @property
+    def inngest_configured(self) -> bool:
+        """Check if Inngest is configured."""
+        return bool(self.inngest_event_key)
 
     def __post_init__(self):
         """Validate settings after initialization."""

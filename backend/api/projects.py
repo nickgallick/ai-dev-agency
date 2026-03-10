@@ -19,6 +19,9 @@ class ProjectCreate(BaseModel):
     cost_profile: str = Field("balanced", description="Cost profile: budget, balanced, premium")
     reference_urls: Optional[List[str]] = Field(None, description="Reference URLs for inspiration")
     tech_stack_override: Optional[dict] = Field(None, description="Override tech stack")
+    # Phase 10: Integration fields
+    figma_url: Optional[str] = Field(None, description="Optional Figma design file URL")
+    integration_config: Optional[dict] = Field(None, description="Integration configuration")
 
 
 class ProjectResponse(BaseModel):
@@ -32,6 +35,9 @@ class ProjectResponse(BaseModel):
     cost_estimate: Optional[float]
     github_repo: Optional[str]
     live_url: Optional[str]
+    # Phase 10: Integration fields
+    figma_url: Optional[str] = None
+    integration_config: Optional[dict] = None
     created_at: datetime
     updated_at: Optional[datetime]
     completed_at: Optional[datetime]
@@ -57,7 +63,10 @@ async def create_project(
         status=ProjectStatus.PENDING,
         cost_profile=CostProfile(project.cost_profile),
         created_at=datetime.utcnow(),
-        metadata={
+        # Phase 10: Integration fields
+        figma_url=project.figma_url,
+        integration_config=project.integration_config or {},
+        project_metadata={
             "reference_urls": project.reference_urls or [],
             "tech_stack_override": project.tech_stack_override,
         },
@@ -85,6 +94,8 @@ async def create_project(
         cost_estimate=db_project.cost_estimate,
         github_repo=db_project.github_repo,
         live_url=db_project.live_url,
+        figma_url=db_project.figma_url,
+        integration_config=db_project.integration_config,
         created_at=db_project.created_at,
         updated_at=db_project.updated_at,
         completed_at=db_project.completed_at,
@@ -120,6 +131,8 @@ async def list_projects(
             cost_estimate=p.cost_estimate,
             github_repo=p.github_repo,
             live_url=p.live_url,
+            figma_url=p.figma_url,
+            integration_config=p.integration_config,
             created_at=p.created_at,
             updated_at=p.updated_at,
             completed_at=p.completed_at,
@@ -149,6 +162,8 @@ async def get_project(
         cost_estimate=project.cost_estimate,
         github_repo=project.github_repo,
         live_url=project.live_url,
+        figma_url=project.figma_url,
+        integration_config=project.integration_config,
         created_at=project.created_at,
         updated_at=project.updated_at,
         completed_at=project.completed_at,

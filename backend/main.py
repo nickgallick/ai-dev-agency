@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import projects_router, agents_router, costs_router, health_router
-from api.routes import revisions_router, analytics_router
+from api.routes import revisions_router, analytics_router, integrations_router
 from auth import auth_router
 from models import engine, Base
 
@@ -48,6 +48,7 @@ app.include_router(agents_router, prefix="/api")
 app.include_router(costs_router, prefix="/api")
 app.include_router(revisions_router)  # Already has /api prefix in router
 app.include_router(analytics_router)  # Phase 9A: Analytics - Already has /api prefix
+app.include_router(integrations_router, prefix="/api")  # Phase 10: Integrations
 
 
 @app.get("/")
