@@ -29,6 +29,11 @@ from .coding_standards import CodingStandardsAgent
 # Phase 7: Revision Handler
 from .revision_handler import RevisionHandlerAgent
 
+# Phase 8: Project Manager, Code Review, Post-Deploy Verification
+from .project_manager import ProjectManagerAgent
+from .code_review import CodeReviewAgent
+from .post_deploy_verification import PostDeployVerificationAgent
+
 __all__ = [
     # Base
     "BaseAgent",
@@ -54,4 +59,8 @@ __all__ = [
     "CodingStandardsAgent",
     # Phase 7
     "RevisionHandlerAgent",
+    # Phase 8
+    "ProjectManagerAgent",
+    "CodeReviewAgent",
+    "PostDeployVerificationAgent",
 ]

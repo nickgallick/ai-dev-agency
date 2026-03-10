@@ -114,6 +114,11 @@ COST_PROFILES = {
             "asset_generation": "openai/gpt-4o-mini",
             "content_generation": "deepseek/deepseek-chat",
             "code_generation": "deepseek/deepseek-coder",
+            # Phase 8 new agents
+            "project_manager": "anthropic/claude-sonnet-4",  # PM needs good reasoning
+            "code_review": "anthropic/claude-sonnet-4",      # Code review needs accuracy
+            "post_deploy_verification": "deepseek/deepseek-chat",  # Just HTTP requests
+            # Quality agents
             "security": "deepseek/deepseek-coder",
             "seo": "deepseek/deepseek-chat",
             "accessibility": "deepseek/deepseek-chat",
@@ -146,6 +151,11 @@ COST_PROFILES = {
             "asset_generation": "openai/gpt-4o",
             "content_generation": "openai/gpt-4o",
             "code_generation": "anthropic/claude-sonnet-4",
+            # Phase 8 new agents
+            "project_manager": "anthropic/claude-sonnet-4",  # PM uses Sonnet
+            "code_review": "anthropic/claude-sonnet-4",      # Code review uses Sonnet
+            "post_deploy_verification": "deepseek/deepseek-chat",  # Just HTTP requests
+            # Quality agents
             "security": "anthropic/claude-sonnet-4",
             "seo": "anthropic/claude-sonnet-4",
             "accessibility": "anthropic/claude-sonnet-4",
@@ -178,6 +188,11 @@ COST_PROFILES = {
             "asset_generation": "openai/gpt-4o",
             "content_generation": "anthropic/claude-opus-4",
             "code_generation": "anthropic/claude-opus-4",
+            # Phase 8 new agents
+            "project_manager": "anthropic/claude-opus-4",  # Premium uses Opus
+            "code_review": "anthropic/claude-opus-4",      # Premium uses Opus
+            "post_deploy_verification": "anthropic/claude-sonnet-4",  # Sonnet for HTTP requests
+            # Quality agents
             "security": "anthropic/claude-opus-4",
             "seo": "anthropic/claude-opus-4",
             "accessibility": "anthropic/claude-opus-4",

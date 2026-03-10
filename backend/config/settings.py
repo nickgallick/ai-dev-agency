@@ -67,3 +67,14 @@ class Settings:
             raise ValueError(
                 f"Invalid DOCKER_INTEGRATION_MODE: {self.docker_integration_mode}"
             )
+
+
+_settings = None
+
+
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings

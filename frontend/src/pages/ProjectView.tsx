@@ -5,7 +5,7 @@ import { Badge } from '@/components/Badge'
 import { PipelineVisualization } from '@/components/PipelineVisualization'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { api } from '@/lib/api'
-import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge } from 'lucide-react'
+import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe } from 'lucide-react'
 import { Button } from '@/components/Button'
 
 export default function ProjectView() {
@@ -42,9 +42,14 @@ export default function ProjectView() {
     { name: 'Research', status: getAgentStatus(project.status, 'research') },
     { name: 'Architect', status: getAgentStatus(project.status, 'architect') },
     { name: 'Design', status: getAgentStatus(project.status, 'design') },
+    { name: 'PM Check 1', status: getAgentStatus(project.status, 'pm_checkpoint_1') },  // ★ New
     { name: 'Code Gen', status: getAgentStatus(project.status, 'code_generation') },
+    { name: 'PM Check 2', status: getAgentStatus(project.status, 'pm_checkpoint_2') },  // ★ New
+    { name: 'Code Review', status: getAgentStatus(project.status, 'code_review') },    // ★ New
+    { name: 'Security', status: getAgentStatus(project.status, 'security') },
     { name: 'QA Test', status: getAgentStatus(project.status, 'qa') },
     { name: 'Deploy', status: getAgentStatus(project.status, 'deployment') },
+    { name: 'Verify', status: getAgentStatus(project.status, 'post_deploy_verification') },  // ★ New
     { name: 'Monitoring', status: getAgentStatus(project.status, 'analytics_monitoring') },
     { name: 'Standards', status: getAgentStatus(project.status, 'coding_standards') },
   ]
@@ -56,6 +61,12 @@ export default function ProjectView() {
   // Extract Phase 6 data from outputs
   const monitoringReport = outputs?.agent_outputs?.analytics_monitoring?.report
   const codingStandardsReport = outputs?.agent_outputs?.coding_standards?.report
+  
+  // Extract Phase 8 data - New agents
+  const pmCheckpoint1 = outputs?.agent_outputs?.pm_checkpoint_1
+  const pmCheckpoint2 = outputs?.agent_outputs?.pm_checkpoint_2
+  const codeReviewReport = outputs?.agent_outputs?.code_review?.report
+  const deployVerificationReport = outputs?.agent_outputs?.post_deploy_verification?.report
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
@@ -121,6 +132,137 @@ export default function ProjectView() {
             </a>
           ))}
         </div>
+      )}
+
+      {/* PM Checkpoint 1 - Build Manifest */}
+      {pmCheckpoint1 && pmCheckpoint1.build_manifest && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <ClipboardCheck className="w-5 h-5 text-accent-primary" />
+            <h3 className="font-medium text-text-primary">PM Checkpoint 1: Coherence</h3>
+            <Badge variant={pmCheckpoint1.coherent ? 'success' : 'error'}>
+              {pmCheckpoint1.coherent ? 'Passed' : 'Issues Found'}
+            </Badge>
+          </div>
+          
+          {pmCheckpoint1.issues?.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-text-secondary mb-2">Validation Issues</h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {pmCheckpoint1.issues.slice(0, 10).map((issue: any, idx: number) => (
+                  <div key={idx} className={`p-2 rounded border-l-2 ${
+                    issue.severity === 'critical' ? 'border-red-400 bg-red-500/10' :
+                    issue.severity === 'warning' ? 'border-yellow-400 bg-yellow-500/10' :
+                    'border-blue-400 bg-blue-500/10'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={issue.severity === 'critical' ? 'error' : issue.severity === 'warning' ? 'warning' : 'info'}>
+                        {issue.severity}
+                      </Badge>
+                      <span className="text-sm text-text-primary">{issue.category}</span>
+                    </div>
+                    <p className="text-xs text-text-secondary mt-1">{issue.message}</p>
+                    <p className="text-xs text-text-tertiary mt-1">💡 {issue.suggestion}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <details className="group">
+            <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
+              View Build Manifest
+            </summary>
+            <div className="mt-3 p-3 bg-background-tertiary rounded-lg">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div>
+                  <span className="text-text-tertiary">Pages:</span>
+                  <span className="ml-2 text-text-primary">{pmCheckpoint1.build_manifest.pages?.length || 0}</span>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Components:</span>
+                  <span className="ml-2 text-text-primary">{pmCheckpoint1.build_manifest.components?.length || 0}</span>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">API Endpoints:</span>
+                  <span className="ml-2 text-text-primary">{pmCheckpoint1.build_manifest.api_endpoints?.length || 0}</span>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Warnings:</span>
+                  <span className="ml-2 text-text-primary">{pmCheckpoint1.build_manifest.warnings?.length || 0}</span>
+                </div>
+              </div>
+            </div>
+          </details>
+        </Card>
+      )}
+
+      {/* Code Review Report */}
+      {codeReviewReport && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Code2 className="w-5 h-5 text-accent-primary" />
+            <h3 className="font-medium text-text-primary">Code Review</h3>
+            <Badge variant={codeReviewReport.pass_threshold ? 'success' : 'error'}>
+              {codeReviewReport.pass_threshold ? 'Passed' : 'Needs Attention'}
+            </Badge>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+            <div className="bg-background-tertiary rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-text-primary">{codeReviewReport.total_files_scanned || 0}</div>
+              <div className="text-xs text-text-secondary">Files Scanned</div>
+            </div>
+            <div className="bg-background-tertiary rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-text-primary">{codeReviewReport.total_issues || 0}</div>
+              <div className="text-xs text-text-secondary">Total Issues</div>
+            </div>
+            <div className="bg-red-500/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-red-400">{codeReviewReport.issues_by_severity?.critical || 0}</div>
+              <div className="text-xs text-text-secondary">Critical</div>
+            </div>
+            <div className="bg-yellow-500/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-yellow-400">{codeReviewReport.issues_by_severity?.high || 0}</div>
+              <div className="text-xs text-text-secondary">High</div>
+            </div>
+            <div className="bg-green-500/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-green-400">{codeReviewReport.auto_fixes_applied?.length || 0}</div>
+              <div className="text-xs text-text-secondary">Auto-Fixed</div>
+            </div>
+          </div>
+
+          {codeReviewReport.issues?.length > 0 && (
+            <details className="group">
+              <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
+                View Issues by Category
+              </summary>
+              <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
+                {codeReviewReport.issues.slice(0, 15).map((issue: any, idx: number) => (
+                  <div key={idx} className={`p-2 rounded border-l-2 ${
+                    issue.severity === 'critical' ? 'border-red-400 bg-red-500/10' :
+                    issue.severity === 'high' ? 'border-orange-400 bg-orange-500/10' :
+                    issue.severity === 'medium' ? 'border-yellow-400 bg-yellow-500/10' :
+                    'border-blue-400 bg-blue-500/10'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={issue.severity === 'critical' || issue.severity === 'high' ? 'error' : 'warning'} className="text-xs">
+                        {issue.category}
+                      </Badge>
+                      <span className="text-sm text-text-primary">{issue.rule}</span>
+                      {issue.auto_fixable && <span className="text-xs text-green-400">🔧 Auto-fixable</span>}
+                    </div>
+                    <p className="text-xs text-text-secondary mt-1">{issue.message}</p>
+                    <p className="text-xs text-text-tertiary">{issue.file}:{issue.line}</p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          <div className="mt-4 p-3 bg-background-tertiary rounded-lg">
+            <p className="text-sm text-text-secondary">{codeReviewReport.summary}</p>
+          </div>
+        </Card>
       )}
 
       {/* QA Test Results */}
@@ -300,6 +442,112 @@ export default function ProjectView() {
                 </pre>
               </div>
             </details>
+          )}
+        </Card>
+      )}
+
+      {/* Post-Deploy Verification */}
+      {deployVerificationReport && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Globe className="w-5 h-5 text-accent-primary" />
+            <h3 className="font-medium text-text-primary">Post-Deploy Verification</h3>
+            <Badge variant={deployVerificationReport.overall_status === 'passed' ? 'success' : 
+                           deployVerificationReport.overall_status === 'partial' ? 'warning' : 'error'}>
+              {deployVerificationReport.overall_status}
+            </Badge>
+          </div>
+          
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="bg-green-500/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-green-400">{deployVerificationReport.checks_passed || 0}</div>
+              <div className="text-xs text-text-secondary">Checks Passed</div>
+            </div>
+            <div className="bg-red-500/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-red-400">{deployVerificationReport.checks_failed || 0}</div>
+              <div className="text-xs text-text-secondary">Checks Failed</div>
+            </div>
+            <div className={`rounded-lg p-3 text-center ${deployVerificationReport.ssl_valid ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+              <div className="text-xl font-bold text-text-primary">{deployVerificationReport.ssl_valid ? '🔒' : '🔓'}</div>
+              <div className="text-xs text-text-secondary">SSL {deployVerificationReport.ssl_valid ? 'Valid' : 'Invalid'}</div>
+            </div>
+            {deployVerificationReport.visual_diff_score !== null && (
+              <div className="bg-background-tertiary rounded-lg p-3 text-center">
+                <div className="text-xl font-bold text-text-primary">{Math.round((deployVerificationReport.visual_diff_score || 0) * 100)}%</div>
+                <div className="text-xs text-text-secondary">Visual Match</div>
+              </div>
+            )}
+          </div>
+
+          {/* Endpoint Checks */}
+          {deployVerificationReport.endpoint_checks?.length > 0 && (
+            <details className="group mb-4">
+              <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
+                Endpoint Health Checks ({deployVerificationReport.endpoint_checks.length})
+              </summary>
+              <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                {deployVerificationReport.endpoint_checks.map((check: any, idx: number) => (
+                  <div key={idx} className={`p-2 rounded flex items-center justify-between ${
+                    check.passed ? 'bg-green-500/10' : 'bg-red-500/10'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {check.passed ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-red-400" />
+                      )}
+                      <span className="text-sm text-text-primary truncate max-w-[200px]">{check.url}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className={check.passed ? 'text-green-400' : 'text-red-400'}>{check.status_code}</span>
+                      <span className="text-text-tertiary">{check.response_time_ms}ms</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {/* Verification Results */}
+          {deployVerificationReport.verification_results?.length > 0 && (
+            <details className="group">
+              <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
+                Verification Details
+              </summary>
+              <div className="mt-3 space-y-2">
+                {deployVerificationReport.verification_results.map((result: any, idx: number) => (
+                  <div key={idx} className={`p-2 rounded flex items-center gap-2 ${
+                    result.passed ? 'bg-green-500/10' : result.severity === 'critical' ? 'bg-red-500/10' : 'bg-yellow-500/10'
+                  }`}>
+                    {result.passed ? (
+                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    ) : (
+                      <XCircle className={`w-4 h-4 flex-shrink-0 ${result.severity === 'critical' ? 'text-red-400' : 'text-yellow-400'}`} />
+                    )}
+                    <div>
+                      <span className="text-sm text-text-primary">{result.check}</span>
+                      <p className="text-xs text-text-secondary">{result.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {/* Deployment URL */}
+          {deployVerificationReport.deployment_url && (
+            <div className="mt-4 p-3 bg-background-tertiary rounded-lg">
+              <a
+                href={deployVerificationReport.deployment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-accent-primary hover:underline flex items-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                {deployVerificationReport.deployment_url}
+              </a>
+            </div>
           )}
         </Card>
       )}
@@ -487,7 +735,25 @@ function DeploymentStatusBadge({ status }: { status: string }) {
 }
 
 function getAgentStatus(projectStatus: string, agent: string): 'queued' | 'active' | 'completed' | 'failed' {
-  const order = ['pending', 'intake', 'research', 'architect', 'design', 'code_generation', 'qa', 'deployment', 'analytics_monitoring', 'coding_standards', 'completed']
+  // Updated order with new agents: PM checkpoints, code review, post-deploy verification
+  const order = [
+    'pending', 
+    'intake', 
+    'research', 
+    'architect', 
+    'design', 
+    'pm_checkpoint_1',      // ★ New
+    'code_generation', 
+    'pm_checkpoint_2',      // ★ New
+    'code_review',          // ★ New
+    'security',
+    'qa', 
+    'deployment', 
+    'post_deploy_verification',  // ★ New
+    'analytics_monitoring', 
+    'coding_standards', 
+    'completed'
+  ]
   const currentIndex = order.indexOf(projectStatus)
   const agentIndex = order.indexOf(agent)
 
@@ -505,9 +771,14 @@ function StatusBadge({ status }: { status: string }) {
     research: 'info',
     architect: 'info',
     design: 'info',
+    pm_checkpoint_1: 'info',     // ★ New
+    pm_checkpoint_2: 'info',     // ★ New
     code_generation: 'info',
+    code_review: 'info',         // ★ New
+    security: 'info',
     qa: 'info',
     deployment: 'info',
+    post_deploy_verification: 'info',  // ★ New
     analytics_monitoring: 'info',
     coding_standards: 'info',
     failed: 'error',

@@ -1,4 +1,11 @@
-"""Pipeline orchestration for AI Dev Agency agents."""
+"""Pipeline orchestration for AI Dev Agency agents.
+
+Enhanced with:
+- Project Manager checkpoints (coherence and completeness)
+- Code Review agent
+- Post-Deploy Verification agent
+- Dynamic agent pooling for parallel code generation
+"""
 
 import asyncio
 import logging
@@ -15,6 +22,9 @@ from agents.deployment import DeploymentAgent
 from agents.analytics_monitoring import AnalyticsMonitoringAgent
 from agents.coding_standards import CodingStandardsAgent
 from agents.revision_handler import RevisionHandlerAgent
+from agents.project_manager import ProjectManagerAgent, COMPLEX_PROJECT_TYPES
+from agents.code_review import CodeReviewAgent
+from agents.post_deploy_verification import PostDeployVerificationAgent
 from config.settings import Settings
 from utils.cost_optimizer import get_cost_optimizer, CostProfile
 
@@ -62,6 +72,10 @@ class PipelineConfig:
     revision_scope: str = "medium_feature"  # small_tweak, medium_feature, major_addition
     project_type: str = "web_simple"
     cost_alert_threshold: float = 50.0
+    # Dynamic pooling settings
+    enable_dynamic_pooling: bool = True
+    max_parallel_code_gen: int = 5  # Max concurrent v0 API sessions
+    pooling_batch_threshold: int = 10  # Activate pooling when 10+ prompts
 
 
 # Project type configurations
@@ -201,37 +215,108 @@ class Pipeline:
             )
 
     def _setup_default_pipeline(self) -> None:
-        """Setup the default pipeline with all agents."""
-        # Phase 1: Code Generation (placeholder for future implementation)
+        """Setup the default pipeline with all agents.
+        
+        Pipeline order:
+        1-6. Intake, Research, Architect, Design System, Assets, Content (parallel)
+        ★ PM Checkpoint 1 (coherence)
+        7. Code Generation (with dynamic pooling)
+        ★ PM Checkpoint 2 (completeness)
+        ★ Code Review
+        8-10. Security/SEO/Accessibility (parallel)
+        11. QA & Testing
+        12. Deployment
+        ★ Post-Deploy Verification
+        13-14. Monitoring/Standards (parallel)
+        15. Delivery
+        """
+        # Placeholders for Phase 1-2 agents (intake, research, architect, etc.)
         self.add_node(PipelineNode(
-            id="code_generation",
-            name="Code Generation",
+            id="intake",
+            name="Intake & Classification",
             agent_class=BaseAgent,  # Placeholder
             dependencies=[],
         ))
-
-        # Phase 2: Documentation (placeholder)
+        
         self.add_node(PipelineNode(
-            id="documentation",
-            name="Documentation",
+            id="research",
+            name="Research",
             agent_class=BaseAgent,  # Placeholder
-            dependencies=["code_generation"],
+            dependencies=["intake"],
+        ))
+        
+        self.add_node(PipelineNode(
+            id="architect",
+            name="Architect",
+            agent_class=BaseAgent,  # Placeholder
+            dependencies=["research"],
+        ))
+        
+        self.add_node(PipelineNode(
+            id="design_system",
+            name="Design System",
+            agent_class=BaseAgent,  # Placeholder
+            dependencies=["architect"],
+        ))
+        
+        # Asset and Content generation run in parallel
+        self.add_node(PipelineNode(
+            id="asset_generation",
+            name="Asset Generation",
+            agent_class=BaseAgent,  # Placeholder
+            dependencies=["architect"],
+            parallel_group="content_assets",
+        ))
+        
+        self.add_node(PipelineNode(
+            id="content_generation",
+            name="Content Generation",
+            agent_class=BaseAgent,  # Placeholder
+            dependencies=["architect"],
+            parallel_group="content_assets",
+        ))
+        
+        # ★ PM Checkpoint 1: Coherence validation
+        # Runs after Architect + Design System + Content + Assets, before Code Gen
+        self.add_node(PipelineNode(
+            id="pm_checkpoint_1",
+            name="PM Checkpoint 1 (Coherence)",
+            agent_class=ProjectManagerAgent,
+            dependencies=["architect", "design_system", "asset_generation", "content_generation"],
         ))
 
-        # Phase 3: Testing (placeholder)
+        # Code Generation (with dynamic pooling support)
         self.add_node(PipelineNode(
-            id="testing",
-            name="Testing",
-            agent_class=BaseAgent,  # Placeholder
+            id="code_generation",
+            name="Code Generation",
+            agent_class=BaseAgent,  # Placeholder - actual implementation uses v0 API
+            dependencies=["pm_checkpoint_1"],
+        ))
+        
+        # ★ PM Checkpoint 2: Completeness validation
+        # Runs after Code Gen, before Quality Gate
+        self.add_node(PipelineNode(
+            id="pm_checkpoint_2",
+            name="PM Checkpoint 2 (Completeness)",
+            agent_class=ProjectManagerAgent,
             dependencies=["code_generation"],
         ))
+        
+        # ★ Code Review Agent
+        # Runs after PM Checkpoint 2, before Security/SEO/Accessibility
+        self.add_node(PipelineNode(
+            id="code_review",
+            name="Code Review",
+            agent_class=CodeReviewAgent,
+            dependencies=["pm_checkpoint_2"],
+        ))
 
-        # Phase 4: Quality & Compliance - Run in parallel after Code Generation
+        # Quality & Compliance - Run in parallel after Code Review
         self.add_node(PipelineNode(
             id="security",
             name="Security Scan",
             agent_class=SecurityAgent,
-            dependencies=["code_generation"],
+            dependencies=["code_review"],
             parallel_group="quality",
         ))
 
@@ -239,7 +324,7 @@ class Pipeline:
             id="seo",
             name="SEO Audit",
             agent_class=SEOAgent,
-            dependencies=["code_generation"],
+            dependencies=["code_review"],
             parallel_group="quality",
         ))
 
@@ -247,32 +332,41 @@ class Pipeline:
             id="accessibility",
             name="Accessibility Audit",
             agent_class=AccessibilityAgent,
-            dependencies=["code_generation"],
+            dependencies=["code_review"],
             parallel_group="quality",
         ))
 
-        # Phase 5: QA Testing Agent - runs after all quality checks complete
+        # QA Testing Agent - runs after all quality checks complete
         self.add_node(PipelineNode(
             id="qa",
             name="QA Testing",
             agent_class=QATestingAgent,
-            dependencies=["security", "seo", "accessibility", "testing"],
+            dependencies=["security", "seo", "accessibility"],
         ))
 
-        # Phase 5: Deployment Agent - runs after QA passes
+        # Deployment Agent - runs after QA passes
         self.add_node(PipelineNode(
             id="deployment",
             name="Deployment",
             agent_class=DeploymentAgent,
             dependencies=["qa"],
         ))
+        
+        # ★ Post-Deploy Verification Agent
+        # Runs after Deployment, before Delivery
+        self.add_node(PipelineNode(
+            id="post_deploy_verification",
+            name="Post-Deploy Verification",
+            agent_class=PostDeployVerificationAgent,
+            dependencies=["deployment"],
+        ))
 
-        # Phase 6: Monitoring & Standards - Run in parallel after Deployment
+        # Monitoring & Standards - Run in parallel after Post-Deploy Verification
         self.add_node(PipelineNode(
             id="analytics_monitoring",
             name="Analytics & Monitoring",
             agent_class=AnalyticsMonitoringAgent,
-            dependencies=["deployment"],
+            dependencies=["post_deploy_verification"],
             parallel_group="phase6",
         ))
 
@@ -280,8 +374,16 @@ class Pipeline:
             id="coding_standards",
             name="Coding Standards",
             agent_class=CodingStandardsAgent,
-            dependencies=["deployment"],
+            dependencies=["post_deploy_verification"],
             parallel_group="phase6",
+        ))
+        
+        # Delivery Agent (placeholder)
+        self.add_node(PipelineNode(
+            id="delivery",
+            name="Delivery",
+            agent_class=BaseAgent,  # Placeholder
+            dependencies=["analytics_monitoring", "coding_standards"],
         ))
         
         # Revision Handler (only activated in revision mode)
@@ -528,6 +630,186 @@ class Pipeline:
             node.id: result 
             for node, result in zip(nodes_to_run, results_list)
         }
+    
+    async def execute_code_gen_with_pooling(
+        self,
+        code_gen_prompts: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> List[AgentResult]:
+        """Execute code generation with dynamic pooling.
+        
+        When Architect produces 10+ prompts, groups into batches:
+        - Batch 1 (foundation): sequential, single agent
+        - Batch 2+ (pages): parallel, max 5 agents
+        - Batch 3 (integration): sequential, single agent
+        
+        Only activates for balanced and premium cost profiles.
+        """
+        if not self.config.enable_dynamic_pooling:
+            return await self._execute_code_gen_sequential(code_gen_prompts, context)
+        
+        # Check if pooling should be activated
+        if len(code_gen_prompts) < self.config.pooling_batch_threshold:
+            self.logger.info(f"Only {len(code_gen_prompts)} prompts - using sequential execution")
+            return await self._execute_code_gen_sequential(code_gen_prompts, context)
+        
+        # Only use pooling for balanced and premium profiles
+        if self.config.cost_profile == "budget":
+            self.logger.info("Budget profile - using sequential execution")
+            return await self._execute_code_gen_sequential(code_gen_prompts, context)
+        
+        self.logger.info(f"Dynamic pooling activated for {len(code_gen_prompts)} prompts")
+        
+        # Categorize prompts into batches
+        batches = self._categorize_prompts(code_gen_prompts)
+        
+        all_results = []
+        
+        # Batch 1: Foundation (sequential)
+        if batches["foundation"]:
+            self.logger.info(f"Executing foundation batch: {len(batches['foundation'])} prompts")
+            for prompt in batches["foundation"]:
+                result = await self._execute_single_code_gen(prompt, context)
+                all_results.append(result)
+        
+        # Batch 2: Pages (parallel, max 5 concurrent)
+        if batches["pages"]:
+            self.logger.info(f"Executing pages batch: {len(batches['pages'])} prompts in parallel")
+            page_results = await self._execute_code_gen_parallel(
+                batches["pages"],
+                context,
+                max_concurrent=self.config.max_parallel_code_gen,
+            )
+            all_results.extend(page_results)
+        
+        # Batch 3: Integration (sequential)
+        if batches["integration"]:
+            self.logger.info(f"Executing integration batch: {len(batches['integration'])} prompts")
+            for prompt in batches["integration"]:
+                result = await self._execute_single_code_gen(prompt, context)
+                all_results.append(result)
+        
+        return all_results
+    
+    def _categorize_prompts(
+        self,
+        prompts: List[Dict[str, Any]],
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Categorize prompts into foundation, pages, and integration batches."""
+        batches = {
+            "foundation": [],
+            "pages": [],
+            "integration": [],
+        }
+        
+        foundation_keywords = ["layout", "config", "setup", "base", "root", "provider", "context"]
+        integration_keywords = ["api", "integration", "connection", "routing", "navigation"]
+        
+        for prompt in prompts:
+            prompt_text = prompt.get("prompt", "").lower()
+            name = prompt.get("name", "").lower()
+            category = prompt.get("category", "")
+            
+            if category:
+                # Use explicit category if provided
+                if category in batches:
+                    batches[category].append(prompt)
+                    continue
+            
+            # Auto-categorize based on keywords
+            if any(kw in prompt_text or kw in name for kw in foundation_keywords):
+                batches["foundation"].append(prompt)
+            elif any(kw in prompt_text or kw in name for kw in integration_keywords):
+                batches["integration"].append(prompt)
+            else:
+                batches["pages"].append(prompt)
+        
+        return batches
+    
+    async def _execute_code_gen_sequential(
+        self,
+        prompts: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> List[AgentResult]:
+        """Execute code generation prompts sequentially."""
+        results = []
+        for prompt in prompts:
+            result = await self._execute_single_code_gen(prompt, context)
+            results.append(result)
+        return results
+    
+    async def _execute_code_gen_parallel(
+        self,
+        prompts: List[Dict[str, Any]],
+        context: Dict[str, Any],
+        max_concurrent: int = 5,
+    ) -> List[AgentResult]:
+        """Execute code generation prompts in parallel with concurrency limit."""
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        async def execute_with_limit(prompt: Dict[str, Any]) -> AgentResult:
+            async with semaphore:
+                return await self._execute_single_code_gen(prompt, context)
+        
+        tasks = [execute_with_limit(prompt) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Convert exceptions to failed results
+        processed = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                processed.append(AgentResult(
+                    success=False,
+                    agent_name="code_generation",
+                    errors=[str(result)],
+                    data={"prompt": prompts[i].get("name", f"prompt_{i}")},
+                ))
+            else:
+                processed.append(result)
+        
+        return processed
+    
+    async def _execute_single_code_gen(
+        self,
+        prompt: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> AgentResult:
+        """Execute a single code generation prompt.
+        
+        This is a placeholder - actual implementation would use v0 API.
+        """
+        prompt_name = prompt.get("name", "unknown")
+        self.logger.info(f"Executing code gen prompt: {prompt_name}")
+        
+        # Placeholder implementation
+        # In real implementation, this would call the v0 API
+        return AgentResult(
+            success=True,
+            agent_name="code_generation",
+            data={
+                "prompt_name": prompt_name,
+                "generated": True,
+            },
+        )
+    
+    def configure_pm_checkpoints(self, project_type: str) -> None:
+        """Configure PM checkpoints based on project type.
+        
+        PM checkpoints only activate for complex project types:
+        - web_complex
+        - python_saas
+        - mobile_cross_platform
+        - desktop_app
+        """
+        if project_type not in COMPLEX_PROJECT_TYPES:
+            # Skip PM checkpoints for simple projects
+            if "pm_checkpoint_1" in self.nodes:
+                self.nodes["pm_checkpoint_1"].status = NodeStatus.SKIPPED
+            if "pm_checkpoint_2" in self.nodes:
+                self.nodes["pm_checkpoint_2"].status = NodeStatus.SKIPPED
+            self.logger.info(f"PM checkpoints skipped for project type: {project_type}")
+        else:
+            self.logger.info(f"PM checkpoints enabled for complex project: {project_type}")
 
     def get_status(self) -> Dict[str, Any]:
         """Get current pipeline status."""
@@ -637,6 +919,10 @@ class PipelineState:
         # Phase 6 additions
         self.monitoring_config: Dict[str, Any] = {}
         self.documentation_links: Dict[str, str] = {}
+        # Phase 8 additions - new agent outputs
+        self.build_manifest: Optional[Dict[str, Any]] = None
+        self.code_review_report: Optional[Dict[str, Any]] = None
+        self.deploy_verification: Optional[Dict[str, Any]] = None
     
     def update_monitoring_config(self, config: Dict[str, Any]) -> None:
         """Update monitoring configuration from Analytics & Monitoring agent."""
@@ -645,6 +931,18 @@ class PipelineState:
     def update_documentation_links(self, links: Dict[str, str]) -> None:
         """Update documentation links from Coding Standards agent."""
         self.documentation_links.update(links)
+    
+    def update_build_manifest(self, manifest: Dict[str, Any]) -> None:
+        """Update build manifest from PM Checkpoint 1."""
+        self.build_manifest = manifest
+    
+    def update_code_review_report(self, report: Dict[str, Any]) -> None:
+        """Update code review report from Code Review agent."""
+        self.code_review_report = report
+    
+    def update_deploy_verification(self, verification: Dict[str, Any]) -> None:
+        """Update deployment verification from Post-Deploy Verification agent."""
+        self.deploy_verification = verification
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert state to dictionary."""
@@ -656,6 +954,9 @@ class PipelineState:
             "errors": self.errors,
             "monitoring_config": self.monitoring_config,
             "documentation_links": self.documentation_links,
+            "build_manifest": self.build_manifest,
+            "code_review_report": self.code_review_report,
+            "deploy_verification": self.deploy_verification,
         }
 
 
