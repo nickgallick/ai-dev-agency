@@ -1,34 +1,35 @@
-import { clsx } from 'clsx'
 import { InputHTMLAttributes, forwardRef } from 'react'
+import { clsx } from 'clsx'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  variant?: 'default' | 'hero'
   label?: string
   error?: string
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, ...props }, ref) => {
+  ({ variant = 'default', label, error, className, ...props }, ref) => {
+    const inputClass = variant === 'hero' ? 'glass-input-hero' : 'glass-input'
+    
     return (
-      <div className="space-y-1.5">
+      <div className="w-full">
         {label && (
-          <label className="block text-sm font-medium text-text-secondary">
+          <label 
+            className="block mb-2 text-sm font-medium" 
+            style={{ color: 'var(--text-secondary)' }}
+          >
             {label}
           </label>
         )}
         <input
           ref={ref}
-          className={clsx(
-            'w-full px-4 py-2.5 bg-background-input border rounded-[10px] text-text-primary',
-            'placeholder:text-text-tertiary',
-            'focus:outline-none focus:ring-2 focus:ring-border-focus focus:border-border-focus',
-            'transition-colors',
-            error ? 'border-accent-error' : 'border-border-subtle',
-            className
-          )}
+          className={clsx(inputClass, error && 'border-red-500', className)}
           {...props}
         />
         {error && (
-          <p className="text-sm text-accent-error">{error}</p>
+          <p className="mt-1 text-sm" style={{ color: 'var(--accent-error)' }}>
+            {error}
+          </p>
         )}
       </div>
     )

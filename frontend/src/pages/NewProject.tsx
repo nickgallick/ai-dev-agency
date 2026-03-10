@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { Card } from '@/components/Card'
-import { Button } from '@/components/Button'
-import { Input } from '@/components/Input'
 import { api } from '@/lib/api'
-import { Mic, ChevronDown, ChevronUp, Globe, Smartphone, Monitor, Chrome, Terminal, Server, Sparkles } from 'lucide-react'
+import { 
+  Mic, ChevronDown, ChevronUp, Globe, Smartphone, Monitor, 
+  Chrome, Terminal, Server, Sparkles, ArrowRight, Zap, Shield, Crown 
+} from 'lucide-react'
 import { clsx } from 'clsx'
 
 // All 10 supported project types
@@ -82,6 +82,13 @@ const PROJECT_TYPES = [
   },
 ]
 
+// Cost profile configurations
+const COST_PROFILES = [
+  { id: 'budget', label: 'Budget', icon: Zap, desc: 'Minimize cost', color: 'var(--accent-success)' },
+  { id: 'balanced', label: 'Balanced', icon: Shield, desc: 'Quality & cost', color: 'var(--accent-primary)' },
+  { id: 'premium', label: 'Premium', icon: Crown, desc: 'Maximum quality', color: 'var(--accent-warning)' },
+]
+
 // Keywords to detect project type from brief
 const TYPE_KEYWORDS: Record<string, string[]> = {
   mobile_native_ios: ['ios', 'iphone', 'ipad', 'swift', 'swiftui', 'app store', 'native ios'],
@@ -119,7 +126,6 @@ export default function NewProject() {
     }
     
     setDetectedType(detected)
-    // Auto-select if not manually selected
     if (detected && !selectedType) {
       setSelectedType(detected)
     }
@@ -149,49 +155,65 @@ export default function NewProject() {
   const costEstimate = currentType?.costRange[costProfile as keyof typeof currentType.costRange] || ''
 
   return (
-    <div className="space-y-6 pb-24 lg:pb-0">
-      <div>
-        <h2 className="text-2xl font-semibold text-text-primary">New Project</h2>
-        <p className="text-text-secondary mt-1">Describe what you want to build</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="mb-2">
+        <h1 className="text-2xl lg:text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
+          New Project
+        </h1>
+        <p className="mt-1" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-base)' }}>
+          Describe what you want to build
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Main Input - Perplexity-style */}
-        <Card padding="none">
-          <div className="relative">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        
+        {/* Hero Input Card */}
+        <div className="glass-card-elevated" style={{ padding: 0 }}>
+          <div className="bloom-content">
             <textarea
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
               placeholder="What do you want built? Describe your project in detail..."
-              className="w-full min-h-[150px] p-4 bg-transparent text-text-primary placeholder:text-text-tertiary resize-none focus:outline-none text-base"
+              className="glass-textarea w-full border-0 bg-transparent"
+              style={{ 
+                minHeight: '160px',
+                padding: 'var(--space-5)',
+                fontSize: 'var(--text-lg)',
+                resize: 'none'
+              }}
               autoFocus
             />
-            <div className="flex items-center justify-between p-3 border-t border-border-subtle">
+            <div className="flex items-center justify-between p-4" 
+                 style={{ borderTop: '1px solid var(--glass-border)' }}>
               <button
                 type="button"
-                className="p-2 rounded-lg hover:bg-background-tertiary text-text-secondary"
+                className="btn-ghost"
+                style={{ padding: 'var(--space-2)' }}
                 title="Voice input"
               >
-                <Mic className="w-5 h-5" />
+                <Mic className="w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
               </button>
               <div className="flex items-center gap-3">
                 {detectedType && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-accent-primary/10 text-accent-primary">
+                  <span className="badge badge-info">
                     Detected: {PROJECT_TYPES.find(t => t.id === detectedType)?.label}
                   </span>
                 )}
-                <span className="text-xs text-text-tertiary">
+                <span style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
                   {brief.length} characters
                 </span>
               </div>
             </div>
           </div>
-        </Card>
+        </div>
 
         {/* Project Type Selector */}
-        <Card>
-          <h3 className="text-sm font-medium text-text-secondary mb-3">Project Type</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+        <div className="glass-card">
+          <h3 className="font-medium mb-4" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+            Project Type
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {PROJECT_TYPES.map((type) => {
               const Icon = type.icon
               const isSelected = selectedType === type.id || (!selectedType && detectedType === type.id)
@@ -201,20 +223,20 @@ export default function NewProject() {
                   type="button"
                   onClick={() => setSelectedType(type.id)}
                   className={clsx(
-                    'flex flex-col items-center gap-2 p-3 rounded-lg border transition-all text-center',
-                    isSelected
-                      ? 'border-accent-primary bg-accent-primary/10'
-                      : 'border-border-subtle hover:border-border-focus'
+                    'glass-card flex flex-col items-center gap-2 p-4 text-center transition-all',
+                    isSelected && 'glass-card-iridescent'
                   )}
+                  style={{
+                    borderColor: isSelected ? 'var(--accent-primary)' : undefined,
+                    background: isSelected ? 'rgba(32, 184, 205, 0.08)' : undefined
+                  }}
                 >
-                  <Icon className={clsx(
-                    'w-5 h-5',
-                    isSelected ? 'text-accent-primary' : 'text-text-tertiary'
-                  )} />
-                  <span className={clsx(
-                    'text-xs font-medium',
-                    isSelected ? 'text-accent-primary' : 'text-text-secondary'
-                  )}>
+                  <Icon className="w-6 h-6" style={{ 
+                    color: isSelected ? 'var(--accent-primary)' : 'var(--text-tertiary)' 
+                  }} />
+                  <span className="text-xs font-medium" style={{ 
+                    color: isSelected ? 'var(--accent-primary)' : 'var(--text-secondary)' 
+                  }}>
                     {type.label}
                   </span>
                 </button>
@@ -222,102 +244,138 @@ export default function NewProject() {
             })}
           </div>
           {currentType && (
-            <p className="mt-3 text-xs text-text-tertiary">
+            <p className="mt-4" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
               {currentType.description}
             </p>
           )}
-        </Card>
+        </div>
 
         {/* Cost Profile Selector */}
-        <Card>
-          <h3 className="text-sm font-medium text-text-secondary mb-3">Cost Profile</h3>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { id: 'budget', label: 'Budget', desc: 'Minimize cost' },
-              { id: 'balanced', label: 'Balanced', desc: 'Quality & cost' },
-              { id: 'premium', label: 'Premium', desc: 'Maximum quality' },
-            ].map((profile) => (
-              <button
-                key={profile.id}
-                type="button"
-                onClick={() => setCostProfile(profile.id)}
-                className={clsx(
-                  'px-4 py-3 rounded-lg text-sm border transition-colors text-center',
-                  costProfile === profile.id
-                    ? 'border-accent-primary bg-accent-primary/10'
-                    : 'border-border-subtle hover:border-border-focus'
-                )}
-              >
-                <span className={clsx(
-                  'font-medium block',
-                  costProfile === profile.id ? 'text-accent-primary' : 'text-text-primary'
-                )}>
-                  {profile.label}
-                </span>
-                <span className="text-xs text-text-tertiary">{profile.desc}</span>
-              </button>
-            ))}
+        <div className="glass-card">
+          <h3 className="font-medium mb-4" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+            Cost Profile
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            {COST_PROFILES.map((profile) => {
+              const Icon = profile.icon
+              const isSelected = costProfile === profile.id
+              return (
+                <button
+                  key={profile.id}
+                  type="button"
+                  onClick={() => setCostProfile(profile.id)}
+                  className="glass-card text-center p-4 transition-all"
+                  style={{
+                    borderColor: isSelected ? profile.color : undefined,
+                    background: isSelected ? `${profile.color}10` : undefined
+                  }}
+                >
+                  <Icon className="w-5 h-5 mx-auto mb-2" style={{ 
+                    color: isSelected ? profile.color : 'var(--text-tertiary)' 
+                  }} />
+                  <span className="block font-medium text-sm" style={{ 
+                    color: isSelected ? profile.color : 'var(--text-primary)' 
+                  }}>
+                    {profile.label}
+                  </span>
+                  <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    {profile.desc}
+                  </span>
+                </button>
+              )
+            })}
           </div>
+          
+          {/* Cost Estimate */}
           {costEstimate && (
-            <div className="mt-3 p-3 bg-background-tertiary rounded-lg">
+            <div className="glass-card mt-4" style={{ 
+              padding: 'var(--space-4)',
+              background: 'var(--glass-bg-elevated)' 
+            }}>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-text-secondary">Estimated Cost</span>
-                <span className="text-lg font-semibold text-accent-primary">{costEstimate}</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                  Estimated Cost
+                </span>
+                <span className="text-xl font-bold" style={{ color: 'var(--accent-primary)' }}>
+                  {costEstimate}
+                </span>
               </div>
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Advanced Options Accordion */}
-        <Card padding="none">
+        <div className="glass-card" style={{ padding: 0 }}>
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="w-full flex items-center justify-between p-4 text-left"
           >
-            <span className="text-sm font-medium text-text-secondary">Advanced Options</span>
+            <span className="font-medium" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+              Advanced Options
+            </span>
             {showAdvanced ? (
-              <ChevronUp className="w-5 h-5 text-text-tertiary" />
+              <ChevronUp className="w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
             ) : (
-              <ChevronDown className="w-5 h-5 text-text-tertiary" />
+              <ChevronDown className="w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
             )}
           </button>
           
           {showAdvanced && (
-            <div className="p-4 pt-0 space-y-4 border-t border-border-subtle">
-              <Input
-                label="Project Name (optional)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="My Awesome Project"
-              />
+            <div className="p-4 pt-0 space-y-4" style={{ borderTop: '1px solid var(--glass-border)' }}>
+              <div>
+                <label className="block mb-2 font-medium" 
+                       style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                  Project Name (optional)
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="My Awesome Project"
+                  className="glass-input"
+                />
+              </div>
               
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-text-secondary">
+              <div>
+                <label className="block mb-2 font-medium" 
+                       style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
                   Reference URLs (one per line)
                 </label>
                 <textarea
                   value={referenceUrls}
                   onChange={(e) => setReferenceUrls(e.target.value)}
-                  placeholder="https://example.com\nhttps://inspiration-site.com"
-                  className="w-full px-4 py-2.5 bg-background-input border border-border-subtle rounded-[10px] text-text-primary placeholder:text-text-tertiary resize-none focus:outline-none focus:ring-2 focus:ring-border-focus h-24"
+                  placeholder="https://example.com&#10;https://inspiration-site.com"
+                  className="glass-textarea"
+                  style={{ minHeight: '100px' }}
                 />
               </div>
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Submit Button - Fixed on mobile */}
-        <div className="fixed bottom-20 left-4 right-4 lg:static lg:bottom-auto">
-          <Button
+        <div className="fixed bottom-20 left-4 right-4 lg:static lg:bottom-auto z-40">
+          <button
             type="submit"
-            size="lg"
-            className="w-full"
-            loading={createProject.isPending}
-            disabled={!brief.trim()}
+            className="btn-iridescent w-full"
+            disabled={!brief.trim() || createProject.isPending}
           >
-            Start Building
-          </Button>
+            {createProject.isPending ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Starting...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                Start Building
+                <ArrowRight className="w-5 h-5" />
+              </span>
+            )}
+          </button>
         </div>
       </form>
     </div>

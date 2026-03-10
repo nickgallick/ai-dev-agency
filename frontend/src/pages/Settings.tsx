@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MCPServerCard } from '../components/MCPServerCard';
 import { CredentialModal } from '../components/CredentialModal';
 import { AddCustomServerModal } from '../components/AddCustomServerModal';
+import { RefreshCw, Plus, Server, CheckCircle, AlertTriangle, XCircle, HelpCircle } from 'lucide-react';
 
 interface MCPServerStatus {
   status: 'connected' | 'degraded' | 'disconnected' | 'disabled';
@@ -82,7 +83,6 @@ export function Settings() {
 
   useEffect(() => {
     fetchServers();
-    // Refresh every 30 seconds
     const interval = setInterval(fetchServers, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -135,7 +135,7 @@ export function Settings() {
     await fetchServers();
   };
 
-  // Add custom server (placeholder - would need backend implementation)
+  // Add custom server (placeholder)
   const addCustomServer = async (server: {
     name: string;
     url: string;
@@ -143,7 +143,6 @@ export function Settings() {
     credentialValue?: string;
     agentAssignments: string[];
   }) => {
-    // This would call a backend endpoint to add custom servers
     console.log('Adding custom server:', server);
     throw new Error('Custom server support coming in future update');
   };
@@ -162,126 +161,153 @@ export function Settings() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            Settings
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Manage MCP server connections and credentials
-          </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="mb-2">
+        <h1 className="text-2xl lg:text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
+          Settings
+        </h1>
+        <p className="mt-1" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-base)' }}>
+          Manage MCP server connections and credentials
+        </p>
+      </div>
+
+      {/* MCP Servers Section */}
+      <section>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <Server className="w-5 h-5" style={{ color: 'var(--accent-primary)' }} />
+              MCP Servers
+            </h2>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
+              Model Context Protocol servers powering agent capabilities
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={triggerHealthCheck}
+              disabled={loading}
+              className="btn-secondary flex items-center gap-2"
+              style={{ padding: 'var(--space-2) var(--space-4)' }}
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+            <button
+              onClick={() => setAddServerModal(true)}
+              className="btn-primary flex items-center gap-2"
+              style={{ padding: 'var(--space-2) var(--space-4)' }}
+            >
+              <Plus className="w-4 h-4" />
+              Add Server
+            </button>
+          </div>
         </div>
 
-        {/* MCP Servers Section */}
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                MCP Servers
-              </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Model Context Protocol servers powering agent capabilities
-              </p>
+        {/* Status Summary - Bento Grid */}
+        <div className="bento-grid mb-6">
+          <div className="stat-card">
+            <div className="stat-card-icon">
+              <Server className="w-5 h-5" />
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={triggerHealthCheck}
-                disabled={loading}
-                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-              >
-                Refresh Status
-              </button>
-              <button
-                onClick={() => setAddServerModal(true)}
-                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-              >
-                + Add Custom Server
-              </button>
-            </div>
+            <div className="stat-card-value">{stats.total}</div>
+            <div className="stat-card-label">Total Servers</div>
           </div>
-
-          {/* Status Summary */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
-              <div className="text-sm text-gray-500">Total Servers</div>
+          <div className="stat-card">
+            <div className="stat-card-icon" style={{ background: 'rgba(52, 211, 153, 0.15)' }}>
+              <CheckCircle className="w-5 h-5" style={{ color: 'var(--accent-success)' }} />
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-green-200 dark:border-green-800">
-              <div className="text-2xl font-bold text-green-600">{stats.connected}</div>
-              <div className="text-sm text-gray-500">Connected</div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
-              <div className="text-2xl font-bold text-yellow-600">{stats.degraded}</div>
-              <div className="text-sm text-gray-500">Degraded</div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-red-200 dark:border-red-800">
-              <div className="text-2xl font-bold text-red-600">{stats.disconnected}</div>
-              <div className="text-sm text-gray-500">Disconnected</div>
-            </div>
+            <div className="stat-card-value" style={{ color: 'var(--accent-success)' }}>{stats.connected}</div>
+            <div className="stat-card-label">Connected</div>
           </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg">
-              {error}
+          <div className="stat-card">
+            <div className="stat-card-icon" style={{ background: 'rgba(251, 191, 36, 0.15)' }}>
+              <AlertTriangle className="w-5 h-5" style={{ color: 'var(--accent-warning)' }} />
             </div>
-          )}
-
-          {/* Loading State */}
-          {loading && Object.keys(servers).length === 0 ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-500">Loading servers...</p>
+            <div className="stat-card-value" style={{ color: 'var(--accent-warning)' }}>{stats.degraded}</div>
+            <div className="stat-card-label">Degraded</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-icon" style={{ background: 'rgba(248, 113, 113, 0.15)' }}>
+              <XCircle className="w-5 h-5" style={{ color: 'var(--accent-error)' }} />
             </div>
-          ) : (
-            /* Server Grid */
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(servers).map(([name, server]) => (
-                <MCPServerCard
-                  key={name}
-                  name={name}
-                  status={server.status}
-                  enabled={server.enabled}
-                  agentWired={server.agent_wired}
-                  usedBy={server.used_by}
-                  source={server.source}
-                  description={server.description}
-                  discoveredTools={server.discovered_tools}
-                  lastUsed={server.last_used}
-                  lastHealthCheck={server.last_health_check}
-                  errorMessage={server.error_message}
-                  onTest={() => testConnection(name)}
-                  onToggle={(enabled) => toggleServer(name, enabled)}
-                  requiresAuth={name in SERVERS_REQUIRING_AUTH}
-                  onConfigureCredentials={
-                    name in SERVERS_REQUIRING_AUTH
-                      ? () =>
-                          setCredentialModal({
-                            isOpen: true,
-                            serverName: name,
-                            credentialKey: SERVERS_REQUIRING_AUTH[name],
-                          })
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </section>
+            <div className="stat-card-value" style={{ color: 'var(--accent-error)' }}>{stats.disconnected}</div>
+            <div className="stat-card-label">Disconnected</div>
+          </div>
+        </div>
 
-        {/* Documentation Link */}
-        <section className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-          <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-1">
-            Need help?
-          </h3>
-          <p className="text-sm text-blue-700 dark:text-blue-300">
-            MCP servers extend agent capabilities with external tools. Configure credentials via
-            environment variables (.env) or through this UI. UI credentials take priority.
-          </p>
-        </section>
-      </div>
+        {/* Error Message */}
+        {error && (
+          <div className="glass-card mb-4" style={{ 
+            background: 'rgba(248, 113, 113, 0.1)', 
+            borderColor: 'rgba(248, 113, 113, 0.3)' 
+          }}>
+            <p style={{ color: 'var(--accent-error)' }}>{error}</p>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && Object.keys(servers).length === 0 ? (
+          <div className="glass-card text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 mx-auto mb-3" 
+                 style={{ border: '2px solid var(--glass-border)', borderTopColor: 'var(--accent-primary)' }} />
+            <p style={{ color: 'var(--text-secondary)' }}>Loading servers...</p>
+          </div>
+        ) : (
+          /* Server Grid */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(servers).map(([name, server]) => (
+              <MCPServerCard
+                key={name}
+                name={name}
+                status={server.status}
+                enabled={server.enabled}
+                agentWired={server.agent_wired}
+                usedBy={server.used_by}
+                source={server.source}
+                description={server.description}
+                discoveredTools={server.discovered_tools}
+                lastUsed={server.last_used}
+                lastHealthCheck={server.last_health_check}
+                errorMessage={server.error_message}
+                onTest={() => testConnection(name)}
+                onToggle={(enabled) => toggleServer(name, enabled)}
+                requiresAuth={name in SERVERS_REQUIRING_AUTH}
+                onConfigureCredentials={
+                  name in SERVERS_REQUIRING_AUTH
+                    ? () =>
+                        setCredentialModal({
+                          isOpen: true,
+                          serverName: name,
+                          credentialKey: SERVERS_REQUIRING_AUTH[name],
+                        })
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Documentation Link */}
+      <section className="glass-card" style={{ 
+        background: 'rgba(91, 158, 244, 0.08)',
+        borderColor: 'rgba(91, 158, 244, 0.2)'
+      }}>
+        <div className="flex items-start gap-3">
+          <HelpCircle className="w-5 h-5 mt-0.5" style={{ color: 'var(--accent-secondary)' }} />
+          <div>
+            <h3 className="font-medium mb-1" style={{ color: 'var(--accent-secondary)' }}>
+              Need help?
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+              MCP servers extend agent capabilities with external tools. Configure credentials via
+              environment variables (.env) or through this UI. UI credentials take priority.
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* Modals */}
       <CredentialModal

@@ -1,28 +1,45 @@
+import { ReactNode } from 'react'
 import { clsx } from 'clsx'
-import { HTMLAttributes, forwardRef } from 'react'
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
+interface CardProps {
+  children: ReactNode
+  className?: string
+  variant?: 'default' | 'elevated' | 'iridescent'
   padding?: 'none' | 'sm' | 'md' | 'lg'
+  onClick?: () => void
 }
 
-export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className, padding = 'md', children, ...props }, ref) => {
-    return (
-      <div
-        ref={ref}
-        className={clsx(
-          'bg-background-secondary border border-border-subtle rounded-lg',
-          padding === 'sm' && 'p-3',
-          padding === 'md' && 'p-4 lg:p-5',
-          padding === 'lg' && 'p-6 lg:p-8',
-          className
-        )}
-        {...props}
-      >
+export function Card({ 
+  children, 
+  className, 
+  variant = 'default',
+  padding = 'md',
+  onClick 
+}: CardProps) {
+  const baseClass = {
+    default: 'glass-card',
+    elevated: 'glass-card-elevated',
+    iridescent: 'glass-card-iridescent'
+  }[variant]
+
+  const paddingStyles = {
+    none: { padding: 0 },
+    sm: { padding: 'var(--space-3)' },
+    md: { padding: 'var(--space-5)' },
+    lg: { padding: 'var(--space-6)' }
+  }[padding]
+
+  return (
+    <div 
+      className={clsx(baseClass, className, onClick && 'cursor-pointer')}
+      style={paddingStyles}
+      onClick={onClick}
+    >
+      {variant === 'elevated' && <div className="bloom-warm" />}
+      {variant === 'elevated' && <div className="bloom-cool" />}
+      <div className={variant === 'elevated' ? 'bloom-content' : undefined}>
         {children}
       </div>
-    )
-  }
-)
-
-Card.displayName = 'Card'
+    </div>
+  )
+}

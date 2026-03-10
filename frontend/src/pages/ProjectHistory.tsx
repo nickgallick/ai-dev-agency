@@ -1,10 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Card } from '@/components/Card'
-import { Badge } from '@/components/Badge'
-import { Input } from '@/components/Input'
 import { api } from '@/lib/api'
-import { Search, ExternalLink, Github } from 'lucide-react'
+import { Search, ExternalLink, Github, FolderOpen, CheckCircle, Play, AlertCircle, Clock } from 'lucide-react'
 import { useState } from 'react'
 import { format } from 'date-fns'
 
@@ -23,21 +20,28 @@ export default function ProjectHistory() {
   )
 
   return (
-    <div className="space-y-6 pb-20 lg:pb-0">
-      <div>
-        <h2 className="text-2xl font-semibold text-text-primary">Project History</h2>
-        <p className="text-text-secondary mt-1">All your past projects</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="mb-2">
+        <h1 className="text-2xl lg:text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--text-primary)' }}>
+          <FolderOpen className="w-7 h-7" style={{ color: 'var(--accent-primary)' }} />
+          Project History
+        </h1>
+        <p className="mt-1" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-base)' }}>
+          All your past projects
+        </p>
       </div>
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
         <input
           type="text"
           placeholder="Search projects..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-background-input border border-border-subtle rounded-[10px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-border-focus"
+          className="glass-input w-full"
+          style={{ paddingLeft: 'var(--space-10)' }}
         />
       </div>
 
@@ -46,40 +50,41 @@ export default function ProjectHistory() {
         {isLoading && (
           <>
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-background-tertiary rounded-lg animate-pulse" />
+              <div key={i} className="skeleton h-24 w-full" />
             ))}
           </>
         )}
 
         {filteredProjects?.length === 0 && !isLoading && (
-          <Card>
-            <p className="text-center text-text-secondary py-8">
+          <div className="glass-card text-center py-12">
+            <FolderOpen className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--text-tertiary)' }} />
+            <p style={{ color: 'var(--text-secondary)' }}>
               No projects found
             </p>
-          </Card>
+          </div>
         )}
 
-        {filteredProjects?.map((project) => (
-          <Card key={project.id} className="hover:border-border-focus/50 transition-colors">
+        {filteredProjects?.map((project, index) => (
+          <div 
+            key={project.id} 
+            className="glass-card animate-enter" 
+            style={{ animationDelay: `${index * 50}ms` }}
+          >
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <Link to={`/project/${project.id}`} className="flex-1">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="font-medium text-text-primary">
+                    <h3 className="font-medium" style={{ color: 'var(--text-primary)' }}>
                       {project.name || 'Untitled Project'}
                     </h3>
-                    <p className="text-sm text-text-secondary mt-1 line-clamp-2">
+                    <p className="text-sm mt-1 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
                       {project.brief}
                     </p>
-                    <div className="flex items-center gap-3 mt-2 text-xs text-text-tertiary">
-                      <span>{project.project_type?.replace('_', ' ')}</span>
-                      <span>•</span>
+                    <div className="flex items-center gap-3 mt-2" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                      <span className="badge badge-default">{project.project_type?.replace('_', ' ')}</span>
                       <span>{format(new Date(project.created_at), 'MMM d, yyyy')}</span>
                       {project.cost_estimate && (
-                        <>
-                          <span>•</span>
-                          <span>${project.cost_estimate.toFixed(2)}</span>
-                        </>
+                        <span style={{ color: 'var(--accent-warning)' }}>${project.cost_estimate.toFixed(2)}</span>
                       )}
                     </div>
                   </div>
@@ -87,13 +92,14 @@ export default function ProjectHistory() {
                 </div>
               </Link>
               
-              <div className="flex items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-border-subtle">
+              <div className="flex items-center gap-2 pt-3 lg:pt-0" style={{ borderTop: '1px solid var(--glass-border)' }}>
                 {project.github_repo && (
                   <a
                     href={project.github_repo}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-lg hover:bg-background-tertiary text-text-secondary"
+                    className="btn-ghost"
+                    style={{ padding: 'var(--space-2)' }}
                   >
                     <Github className="w-5 h-5" />
                   </a>
@@ -103,14 +109,15 @@ export default function ProjectHistory() {
                     href={project.live_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-lg hover:bg-background-tertiary text-accent-primary"
+                    className="btn-ghost"
+                    style={{ padding: 'var(--space-2)', color: 'var(--accent-primary)' }}
                   >
                     <ExternalLink className="w-5 h-5" />
                   </a>
                 )}
               </div>
             </div>
-          </Card>
+          </div>
         ))}
       </div>
     </div>
@@ -118,11 +125,12 @@ export default function ProjectHistory() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const variants: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
-    completed: 'success',
-    running: 'info',
-    failed: 'error',
-    pending: 'default',
+  const config: Record<string, { class: string; icon: React.ReactNode }> = {
+    completed: { class: 'badge-success', icon: <CheckCircle className="w-3 h-3" /> },
+    running: { class: 'badge-running', icon: <Play className="w-3 h-3" /> },
+    failed: { class: 'badge-error', icon: <AlertCircle className="w-3 h-3" /> },
+    pending: { class: 'badge-default', icon: <Clock className="w-3 h-3" /> },
   }
-  return <Badge variant={variants[status] || 'default'}>{status}</Badge>
+  const { class: badgeClass, icon } = config[status] || config.pending
+  return <span className={`badge ${badgeClass}`}>{icon}{status}</span>
 }

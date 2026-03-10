@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Badge } from './Badge';
-import { StatusDot } from './StatusDot';
+import { ChevronRight, CheckCircle, AlertTriangle, XCircle, Power, Zap, Clock, Key } from 'lucide-react';
 
 interface MCPServerCardProps {
   name: string;
@@ -19,6 +18,33 @@ interface MCPServerCardProps {
   onConfigureCredentials?: () => void;
   requiresAuth?: boolean;
 }
+
+const statusConfig = {
+  connected: { 
+    icon: CheckCircle, 
+    color: 'var(--accent-success)', 
+    bg: 'rgba(52, 211, 153, 0.15)',
+    label: 'Connected'
+  },
+  degraded: { 
+    icon: AlertTriangle, 
+    color: 'var(--accent-warning)', 
+    bg: 'rgba(251, 191, 36, 0.15)',
+    label: 'Degraded'
+  },
+  disconnected: { 
+    icon: XCircle, 
+    color: 'var(--accent-error)', 
+    bg: 'rgba(248, 113, 113, 0.15)',
+    label: 'Disconnected'
+  },
+  disabled: { 
+    icon: Power, 
+    color: 'var(--text-tertiary)', 
+    bg: 'var(--glass-bg)',
+    label: 'Disabled'
+  },
+};
 
 export function MCPServerCard({
   name,
@@ -59,26 +85,34 @@ export function MCPServerCard({
     return new Date(ts).toLocaleString();
   };
 
+  const StatusIcon = statusConfig[status].icon;
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+    <div className="glass-card" style={{ padding: 'var(--space-4)' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <StatusDot status={status} size="md" />
+          <div 
+            className="w-10 h-10 rounded-lg flex items-center justify-center"
+            style={{ background: statusConfig[status].bg }}
+          >
+            <StatusIcon className="w-5 h-5" style={{ color: statusConfig[status].color }} />
+          </div>
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white capitalize">
+            <h3 className="font-semibold capitalize" style={{ color: 'var(--text-primary)' }}>
               {name}
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+            <p className="font-mono" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
               {source}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {agentWired ? (
-            <Badge variant="success">Active</Badge>
-          ) : (
-            <Badge variant="outline">Standby</Badge>
+        <div className="flex items-center gap-3">
+          {agentWired && (
+            <span className="badge badge-success flex items-center gap-1">
+              <Zap className="w-3 h-3" />
+              Active
+            </span>
           )}
           {/* Toggle Switch */}
           <label className="relative inline-flex items-center cursor-pointer">
@@ -88,75 +122,105 @@ export function MCPServerCard({
               onChange={(e) => onToggle(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+            <div 
+              className="w-10 h-6 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:rounded-full after:h-[18px] after:w-[18px] after:transition-all"
+              style={{
+                background: enabled ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+              }}
+            >
+              <span 
+                className="absolute top-[3px] rounded-full w-[18px] h-[18px] transition-all"
+                style={{
+                  background: 'white',
+                  left: enabled ? 'calc(100% - 21px)' : '3px'
+                }}
+              />
+            </div>
           </label>
         </div>
       </div>
 
       {/* Description */}
-      <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+      <p className="mb-3" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
         {description}
       </p>
 
       {/* Agent Pills */}
       <div className="flex flex-wrap gap-1 mb-3">
         {usedBy.map((agent) => (
-          <Badge key={agent} variant="info" size="sm">
+          <span key={agent} className="badge badge-info">
             {agent}
-          </Badge>
+          </span>
         ))}
       </div>
 
       {/* Error Message */}
       {errorMessage && (
-        <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm rounded p-2 mb-3">
-          {errorMessage}
+        <div 
+          className="glass-card mb-3" 
+          style={{ 
+            background: 'rgba(248, 113, 113, 0.1)', 
+            borderColor: 'rgba(248, 113, 113, 0.3)',
+            padding: 'var(--space-3)'
+          }}
+        >
+          <p style={{ color: 'var(--accent-error)', fontSize: 'var(--text-sm)' }}>{errorMessage}</p>
         </div>
       )}
 
       {/* Expandable Tools Section */}
-      <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
+      <div className="pt-3" style={{ borderTop: '1px solid var(--glass-border)' }}>
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+          className="flex items-center gap-2 w-full text-left"
+          style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}
         >
-          <svg
+          <ChevronRight 
             className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          />
           {discoveredTools.length} tools available
         </button>
 
         {isExpanded && (
-          <div className="mt-2 pl-6">
+          <div className="mt-3 ml-6">
             <div className="flex flex-wrap gap-1">
               {discoveredTools.map((tool) => (
                 <code
                   key={tool}
-                  className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded"
+                  className="font-mono"
+                  style={{ 
+                    padding: 'var(--space-1) var(--space-2)',
+                    background: 'var(--glass-bg-elevated)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--text-secondary)',
+                    fontSize: 'var(--text-xs)'
+                  }}
                 >
                   {tool}
                 </code>
               ))}
             </div>
-            <div className="mt-2 text-xs text-gray-500">
-              <p>Last used: {formatTimestamp(lastUsed)}</p>
-              <p>Last health check: {formatTimestamp(lastHealthCheck)}</p>
+            <div className="mt-3 flex items-center gap-4" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                Last used: {formatTimestamp(lastUsed)}
+              </span>
+              <span className="flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" />
+                Health: {formatTimestamp(lastHealthCheck)}
+              </span>
             </div>
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+      <div className="flex gap-2 mt-3 pt-3" style={{ borderTop: '1px solid var(--glass-border)' }}>
         <button
           onClick={handleTest}
           disabled={isTesting}
-          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+          className="btn-primary flex items-center gap-2"
+          style={{ padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-sm)' }}
         >
           {isTesting ? (
             <>
@@ -173,8 +237,10 @@ export function MCPServerCard({
         {requiresAuth && onConfigureCredentials && (
           <button
             onClick={onConfigureCredentials}
-            className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="btn-secondary flex items-center gap-2"
+            style={{ padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-sm)' }}
           >
+            <Key className="w-4 h-4" />
             Configure Auth
           </button>
         )}
@@ -183,13 +249,19 @@ export function MCPServerCard({
       {/* Test Result */}
       {testResult && (
         <div
-          className={`mt-2 text-sm p-2 rounded ${
-            testResult.success
-              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-              : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-          }`}
+          className="glass-card mt-2"
+          style={{ 
+            background: testResult.success ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)',
+            borderColor: testResult.success ? 'rgba(52, 211, 153, 0.3)' : 'rgba(248, 113, 113, 0.3)',
+            padding: 'var(--space-2) var(--space-3)'
+          }}
         >
-          {testResult.success ? '✓ Connection successful' : '✗ Connection failed'}
+          <p style={{ 
+            color: testResult.success ? 'var(--accent-success)' : 'var(--accent-error)',
+            fontSize: 'var(--text-sm)'
+          }}>
+            {testResult.success ? '✓ Connection successful' : '✗ Connection failed'}
+          </p>
         </div>
       )}
     </div>

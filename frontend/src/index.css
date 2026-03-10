@@ -2,57 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Base styles */
-:root {
-  --background-primary: #191A1A;
-  --background-secondary: #202222;
-  --background-tertiary: #2A2B2B;
-  --border-subtle: #313333;
-  --border-focus: #5B9EF4;
-  --text-primary: #ECECEC;
-  --text-secondary: #989898;
-  --accent-primary: #20B8CD;
-}
+/* Import glassmorphism design system */
+@import './styles/glassmorphism.css';
 
+/* Ensure base background is applied */
 body {
-  @apply bg-background-primary text-text-primary font-sans antialiased;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-base);
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--background-tertiary);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #4A4A4A;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #5A5A5A;
-}
-
-/* Focus styles */
-*:focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
-}
-
-/* Selection */
-::selection {
-  background: rgba(32, 184, 205, 0.3);
-}
-
-/* Transitions */
-* {
-  transition-duration: 150ms;
-  transition-timing-function: ease;
+/* Override Tailwind defaults to use our design tokens */
+@layer base {
+  :root {
+    --background: var(--bg-base);
+    --foreground: var(--text-primary);
+  }
 }

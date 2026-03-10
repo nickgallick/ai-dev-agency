@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { Loader2, Lock, Mail, User, AlertCircle, Sparkles } from 'lucide-react'
+import { Loader2, Lock, Mail, User, AlertCircle, Sparkles, ArrowRight } from 'lucide-react'
 
 export default function Login() {
   const { login, setup, setupRequired, isLoading: authLoading } = useAuth()
@@ -22,7 +22,6 @@ export default function Login() {
     
     try {
       if (setupRequired) {
-        // Validate passwords match
         if (password !== confirmPassword) {
           setError('Passwords do not match')
           setIsLoading(false)
@@ -47,158 +46,225 @@ export default function Login() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-bg-primary flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-accent-primary" />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-primary)' }} />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-bg-primary flex items-center justify-center p-4">
+    <div 
+      className="min-h-screen flex items-center justify-center p-4" 
+      style={{ 
+        background: 'var(--bg-base)',
+        backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px)',
+        backgroundSize: '40px 40px'
+      }}
+    >
       <div className="w-full max-w-md">
         {/* Logo/Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-primary to-accent-secondary mb-4">
+          <div 
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+            style={{ background: 'var(--gradient-accent)', boxShadow: 'var(--shadow-glow)' }}
+          >
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-text-primary">AI Dev Agency</h1>
-          <p className="text-text-secondary mt-1">
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            AI Dev Agency
+          </h1>
+          <p className="mt-1" style={{ color: 'var(--text-secondary)' }}>
             {setupRequired ? 'Create your admin account' : 'Sign in to continue'}
           </p>
         </div>
         
-        {/* Form Card */}
-        <div className="bg-bg-secondary border border-border-default rounded-2xl p-6 shadow-xl">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Error Message */}
-            {error && (
-              <div className="flex items-center gap-2 p-3 bg-accent-error/10 border border-accent-error/20 rounded-lg text-accent-error text-sm">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-            
-            {/* Name field (setup only) */}
-            {setupRequired && (
+        {/* Form Card - Glassmorphic */}
+        <div className="glass-card-elevated" style={{ padding: 'var(--space-6)' }}>
+          <div className="bloom-content">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Error Message */}
+              {error && (
+                <div 
+                  className="glass-card flex items-center gap-2"
+                  style={{ 
+                    background: 'rgba(248, 113, 113, 0.1)', 
+                    borderColor: 'rgba(248, 113, 113, 0.3)',
+                    padding: 'var(--space-3)'
+                  }}
+                >
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--accent-error)' }} />
+                  <span style={{ color: 'var(--accent-error)', fontSize: 'var(--text-sm)' }}>{error}</span>
+                </div>
+              )}
+              
+              {/* Name field (setup only) */}
+              {setupRequired && (
+                <div>
+                  <label 
+                    htmlFor="name" 
+                    className="block mb-2 font-medium"
+                    style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}
+                  >
+                    Name (optional)
+                  </label>
+                  <div className="relative">
+                    <User 
+                      className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" 
+                      style={{ color: 'var(--text-tertiary)' }}
+                    />
+                    <input
+                      id="name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Admin"
+                      className="glass-input w-full"
+                      style={{ paddingLeft: 'var(--space-10)' }}
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {/* Email */}
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1.5">
-                  Name (optional)
+                <label 
+                  htmlFor="email" 
+                  className="block mb-2 font-medium"
+                  style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}
+                >
+                  Email
                 </label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
+                  <Mail 
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" 
+                    style={{ color: 'var(--text-tertiary)' }}
+                  />
                   <input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Admin"
-                    className="w-full pl-10 pr-4 py-2.5 bg-bg-primary border border-border-default rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary transition-colors"
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin@example.com"
+                    required
+                    autoFocus
+                    className="glass-input w-full"
+                    style={{ paddingLeft: 'var(--space-10)' }}
                   />
                 </div>
               </div>
-            )}
-            
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1.5">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@example.com"
-                  required
-                  autoFocus
-                  className="w-full pl-10 pr-4 py-2.5 bg-bg-primary border border-border-default rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary transition-colors"
-                />
-              </div>
-            </div>
-            
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-text-secondary mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  minLength={8}
-                  className="w-full pl-10 pr-4 py-2.5 bg-bg-primary border border-border-default rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary transition-colors"
-                />
-              </div>
-              {setupRequired && (
-                <p className="text-xs text-text-tertiary mt-1">Minimum 8 characters</p>
-              )}
-            </div>
-            
-            {/* Confirm Password (setup only) */}
-            {setupRequired && (
+              
+              {/* Password */}
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-text-secondary mb-1.5">
-                  Confirm Password
+                <label 
+                  htmlFor="password" 
+                  className="block mb-2 font-medium"
+                  style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}
+                >
+                  Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
+                  <Lock 
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" 
+                    style={{ color: 'var(--text-tertiary)' }}
+                  />
                   <input
-                    id="confirmPassword"
+                    id="password"
                     type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
                     minLength={8}
-                    className="w-full pl-10 pr-4 py-2.5 bg-bg-primary border border-border-default rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent-primary focus:ring-1 focus:ring-accent-primary transition-colors"
+                    className="glass-input w-full"
+                    style={{ paddingLeft: 'var(--space-10)' }}
                   />
                 </div>
+                {setupRequired && (
+                  <p className="mt-1" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                    Minimum 8 characters
+                  </p>
+                )}
               </div>
-            )}
-            
-            {/* Remember Me (login only) */}
-            {!setupRequired && (
-              <div className="flex items-center">
-                <input
-                  id="rememberMe"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-border-default bg-bg-primary text-accent-primary focus:ring-accent-primary focus:ring-offset-0"
-                />
-                <label htmlFor="rememberMe" className="ml-2 text-sm text-text-secondary">
-                  Remember me
-                </label>
-              </div>
-            )}
-            
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-2.5 px-4 bg-gradient-to-r from-accent-primary to-accent-secondary text-white font-medium rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {setupRequired ? 'Creating Account...' : 'Signing in...'}
-                </>
-              ) : (
-                setupRequired ? 'Create Admin Account' : 'Sign In'
+              
+              {/* Confirm Password (setup only) */}
+              {setupRequired && (
+                <div>
+                  <label 
+                    htmlFor="confirmPassword" 
+                    className="block mb-2 font-medium"
+                    style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}
+                  >
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <Lock 
+                      className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" 
+                      style={{ color: 'var(--text-tertiary)' }}
+                    />
+                    <input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      minLength={8}
+                      className="glass-input w-full"
+                      style={{ paddingLeft: 'var(--space-10)' }}
+                    />
+                  </div>
+                </div>
               )}
-            </button>
-          </form>
+              
+              {/* Remember Me (login only) */}
+              {!setupRequired && (
+                <div className="flex items-center">
+                  <input
+                    id="rememberMe"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded"
+                    style={{ 
+                      accentColor: 'var(--accent-primary)',
+                      background: 'var(--glass-bg)',
+                      borderColor: 'var(--glass-border)'
+                    }}
+                  />
+                  <label 
+                    htmlFor="rememberMe" 
+                    className="ml-2"
+                    style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}
+                  >
+                    Remember me
+                  </label>
+                </div>
+              )}
+              
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="btn-iridescent w-full flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {setupRequired ? 'Creating Account...' : 'Signing in...'}
+                  </>
+                ) : (
+                  <>
+                    {setupRequired ? 'Create Admin Account' : 'Sign In'}
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
         </div>
         
         {/* Footer */}
-        <p className="text-center text-xs text-text-tertiary mt-6">
+        <p className="text-center mt-6" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
           {setupRequired 
             ? 'This is a single-user system. Create one admin account.'
             : 'Session expires after 30 minutes of inactivity.'
