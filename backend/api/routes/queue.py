@@ -15,9 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.models.database import get_db
-from backend.models.project import Project
-from backend.queue.manager import (
+from models.database import get_db
+from models.project import Project
+from task_queue.manager import (
     QueueManager,
     QueuePriority,
     get_queue_manager

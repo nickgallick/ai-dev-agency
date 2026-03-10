@@ -11,7 +11,7 @@ import inspect
 from typing import Any, Callable, Optional, Union
 from datetime import timedelta
 
-from backend.cache.manager import get_cache_manager, CACHE_TTLS
+from cache.manager import get_cache_manager, CACHE_TTLS
 
 
 def cache_key(*args, **kwargs) -> str:

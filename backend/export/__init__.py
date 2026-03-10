@@ -8,12 +8,12 @@ Provides:
 - Knowledge base export
 """
 
-from backend.export.project import (
+from export.project import (
     export_project_zip,
     import_project_zip,
     list_exportable_files
 )
-from backend.export.system import (
+from export.system import (
     backup_system,
     restore_system,
     export_knowledge_base,

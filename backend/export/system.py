@@ -18,10 +18,10 @@ import subprocess
 
 from sqlalchemy.orm import Session
 
-from backend.config.settings import get_settings
-from backend.models.database import engine
-from backend.models.knowledge_base import KnowledgeBase
-from backend.models.project_template import ProjectTemplate
+from config.settings import get_settings
+from models.database import engine
+from models.knowledge_base import KnowledgeBase
+from models.project_template import ProjectTemplate
 
 
 # Tables to include in backup

@@ -10,7 +10,7 @@ import pickle
 from datetime import timedelta
 from typing import Any, Dict, Optional, Union
 import redis
-from backend.config.settings import get_settings
+from config.settings import get_settings
 
 
 # Cache TTL configurations

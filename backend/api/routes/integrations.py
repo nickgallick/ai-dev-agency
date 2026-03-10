@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ...config.settings import get_settings
+from config.settings import get_settings
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -108,7 +108,7 @@ class TestFigmaRequest(BaseModel):
 @router.post("/test/figma")
 async def test_figma_connection(request: TestFigmaRequest):
     """Test Figma connection with a URL."""
-    from ...integrations.figma_mcp import FigmaMCPClient
+    from integrations.figma_mcp import FigmaMCPClient
     
     client = FigmaMCPClient()
     
@@ -138,7 +138,7 @@ async def test_figma_connection(request: TestFigmaRequest):
 @router.post("/test/browserstack")
 async def test_browserstack_connection():
     """Test BrowserStack connection."""
-    from ...integrations.browserstack import BrowserStackClient
+    from integrations.browserstack import BrowserStackClient
     
     client = BrowserStackClient()
     

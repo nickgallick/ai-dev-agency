@@ -12,7 +12,7 @@ import time
 from typing import Dict, Optional
 from datetime import datetime
 import redis
-from backend.config.settings import get_settings
+from config.settings import get_settings
 
 
 # Default rate limits (requests per minute)

@@ -14,10 +14,10 @@ import traceback
 
 from sqlalchemy.orm import Session
 
-from backend.models.database import get_db, SessionLocal
-from backend.models.project import Project, ProjectStatus
-from backend.queue.manager import QueueManager, get_queue_manager, QueueItem
-from backend.config.settings import get_settings
+from models.database import get_db, SessionLocal
+from models.project import Project, ProjectStatus
+from task_queue.manager import QueueManager, get_queue_manager, QueueItem
+from config.settings import get_settings
 
 
 # Worker configuration
@@ -149,7 +149,7 @@ class QueueWorker:
                 await self._pipeline_executor(project_id, db)
             else:
                 # Default: Import and run the pipeline
-                from backend.orchestration.pipeline import Pipeline
+                from orchestration.pipeline import Pipeline
                 pipeline = Pipeline(project_id=project_id, db=db)
                 await pipeline.run()
             

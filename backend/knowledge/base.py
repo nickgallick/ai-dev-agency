@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_, desc
 import logging
 
-from ..models.knowledge_base import KnowledgeBase
+from models.knowledge_base import KnowledgeBase
 from .types import KnowledgeEntryType, KnowledgeEntry, KnowledgeQueryResult, KnowledgeStats
 from .embeddings import generate_embedding, compute_similarity
 

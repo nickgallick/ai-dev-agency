@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
 import redis
 
-from backend.config.settings import get_settings
+from config.settings import get_settings
 
 
 class QueuePriority(str, Enum):

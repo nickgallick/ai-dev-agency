@@ -17,14 +17,14 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.models.database import get_db
-from backend.models.project import Project
-from backend.export.project import (
+from models.database import get_db
+from models.project import Project
+from export.project import (
     export_project_zip,
     import_project_zip,
     list_exportable_files
 )
-from backend.export.system import (
+from export.system import (
     backup_system,
     restore_system,
     export_knowledge_base,

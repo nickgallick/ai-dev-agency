@@ -257,6 +257,14 @@ class AnalyticsMonitoringAgent(BaseAgent):
                 warnings=report.warnings,
                 execution_time=execution_time,
             )
+        except Exception as e:
+            logger.error(f"Analytics monitoring setup failed: {e}")
+            return AgentResult(
+                success=False,
+                agent_name=self.name,
+                error=str(e),
+                data={"report": report.to_dict()},
+            )
     
     def _extract_integrations(self, requirements: Dict[str, Any]) -> List[str]:
         """Extract integrations from requirements."""

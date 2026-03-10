@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 # revision identifiers, used by Alembic.
 revision = '11a01_smart_intake'
-down_revision = '9b01_user_authentication'
+down_revision = '9b01_user_auth'
 branch_labels = None
 depends_on = None
 

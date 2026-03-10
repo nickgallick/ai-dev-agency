@@ -9,8 +9,8 @@ Redis-based FIFO queue with priority levels:
 Max 2 concurrent projects (configurable).
 """
 
-from backend.queue.manager import QueueManager, get_queue_manager, QueuePriority
-from backend.queue.worker import QueueWorker, start_worker
+from .manager import QueueManager, get_queue_manager, QueuePriority
+from .worker import QueueWorker, start_worker
 
 __all__ = [
     "QueueManager",

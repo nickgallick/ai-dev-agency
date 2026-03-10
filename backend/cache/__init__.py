@@ -10,9 +10,9 @@ Provides caching for:
 Also includes rate limiting for external APIs.
 """
 
-from backend.cache.manager import CacheManager, get_cache_manager
-from backend.cache.decorators import cached, cache_key
-from backend.cache.rate_limiter import RateLimiter, get_rate_limiter
+from cache.manager import CacheManager, get_cache_manager
+from cache.decorators import cached, cache_key
+from cache.rate_limiter import RateLimiter, get_rate_limiter
 
 __all__ = [
     "CacheManager",

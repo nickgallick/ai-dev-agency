@@ -11,25 +11,23 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '11b01'
-down_revision = '11a01_smart_intake_system'
+down_revision = '11a01_smart_intake'
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    # Enable pgvector extension for similarity search
-    op.execute('CREATE EXTENSION IF NOT EXISTS vector')
-    
+    # Note: pgvector extension not required - using ARRAY(Float) for embeddings
     # Create knowledge_base table with vector embeddings
     op.create_table(
         'knowledge_base',
-        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('id', sa.UUID(), primary_key=True),
         sa.Column('entry_type', sa.String(50), nullable=False),  # architecture_decision, qa_finding, prompt_result, code_pattern, user_preference
         sa.Column('title', sa.String(500), nullable=False),
         sa.Column('content', sa.Text, nullable=False),
         sa.Column('embedding', postgresql.ARRAY(sa.Float), nullable=True),  # 1536-dim vector for OpenAI embeddings
         # Metadata for filtering
-        sa.Column('project_id', sa.String(36), sa.ForeignKey('projects.id'), nullable=True),
+        sa.Column('project_id', sa.UUID(), sa.ForeignKey('projects.id'), nullable=True),
         sa.Column('project_type', sa.String(50), nullable=True),
         sa.Column('industry', sa.String(100), nullable=True),
         sa.Column('tech_stack', postgresql.JSONB, nullable=True),  # ["nextjs", "supabase", "stripe"]
@@ -40,7 +38,7 @@ def upgrade() -> None:
         # Audit
         sa.Column('created_at', sa.DateTime, server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime, server_default=sa.func.now(), onupdate=sa.func.now()),
-        sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('created_by', sa.UUID(), sa.ForeignKey('users.id'), nullable=True),
         # Additional data
         sa.Column('metadata', postgresql.JSONB, nullable=True),  # Flexible storage for type-specific data
         sa.Column('tags', postgresql.ARRAY(sa.String(50)), nullable=True),
@@ -57,7 +55,7 @@ def upgrade() -> None:
     # Create project_templates table
     op.create_table(
         'project_templates',
-        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('id', sa.UUID(), primary_key=True),
         sa.Column('name', sa.String(200), nullable=False),
         sa.Column('description', sa.Text, nullable=True),
         sa.Column('project_type', sa.String(50), nullable=False),
@@ -70,7 +68,7 @@ def upgrade() -> None:
         sa.Column('tech_stack', postgresql.JSONB, nullable=True),  # Saved tech stack
         sa.Column('features', postgresql.JSONB, nullable=True),  # Feature list
         # Source project (if auto-generated)
-        sa.Column('source_project_id', sa.String(36), sa.ForeignKey('projects.id'), nullable=True),
+        sa.Column('source_project_id', sa.UUID(), sa.ForeignKey('projects.id'), nullable=True),
         sa.Column('is_auto_generated', sa.Boolean, default=False),  # True if created from successful project
         sa.Column('is_public', sa.Boolean, default=True),  # Visible to all users
         # Quality metrics from source project
@@ -80,7 +78,7 @@ def upgrade() -> None:
         # Audit
         sa.Column('created_at', sa.DateTime, server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime, server_default=sa.func.now(), onupdate=sa.func.now()),
-        sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('created_by', sa.UUID(), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('is_active', sa.Boolean, default=True),
         # Additional data
         sa.Column('metadata', postgresql.JSONB, nullable=True),

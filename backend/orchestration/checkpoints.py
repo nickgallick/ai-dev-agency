@@ -17,8 +17,8 @@ import asyncio
 import json
 
 from sqlalchemy.orm import Session
-from backend.models.project import Project
-from backend.config.settings import get_settings
+from models.project import Project
+from config.settings import get_settings
 
 
 class CheckpointMode(str, Enum):

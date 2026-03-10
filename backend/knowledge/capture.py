@@ -7,8 +7,8 @@ from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 import uuid
 
-from ..models.project import Project
-from ..models.project_template import ProjectTemplate
+from models.project import Project
+from models.project_template import ProjectTemplate
 from .types import KnowledgeEntryType
 from .base import store_knowledge
 

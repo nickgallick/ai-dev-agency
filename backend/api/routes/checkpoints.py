@@ -16,9 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.models.database import get_db
-from backend.models.project import Project, ProjectStatus
-from backend.orchestration.checkpoints import (
+from models.database import get_db
+from models.project import Project, ProjectStatus
+from orchestration.checkpoints import (
     CheckpointManager,
     CheckpointMode,
     CheckpointState,
