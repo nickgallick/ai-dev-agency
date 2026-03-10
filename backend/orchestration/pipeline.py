@@ -10,6 +10,8 @@ from agents.base import AgentResult, BaseAgent
 from agents.security import SecurityAgent
 from agents.seo import SEOAgent
 from agents.accessibility import AccessibilityAgent
+from agents.qa_testing import QATestingAgent
+from agents.deployment import DeploymentAgent
 from config.settings import Settings
 
 
@@ -119,19 +121,19 @@ class Pipeline:
             parallel_group="quality",
         ))
 
-        # QA Agent - runs after all quality checks complete
+        # Phase 5: QA Testing Agent - runs after all quality checks complete
         self.add_node(PipelineNode(
             id="qa",
-            name="QA Review",
-            agent_class=BaseAgent,  # Placeholder
+            name="QA Testing",
+            agent_class=QATestingAgent,
             dependencies=["security", "seo", "accessibility", "testing"],
         ))
 
-        # Phase 5: Deployment (placeholder)
+        # Phase 5: Deployment Agent - runs after QA passes
         self.add_node(PipelineNode(
             id="deployment",
             name="Deployment",
-            agent_class=BaseAgent,  # Placeholder
+            agent_class=DeploymentAgent,
             dependencies=["qa"],
         ))
 

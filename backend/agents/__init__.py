@@ -18,6 +18,10 @@ from .security import SecurityAgent
 from .seo import SEOAgent
 from .accessibility import AccessibilityAgent
 
+# Phase 5: QA & Deployment Agents
+from .qa_testing import QATestingAgent
+from .deployment import DeploymentAgent
+
 __all__ = [
     # Base
     "BaseAgent",
@@ -35,4 +39,7 @@ __all__ = [
     "SecurityAgent",
     "SEOAgent",
     "AccessibilityAgent",
+    # Phase 5
+    "QATestingAgent",
+    "DeploymentAgent",
 ]
