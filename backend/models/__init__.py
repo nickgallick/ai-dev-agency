@@ -8,6 +8,9 @@ from .mcp_credentials import MCPCredential
 from .agent_performance import AgentPerformance, QAFailurePattern, CostAccuracyTracking
 # Phase 11A: Project Presets
 from .preset import ProjectPreset
+# Phase 11B: Knowledge Base + Templates
+from .knowledge_base import KnowledgeBase
+from .project_template import ProjectTemplate
 
 __all__ = [
     "Base",
@@ -27,6 +30,9 @@ __all__ = [
     "CostAccuracyTracking",
     # Phase 11A
     "ProjectPreset",
+    # Phase 11B
+    "KnowledgeBase",
+    "ProjectTemplate",
 ]
 
 # Note: Auth models (User, RefreshToken) are in backend/auth/models.py

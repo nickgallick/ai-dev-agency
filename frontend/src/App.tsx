@@ -11,6 +11,7 @@ import ProjectHistory from './pages/ProjectHistory'
 import Settings from './pages/Settings'
 import AgentLogs from './pages/AgentLogs'
 import CostDashboard from './pages/CostDashboard'
+import KnowledgeBase from './pages/KnowledgeBase'  // Phase 11B
 
 function AppRoutes() {
   const { isAuthenticated, setupRequired, isLoading } = useAuth()
@@ -43,6 +44,7 @@ function AppRoutes() {
         <Route path="settings" element={<Settings />} />
         <Route path="logs" element={<AgentLogs />} />
         <Route path="costs" element={<CostDashboard />} />
+        <Route path="knowledge" element={<KnowledgeBase />} />
       </Route>
     </Routes>
   )

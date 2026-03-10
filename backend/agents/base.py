@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 
 try:
     import docker
@@ -17,6 +17,10 @@ except ImportError:
     DOCKER_SDK_AVAILABLE = False
 
 from config.settings import Settings
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+    from knowledge.types import KnowledgeQueryResult
 
 
 class AgentStatus(Enum):
@@ -267,3 +271,68 @@ class BaseAgent(ABC):
         except Exception as e:
             self.logger.error(f"Failed to write file {path}: {e}")
             return False
+
+    # Phase 11B: Knowledge Base Integration
+    
+    async def query_knowledge(
+        self,
+        db: "Session",
+        context: Dict[str, Any],
+        limit: int = 5,
+    ) -> List["KnowledgeQueryResult"]:
+        """
+        Query the knowledge base for relevant information before starting work.
+        
+        Args:
+            db: Database session
+            context: Agent context with project info
+            limit: Maximum results to return
+            
+        Returns:
+            List of relevant knowledge entries
+        """
+        try:
+            from knowledge.base import get_relevant_knowledge
+            
+            results = await get_relevant_knowledge(
+                db=db,
+                agent_name=self.name,
+                context=context,
+                limit=limit,
+            )
+            
+            if results:
+                self.logger.info(f"Found {len(results)} relevant knowledge entries")
+            
+            return results
+        except Exception as e:
+            self.logger.warning(f"Failed to query knowledge base: {e}")
+            return []
+    
+    def format_knowledge_context(
+        self,
+        knowledge_results: List["KnowledgeQueryResult"],
+    ) -> str:
+        """
+        Format knowledge results into a context string for LLM prompts.
+        
+        Args:
+            knowledge_results: List of knowledge query results
+            
+        Returns:
+            Formatted string with relevant knowledge
+        """
+        if not knowledge_results:
+            return ""
+        
+        sections = ["## Relevant Knowledge from Past Projects\n"]
+        
+        for result in knowledge_results:
+            entry = result.entry
+            sections.append(f"### {entry.title}")
+            sections.append(f"Type: {entry.entry_type.value}")
+            if entry.quality_score:
+                sections.append(f"Quality: {entry.quality_score:.0%}")
+            sections.append(f"\n{entry.content}\n")
+        
+        return "\n".join(sections)

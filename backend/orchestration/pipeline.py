@@ -6,6 +6,7 @@ Enhanced with:
 - Post-Deploy Verification agent
 - Dynamic agent pooling for parallel code generation
 - Phase 9A: Agent Performance Analytics integration
+- Phase 11B: Knowledge Base integration (auto-capture after agent completion)
 """
 
 import asyncio
@@ -19,6 +20,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from agents.base import AgentResult, BaseAgent
+# Phase 11B: Knowledge capture
+from knowledge.capture import capture_agent_knowledge, auto_generate_template
 from agents.security import SecurityAgent
 from agents.seo import SEOAgent
 from agents.accessibility import AccessibilityAgent
@@ -547,6 +550,49 @@ class Pipeline:
                 error_occurred=error_occurred,
                 error_message=error_message,
             )
+            
+            # Phase 11B: Capture knowledge from completed agent
+            if node.status == NodeStatus.COMPLETED and node.result and node.result.success:
+                await self._capture_agent_knowledge(node)
+    
+    async def _capture_agent_knowledge(self, node: PipelineNode) -> None:
+        """Capture knowledge from a completed agent.
+        
+        Phase 11B: Knowledge Base Integration
+        """
+        if not self.db:
+            return
+        
+        project_id = self.context.get("project_id")
+        if not project_id:
+            return
+        
+        try:
+            # Get agent output data
+            output_data = node.result.data if node.result else {}
+            
+            # Get project context
+            project_type = self.context.get("project_type")
+            industry = self.context.get("industry")
+            tech_stack = self.context.get("tech_stack", [])
+            
+            # Capture knowledge
+            knowledge_ids = await capture_agent_knowledge(
+                db=self.db,
+                agent_name=node.id,
+                agent_output=output_data,
+                project_id=str(project_id),
+                project_type=project_type,
+                industry=industry,
+                tech_stack=tech_stack,
+            )
+            
+            if knowledge_ids:
+                self.logger.info(f"Captured {len(knowledge_ids)} knowledge entries from {node.id}")
+                
+        except Exception as e:
+            # Don't fail the pipeline if knowledge capture fails
+            self.logger.warning(f"Failed to capture knowledge from {node.id}: {e}")
     
     async def _log_agent_performance(
         self,

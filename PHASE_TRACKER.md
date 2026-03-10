@@ -16,6 +16,7 @@ AI Dev Agency is an automated software development platform that uses AI agents 
 | 7 | Advanced Features | ✅ Complete | 2026-03-10 |
 | 10 | Integrations | ✅ Complete | 2026-03-10 |
 | 11A | Smart Adaptive Intake | ✅ Complete | 2026-03-10 |
+| 11B | Knowledge Base + Templates | ✅ Complete | 2026-03-10 |
 
 ---
 
@@ -788,3 +789,162 @@ playwright:
 - Smart cost optimization tracks quality outcomes per agent per model
 - Revision system supports incremental updates without full rebuild
 - All agents support project-type-specific configurations
+
+
+
+---
+
+## Phase 11B: Knowledge Base + Templates ✅
+
+**Completed:** March 10, 2026
+
+### Overview
+
+Phase 11B adds a RAG-powered knowledge base that learns from completed projects and makes that knowledge available to all agents. It also implements a template system that allows users to create projects from successful past builds.
+
+### Components Implemented
+
+#### Database Migration
+
+- [x] **11b01_knowledge_base_templates.py** - Adds:
+  - `pgvector` extension for vector similarity search
+  - `knowledge_base` table with embedding column
+  - `project_templates` table for reusable templates
+  - Indexes for efficient filtering
+
+#### Backend Models (`backend/models/`)
+
+- [x] **knowledge_base.py** - SQLAlchemy model:
+  - `KnowledgeBase` - Entry type, title, content, embedding (ARRAY)
+  - Metadata: project_id, project_type, industry, tech_stack, agent_name
+  - Quality tracking: quality_score, usage_count, last_used_at
+  - Tags and flexible metadata JSONB
+
+- [x] **project_template.py** - SQLAlchemy model:
+  - `ProjectTemplate` - Name, description, project_type, industry
+  - Template content: brief_template, requirements, design_tokens, tech_stack, features
+  - Source tracking: source_project_id, is_auto_generated
+  - Quality metrics: qa_score, build_success_count, total_usage_count
+
+#### Backend Knowledge Module (`backend/knowledge/`)
+
+- [x] **types.py** - Knowledge entry types enum:
+  - `KnowledgeEntryType` - 12 types including architecture_decision, qa_finding, prompt_result, code_pattern, user_preference
+
+- [x] **embeddings.py** - Embedding generation:
+  - `generate_embedding()` - OpenAI or OpenRouter API
+  - `compute_similarity()` - Cosine similarity
+  - Fallback hash-based embeddings
+
+- [x] **base.py** - Core operations:
+  - `store_knowledge()` - Store entry with embedding
+  - `query_knowledge()` - Hybrid search (semantic + metadata)
+  - `get_relevant_knowledge()` - Agent-specific queries
+  - Convenience functions: `store_architecture_decision()`, `store_qa_finding()`, `store_prompt_result()`, `store_code_pattern()`, `store_user_preference()`
+  - `get_knowledge_stats()` - Statistics aggregation
+
+- [x] **capture.py** - Auto-capture from agents:
+  - `capture_agent_knowledge()` - Extract knowledge from agent output
+  - Agent-specific capture functions for research, architect, design_system, code_generation, qa_testing, security, code_review, deployment
+  - `auto_generate_template()` - Create template from successful project (QA score >= 0.8)
+
+#### Backend Agent Updates
+
+- [x] **base.py** - Added knowledge base methods:
+  - `query_knowledge()` - Query relevant knowledge before starting
+  - `format_knowledge_context()` - Format results for LLM prompts
+
+#### Backend Pipeline (`backend/orchestration/pipeline.py`)
+
+- [x] Updated to capture knowledge after each agent completes:
+  - `_capture_agent_knowledge()` - Extracts and stores knowledge
+  - Triggered in `execute_node()` finally block
+
+#### Backend API Routes
+
+- [x] **templates.py** - Template CRUD:
+  - `GET /api/templates` - List templates with filtering
+  - `POST /api/templates` - Create template manually
+  - `POST /api/templates/from-project/{id}` - Save project as template
+  - `GET /api/templates/{id}` - Get template details
+  - `PUT /api/templates/{id}` - Update template
+  - `DELETE /api/templates/{id}` - Soft delete template
+  - `POST /api/templates/{id}/use` - Create project from template
+
+- [x] **knowledge.py** - Knowledge base API:
+  - `GET /api/knowledge/stats` - Statistics
+  - `POST /api/knowledge/search` - Semantic search
+  - `POST /api/knowledge/preference` - Store user preference
+  - `GET /api/knowledge/entries` - List entries with filtering
+  - `GET /api/knowledge/entry/{id}` - Get entry
+  - `PUT /api/knowledge/entry/{id}/quality` - Update quality score
+  - `DELETE /api/knowledge/entry/{id}` - Delete entry
+  - `GET /api/knowledge/types` - List entry types
+
+#### Frontend Components
+
+- [x] **TemplateBrowser.tsx** - Template browser modal:
+  - Grid display of templates
+  - Filters: project type, industry, search
+  - Template cards with thumbnails, stats, badges
+
+- [x] **TemplateBrowser.css** - Glassmorphic styling
+
+#### Frontend Pages
+
+- [x] **KnowledgeBase.tsx** - Knowledge base page:
+  - Overview tab: stats, entries by type/agent, recent learnings
+  - Search tab: semantic search, filters
+  - Preferences tab: manage user preferences
+
+- [x] **KnowledgeBase.css** - Page styling
+
+- [x] **NewProject.tsx** - Updated with:
+  - Template browser button and modal
+  - Selected template display
+  - Template selection handler
+
+#### Frontend API (`frontend/src/lib/api.ts`)
+
+- [x] Added types and methods:
+  - `ProjectTemplate`, `TemplateCreate`, `UseTemplateRequest`
+  - `KnowledgeEntry`, `KnowledgeStats`, `PreferenceCreate`, `SearchQuery`
+  - Template CRUD methods
+  - Knowledge search and management methods
+
+#### Frontend Layout
+
+- [x] **Layout.tsx** - Added "Knowledge Base" to sidebar navigation
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| Vector Embeddings | OpenAI text-embedding-3-small via API |
+| Hybrid Search | Semantic similarity + metadata filtering |
+| Knowledge Types | 12 types covering all aspects of project development |
+| Auto-Capture | Knowledge extracted from every completed agent |
+| Quality Scores | Track which knowledge produces good outcomes |
+| Auto Templates | Generate templates from successful projects (QA >= 80%) |
+| Template Browser | Grid view with filtering, search, usage stats |
+| User Preferences | Store and query user preferences |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /api/templates | List templates |
+| POST | /api/templates | Create template |
+| POST | /api/templates/from-project/{id} | Save as template |
+| GET | /api/templates/{id} | Get template |
+| PUT | /api/templates/{id} | Update template |
+| DELETE | /api/templates/{id} | Delete template |
+| POST | /api/templates/{id}/use | Use template |
+| GET | /api/knowledge/stats | Get stats |
+| POST | /api/knowledge/search | Search knowledge |
+| POST | /api/knowledge/preference | Add preference |
+| GET | /api/knowledge/entries | List entries |
+| GET | /api/knowledge/entry/{id} | Get entry |
+| PUT | /api/knowledge/entry/{id}/quality | Update quality |
+| DELETE | /api/knowledge/entry/{id} | Delete entry |
+| GET | /api/knowledge/types | Get entry types |

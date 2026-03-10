@@ -1,18 +1,20 @@
 /**
  * Phase 11A: Smart Adaptive Intake System
+ * Phase 11B: Template Browser Integration
  * Complete rewrite of NewProject page with multi-step glassmorphic form
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { api, BriefAnalysis, Preset } from '@/lib/api'
+import { api, BriefAnalysis, Preset, ProjectTemplate } from '@/lib/api'
 import VoiceInput from '@/components/VoiceInput'
+import TemplateBrowser from '@/components/TemplateBrowser'
 import { 
   Globe, Smartphone, Monitor, Chrome, Terminal, Server, Sparkles, 
   ArrowRight, Zap, Shield, Crown, ChevronDown, ChevronUp, Save,
   Figma, Info, AlertCircle, Check, Plus, X, Palette, Settings2,
   Rocket, FileCode, Layers, Database, Mail, CreditCard, Users,
-  Bell, Search, Upload, MessageSquare, Moon, Sun
+  Bell, Search, Upload, MessageSquare, Moon, Sun, LayoutTemplate
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -171,6 +173,10 @@ export default function NewProject() {
   const [showSavePreset, setShowSavePreset] = useState(false)
   const [presetName, setPresetName] = useState('')
   const analyzeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  
+  // Phase 11B: Template Browser
+  const [showTemplateBrowser, setShowTemplateBrowser] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate | null>(null)
 
   // Load presets
   const { data: presets = [] } = useQuery({
@@ -281,6 +287,30 @@ export default function NewProject() {
     
     // Mark preset as used
     api.usePreset(preset.id).catch(() => {})
+  }
+
+  // Phase 11B: Handle template selection
+  const handleSelectTemplate = async (template: ProjectTemplate) => {
+    setSelectedTemplate(template)
+    setShowTemplateBrowser(false)
+    
+    // Apply template data to form
+    setForm(prev => ({
+      ...prev,
+      projectType: template.project_type || prev.projectType,
+      brief: template.brief_template || prev.brief,
+      industry: template.industry || prev.industry,
+      selectedFeatures: template.features || prev.selectedFeatures,
+      // Apply design tokens if available
+      ...(template.design_tokens ? {
+        primaryColor: template.design_tokens.primary_color || prev.primaryColor,
+        designStyle: template.design_tokens.design_style || prev.designStyle,
+      } : {}),
+      // Apply tech stack if available
+      ...(template.tech_stack ? {
+        frontendFramework: template.tech_stack[0] || prev.frontendFramework,
+      } : {}),
+    }))
   }
 
   // Handle voice transcript
@@ -441,11 +471,53 @@ export default function NewProject() {
         </p>
       </div>
 
+      {/* Phase 11B: Template Browser Section */}
+      <div className="glass-card" style={{ padding: 'var(--space-4)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-medium" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+            Start from Template
+          </h3>
+          <button
+            type="button"
+            onClick={() => setShowTemplateBrowser(true)}
+            className="btn-secondary flex items-center gap-2"
+            style={{ padding: '8px 16px', fontSize: 'var(--text-sm)' }}
+          >
+            <LayoutTemplate className="w-4 h-4" />
+            Browse All
+          </button>
+        </div>
+        {selectedTemplate ? (
+          <div className="glass-card-iridescent flex items-center justify-between p-4">
+            <div>
+              <div className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                {selectedTemplate.name}
+              </div>
+              <div className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                {selectedTemplate.project_type} • {selectedTemplate.industry || 'General'}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedTemplate(null)}
+              className="btn-ghost"
+              style={{ padding: '4px' }}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
+            Use a pre-built template to jump-start your project
+          </p>
+        )}
+      </div>
+
       {/* Presets Row */}
       {presets.length > 0 && (
         <div className="glass-card" style={{ padding: 'var(--space-4)' }}>
           <h3 className="font-medium mb-3" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
-            Quick Start Templates
+            Quick Start Presets
           </h3>
           <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
             {presets.map((preset) => (
@@ -1418,6 +1490,13 @@ export default function NewProject() {
           </div>
         </div>
       </form>
+
+      {/* Phase 11B: Template Browser Modal */}
+      <TemplateBrowser
+        isOpen={showTemplateBrowser}
+        onClose={() => setShowTemplateBrowser(false)}
+        onSelectTemplate={handleSelectTemplate}
+      />
     </div>
   )
 }

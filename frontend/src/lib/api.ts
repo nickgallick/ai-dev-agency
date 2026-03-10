@@ -252,6 +252,96 @@ export interface ProjectRequirements {
   integration_config?: Record<string, any>
 }
 
+// Phase 11B: Template Types
+export interface ProjectTemplate {
+  id: string
+  name: string
+  description: string | null
+  project_type: string
+  industry: string | null
+  thumbnail_url: string | null
+  brief_template: string | null
+  requirements: Record<string, any> | null
+  design_tokens: Record<string, any> | null
+  tech_stack: string[] | null
+  features: string[] | null
+  source_project_id: string | null
+  is_auto_generated: boolean
+  is_public: boolean
+  qa_score: number | null
+  build_success_count: number
+  total_usage_count: number
+  created_at: string | null
+  is_active: boolean
+  tags: string[] | null
+}
+
+export interface TemplateCreate {
+  name: string
+  description?: string
+  project_type: string
+  industry?: string
+  brief_template?: string
+  requirements?: Record<string, any>
+  design_tokens?: Record<string, any>
+  tech_stack?: string[]
+  features?: string[]
+  tags?: string[]
+}
+
+export interface UseTemplateRequest {
+  name: string
+  description?: string
+  customizations?: Record<string, any>
+}
+
+// Phase 11B: Knowledge Base Types
+export interface KnowledgeEntry {
+  id: string
+  entry_type: string
+  title: string
+  content: string
+  project_id: string | null
+  project_type: string | null
+  industry: string | null
+  tech_stack: string[] | null
+  agent_name: string | null
+  quality_score: number | null
+  usage_count: number
+  last_used_at: string | null
+  created_at: string | null
+  tags: string[] | null
+  similarity_score?: number
+}
+
+export interface KnowledgeStats {
+  total_entries: number
+  entries_by_type: Record<string, number>
+  entries_by_agent: Record<string, number>
+  entries_by_project_type: Record<string, number>
+  average_quality_score: number
+  most_used_entries: Record<string, any>[]
+  recent_entries: Record<string, any>[]
+}
+
+export interface PreferenceCreate {
+  title: string
+  preference: string
+  category: string
+  tags?: string[]
+}
+
+export interface SearchQuery {
+  query: string
+  entry_types?: string[]
+  project_type?: string
+  industry?: string
+  agent_name?: string
+  tech_stack?: string[]
+  min_quality_score?: number
+  limit?: number
+}
+
 export const api = {
   // Projects
   createProject: async (data: {
@@ -403,6 +493,101 @@ export const api = {
 
   getAnalyticsSummary: async (days: number = 30): Promise<AnalyticsSummary> => {
     const response = await apiClient.get('/analytics/summary', { params: { days } })
+    return response.data
+  },
+
+  // Phase 11B: Templates
+  getTemplates: async (params?: {
+    project_type?: string
+    industry?: string
+    is_public?: boolean
+    search?: string
+    limit?: number
+    offset?: number
+  }): Promise<ProjectTemplate[]> => {
+    const response = await apiClient.get('/templates', { params })
+    return response.data
+  },
+
+  getTemplate: async (id: string): Promise<ProjectTemplate> => {
+    const response = await apiClient.get(`/templates/${id}`)
+    return response.data
+  },
+
+  createTemplate: async (data: TemplateCreate): Promise<ProjectTemplate> => {
+    const response = await apiClient.post('/templates', data)
+    return response.data
+  },
+
+  createTemplateFromProject: async (projectId: string, name?: string): Promise<ProjectTemplate> => {
+    const response = await apiClient.post(`/templates/from-project/${projectId}`, null, {
+      params: { name }
+    })
+    return response.data
+  },
+
+  updateTemplate: async (id: string, data: Partial<TemplateCreate>): Promise<ProjectTemplate> => {
+    const response = await apiClient.put(`/templates/${id}`, data)
+    return response.data
+  },
+
+  deleteTemplate: async (id: string): Promise<void> => {
+    await apiClient.delete(`/templates/${id}`)
+  },
+
+  useTemplate: async (templateId: string, data: UseTemplateRequest): Promise<{ 
+    status: string
+    template_id: string
+    project_data: Record<string, any>
+  }> => {
+    const response = await apiClient.post(`/templates/${templateId}/use`, data)
+    return response.data
+  },
+
+  // Phase 11B: Knowledge Base
+  getKnowledgeStats: async (): Promise<KnowledgeStats> => {
+    const response = await apiClient.get('/knowledge/stats')
+    return response.data
+  },
+
+  searchKnowledge: async (query: SearchQuery): Promise<KnowledgeEntry[]> => {
+    const response = await apiClient.post('/knowledge/search', query)
+    return response.data
+  },
+
+  storePreference: async (data: PreferenceCreate): Promise<KnowledgeEntry> => {
+    const response = await apiClient.post('/knowledge/preference', data)
+    return response.data
+  },
+
+  getKnowledgeEntries: async (params?: {
+    entry_type?: string
+    agent_name?: string
+    project_type?: string
+    limit?: number
+    offset?: number
+  }): Promise<KnowledgeEntry[]> => {
+    const response = await apiClient.get('/knowledge/entries', { params })
+    return response.data
+  },
+
+  getKnowledgeEntry: async (id: string): Promise<KnowledgeEntry> => {
+    const response = await apiClient.get(`/knowledge/entry/${id}`)
+    return response.data
+  },
+
+  updateKnowledgeQuality: async (id: string, qualityScore: number): Promise<void> => {
+    await apiClient.put(`/knowledge/entry/${id}/quality`, null, {
+      params: { quality_score: qualityScore }
+    })
+  },
+
+  deleteKnowledgeEntry: async (id: string): Promise<void> => {
+    await apiClient.delete(`/knowledge/entry/${id}`)
+  },
+
+  getKnowledgeEntryTypes: async (): Promise<{ types: { value: string; name: string }[] }> => {
+    const response = await apiClient.get('/knowledge/types')
     return response.data
   },
 }
