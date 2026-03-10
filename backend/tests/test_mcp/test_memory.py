@@ -4,8 +4,8 @@ import json
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from backend.mcp.servers.memory import MemoryMCPServer
-from backend.mcp.manager import ServerStatus
+from mcp.servers.memory import MemoryMCPServer
+from mcp.manager import ServerStatus
 
 
 class TestMemoryMCPServer:

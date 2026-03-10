@@ -4,8 +4,8 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 import httpx
 
-from backend.mcp.servers.fetch import FetchMCPServer
-from backend.mcp.manager import ServerStatus
+from mcp.servers.fetch import FetchMCPServer
+from mcp.manager import ServerStatus
 
 
 class TestFetchMCPServer:

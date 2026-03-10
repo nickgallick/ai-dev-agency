@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
 
-from backend.mcp.manager import (
+from mcp.manager import (
     MCPManager,
     MCPServerBase,
     ServerStatus,

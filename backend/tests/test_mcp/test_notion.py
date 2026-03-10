@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.mcp.servers.notion import NotionMCPServer
-from backend.mcp.manager import ServerStatus
+from mcp.servers.notion import NotionMCPServer
+from mcp.manager import ServerStatus
 
 
 class TestNotionMCPServer:

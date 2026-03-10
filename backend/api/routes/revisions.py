@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.models import get_db, Project, ProjectStatus
-from backend.agents.revision_handler import RevisionHandlerAgent, RevisionScope
+from models import get_db, Project, ProjectStatus
+from agents.revision_handler import RevisionHandlerAgent, RevisionScope
 
 
 router = APIRouter(prefix="/api/projects", tags=["revisions"])

@@ -4,8 +4,8 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 
-from backend.mcp.servers.browser import BrowserMCPServer
-from backend.mcp.manager import ServerStatus
+from mcp.servers.browser import BrowserMCPServer
+from mcp.manager import ServerStatus
 
 
 class TestBrowserMCPServer:

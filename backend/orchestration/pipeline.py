@@ -5,13 +5,18 @@ Enhanced with:
 - Code Review agent
 - Post-Deploy Verification agent
 - Dynamic agent pooling for parallel code generation
+- Phase 9A: Agent Performance Analytics integration
 """
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Type
+from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from agents.base import AgentResult, BaseAgent
 from agents.security import SecurityAgent
@@ -27,6 +32,7 @@ from agents.code_review import CodeReviewAgent
 from agents.post_deploy_verification import PostDeployVerificationAgent
 from config.settings import Settings
 from utils.cost_optimizer import get_cost_optimizer, CostProfile
+from utils.agent_analytics import log_agent_performance, get_agent_analytics
 
 
 class NodeStatus(Enum):
@@ -144,6 +150,7 @@ class Pipeline:
         self,
         settings: Optional[Settings] = None,
         config: Optional[PipelineConfig] = None,
+        db: Optional[Session] = None,
     ):
         self.settings = settings or Settings()
         self.config = config or PipelineConfig()
@@ -153,6 +160,8 @@ class Pipeline:
         self.cost_optimizer = get_cost_optimizer()
         self.total_cost: float = 0.0
         self.cost_breakdown: Dict[str, float] = {}
+        # Phase 9A: Database session for analytics logging
+        self.db = db
         self._setup_default_pipeline()
     
     def configure_for_project_type(self, project_type: str) -> None:
@@ -451,9 +460,17 @@ class Pipeline:
         return groups
 
     async def execute_node(self, node: PipelineNode) -> AgentResult:
-        """Execute a single pipeline node."""
+        """Execute a single pipeline node with performance analytics tracking."""
         self.logger.info(f"Executing node: {node.name}")
         node.status = NodeStatus.RUNNING
+        
+        # Phase 9A: Track execution time
+        start_time = time.time()
+        model_used = "placeholder"
+        tokens_used = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        cost = 0.0
+        error_occurred = False
+        error_message = None
 
         try:
             # Skip placeholder agents
@@ -481,12 +498,24 @@ class Pipeline:
 
             # Store result in context for downstream nodes
             self.context[f"{node.id}_result"] = result.data
+            
+            # Extract model and token info from result if available
+            if hasattr(result, 'metadata') and result.metadata:
+                model_used = result.metadata.get('model_used', 'unknown')
+                tokens_used = result.metadata.get('tokens_used', tokens_used)
+                cost = result.metadata.get('cost', 0.0)
+            elif hasattr(result, 'data') and isinstance(result.data, dict):
+                model_used = result.data.get('model_used', 'unknown')
+                tokens_used = result.data.get('tokens_used', tokens_used)
+                cost = result.data.get('cost', 0.0)
 
             return result
 
         except asyncio.TimeoutError:
             self.logger.error(f"Node {node.name} timed out")
             node.status = NodeStatus.FAILED
+            error_occurred = True
+            error_message = "Execution timed out"
             node.result = AgentResult(
                 success=False,
                 agent_name=node.name,
@@ -497,12 +526,100 @@ class Pipeline:
         except Exception as e:
             self.logger.error(f"Node {node.name} failed: {e}")
             node.status = NodeStatus.FAILED
+            error_occurred = True
+            error_message = str(e)
             node.result = AgentResult(
                 success=False,
                 agent_name=node.name,
                 errors=[str(e)],
             )
             return node.result
+        
+        finally:
+            # Phase 9A: Log performance analytics
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            await self._log_agent_performance(
+                node=node,
+                execution_time_ms=execution_time_ms,
+                model_used=model_used,
+                tokens_used=tokens_used,
+                cost=cost,
+                error_occurred=error_occurred,
+                error_message=error_message,
+            )
+    
+    async def _log_agent_performance(
+        self,
+        node: PipelineNode,
+        execution_time_ms: int,
+        model_used: str,
+        tokens_used: Dict[str, int],
+        cost: float,
+        error_occurred: bool = False,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """Log agent performance to the analytics system.
+        
+        Phase 9A: Enhanced Analytics
+        """
+        if not self.db:
+            self.logger.debug("No database session - skipping analytics logging")
+            return
+        
+        project_id = self.context.get("project_id")
+        if not project_id:
+            self.logger.debug("No project_id in context - skipping analytics logging")
+            return
+        
+        try:
+            # Determine if output passed to next stage
+            passed_next_stage = (
+                node.status == NodeStatus.COMPLETED and 
+                node.result is not None and 
+                node.result.success
+            )
+            
+            # Get revision count from context if tracking revisions
+            revision_count = self.context.get(f"{node.id}_revision_count", 0)
+            
+            # Get QA issues caused (if this was from QA feedback)
+            qa_issues_caused = self.context.get(f"{node.id}_qa_issues", 0)
+            
+            # Calculate quality score based on success and revisions
+            quality_score = 1.0
+            if not passed_next_stage:
+                quality_score = 0.5
+            if revision_count > 0:
+                quality_score -= min(0.3, revision_count * 0.1)
+            if qa_issues_caused > 0:
+                quality_score -= min(0.2, qa_issues_caused * 0.05)
+            quality_score = max(0.0, quality_score)
+            
+            log_agent_performance(
+                db=self.db,
+                project_id=project_id if isinstance(project_id, UUID) else UUID(str(project_id)),
+                agent_name=node.id,
+                model_used=model_used,
+                execution_time_ms=execution_time_ms,
+                tokens_used=tokens_used,
+                cost=cost,
+                passed_next_stage=passed_next_stage,
+                revision_count=revision_count,
+                qa_issues_caused=qa_issues_caused,
+                quality_score=quality_score,
+                error_occurred=error_occurred,
+                error_message=error_message,
+            )
+            
+            self.logger.info(
+                f"Logged analytics for {node.id}: "
+                f"time={execution_time_ms}ms, passed={passed_next_stage}, "
+                f"quality={quality_score:.2f}"
+            )
+            
+        except Exception as e:
+            # Don't fail the pipeline if analytics logging fails
+            self.logger.warning(f"Failed to log agent performance: {e}")
 
     async def execute_parallel_group(
         self, nodes: List[PipelineNode]

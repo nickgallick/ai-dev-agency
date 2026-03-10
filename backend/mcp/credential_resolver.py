@@ -8,8 +8,8 @@ import logging
 from typing import Optional
 import os
 
-from backend.utils.crypto import decrypt_value, hash_credential_key
-from backend.config.settings import get_settings
+from utils.crypto import decrypt_value, hash_credential_key
+from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ async def _get_ui_credential(server_name: str, credential_key: str) -> Optional[
     """Get credential from UI storage (encrypted in database)."""
     try:
         # Import here to avoid circular imports
-        from backend.api.database import get_db_session
+        from api.database import get_db_session
         from sqlalchemy import text
         
         credential_id = hash_credential_key(server_name, credential_key)
@@ -112,8 +112,8 @@ async def set_credential(
         True if stored successfully.
     """
     try:
-        from backend.api.database import get_db_session
-        from backend.utils.crypto import encrypt_value
+        from api.database import get_db_session
+        from utils.crypto import encrypt_value
         from sqlalchemy import text
         
         credential_id = hash_credential_key(server_name, credential_key)
@@ -152,7 +152,7 @@ async def set_credential(
 async def delete_credential(server_name: str, credential_key: str) -> bool:
     """Delete a credential from the database."""
     try:
-        from backend.api.database import get_db_session
+        from api.database import get_db_session
         from sqlalchemy import text
         
         credential_id = hash_credential_key(server_name, credential_key)

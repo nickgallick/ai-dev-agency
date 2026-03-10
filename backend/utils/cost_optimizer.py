@@ -9,10 +9,16 @@ Implements intelligent model selection based on:
 
 import os
 import json
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+
+from sqlalchemy import func, desc
+from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 
 class CostProfile(str, Enum):
@@ -219,13 +225,110 @@ COST_PROFILES = {
 
 
 class CostOptimizer:
-    """Smart cost optimization engine."""
+    """Smart cost optimization engine.
+    
+    Phase 9A Enhanced: Now uses real performance data from agent_performance table
+    for intelligent model selection.
+    """
     
     def __init__(self, db_session=None):
         self.db_session = db_session
         self.quality_history: Dict[str, Dict[str, List[float]]] = {}
         self.cost_alerts: List[CostAlert] = []
         self.alert_threshold: float = float(os.getenv("COST_ALERT_THRESHOLD", "50.0"))
+        # Phase 9A: Cache for real performance data
+        self._real_performance_cache: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        self._cache_timestamp: Optional[datetime] = None
+        self._cache_ttl_minutes: int = 15  # Refresh cache every 15 minutes
+    
+    def set_db_session(self, db_session: Session) -> None:
+        """Set or update the database session for querying real performance data."""
+        self.db_session = db_session
+    
+    def _refresh_real_performance_cache(self) -> None:
+        """Refresh the real performance data cache from database.
+        
+        Phase 9A: Uses actual agent_performance table data.
+        """
+        if not self.db_session:
+            return
+        
+        # Check if cache is still valid
+        if (self._cache_timestamp and 
+            datetime.utcnow() - self._cache_timestamp < timedelta(minutes=self._cache_ttl_minutes)):
+            return
+        
+        try:
+            from models.agent_performance import AgentPerformance
+            
+            # Query performance data from last 30 days
+            cutoff_date = datetime.utcnow() - timedelta(days=30)
+            
+            results = self.db_session.query(
+                AgentPerformance.agent_name,
+                AgentPerformance.model_used,
+                func.count(AgentPerformance.id).label('execution_count'),
+                func.avg(
+                    func.cast(
+                        AgentPerformance.output_quality['passed_next_stage'].astext == 'true',
+                        type_=func.INTEGER()
+                    )
+                ).label('success_rate'),
+                func.avg(
+                    func.cast(
+                        AgentPerformance.output_quality['revision_count'].astext,
+                        type_=func.FLOAT()
+                    )
+                ).label('avg_revisions'),
+                func.avg(
+                    func.cast(
+                        AgentPerformance.output_quality['quality_score'].astext,
+                        type_=func.FLOAT()
+                    )
+                ).label('avg_quality'),
+                func.avg(AgentPerformance.cost).label('avg_cost'),
+                func.avg(AgentPerformance.execution_time_ms).label('avg_time'),
+            ).filter(
+                AgentPerformance.created_at >= cutoff_date
+            ).group_by(
+                AgentPerformance.agent_name,
+                AgentPerformance.model_used
+            ).all()
+            
+            # Build cache
+            self._real_performance_cache = {}
+            for row in results:
+                if row.agent_name not in self._real_performance_cache:
+                    self._real_performance_cache[row.agent_name] = {}
+                
+                self._real_performance_cache[row.agent_name][row.model_used] = {
+                    'execution_count': row.execution_count or 0,
+                    'success_rate': (row.success_rate or 0) * 100,
+                    'avg_revisions': row.avg_revisions or 0,
+                    'avg_quality': row.avg_quality or 1.0,
+                    'avg_cost': row.avg_cost or 0,
+                    'avg_time_ms': row.avg_time or 0,
+                }
+            
+            self._cache_timestamp = datetime.utcnow()
+            logger.info(f"Refreshed performance cache with data for {len(self._real_performance_cache)} agents")
+            
+        except Exception as e:
+            logger.warning(f"Failed to refresh performance cache: {e}")
+    
+    def get_real_performance_data(
+        self, 
+        agent_name: str
+    ) -> Dict[str, Dict[str, Any]]:
+        """Get real performance data for an agent from the database.
+        
+        Phase 9A: Returns model performance stats from agent_performance table.
+        
+        Returns:
+            Dict mapping model_id -> performance stats
+        """
+        self._refresh_real_performance_cache()
+        return self._real_performance_cache.get(agent_name, {})
     
     def get_model_for_agent(
         self,
@@ -234,7 +337,11 @@ class CostOptimizer:
         project_type: str = "web_simple",
         complexity_score: int = 5,
     ) -> str:
-        """Select the optimal model for an agent based on profile and history."""
+        """Select the optimal model for an agent based on profile and history.
+        
+        Phase 9A Enhanced: Now uses real performance data from agent_performance
+        table for intelligent model selection.
+        """
         profile = COST_PROFILES.get(cost_profile, COST_PROFILES[CostProfile.BALANCED])
         base_model = profile["models"].get(agent_name, "anthropic/claude-sonnet-4")
         
@@ -244,7 +351,51 @@ class CostOptimizer:
             if agent_name in ["architect", "code_generation", "security"]:
                 return "anthropic/claude-sonnet-4"
         
-        # Check quality history - if a cheaper model consistently works, use it
+        # Phase 9A: Check real performance data first
+        real_data = self.get_real_performance_data(agent_name)
+        if real_data:
+            best_alternative = None
+            best_score = 0
+            base_info = MODEL_PRICING.get(base_model)
+            
+            for model_id, stats in real_data.items():
+                # Need at least 5 executions for reliable data
+                if stats['execution_count'] < 5:
+                    continue
+                
+                # Check if model has high success rate and low revisions
+                success_rate = stats['success_rate']
+                avg_revisions = stats['avg_revisions']
+                avg_quality = stats['avg_quality']
+                
+                # Calculate a score: high success + high quality + low revisions
+                revision_penalty = min(0.2, avg_revisions * 0.1)
+                score = (success_rate / 100) * avg_quality * (1 - revision_penalty)
+                
+                # For non-premium profiles, prefer cheaper models with good performance
+                if cost_profile != CostProfile.PREMIUM:
+                    model_info = MODEL_PRICING.get(model_id)
+                    if model_info and base_info:
+                        # Only consider if cheaper or equal cost
+                        if model_info.input_cost_per_1k <= base_info.input_cost_per_1k:
+                            # Boost score for cheaper models with good performance
+                            if score >= 0.8:  # 80% quality threshold
+                                cost_savings = 1 - (model_info.input_cost_per_1k / base_info.input_cost_per_1k)
+                                score += cost_savings * 0.1  # Small bonus for cost savings
+                
+                if score > best_score:
+                    best_score = score
+                    best_alternative = model_id
+            
+            # Use alternative if it's significantly better
+            if best_alternative and best_score >= 0.85:
+                logger.info(
+                    f"Using {best_alternative} for {agent_name} "
+                    f"(score={best_score:.2f}) based on real performance data"
+                )
+                return best_alternative
+        
+        # Fall back to local quality history
         if agent_name in self.quality_history:
             model_history = self.quality_history[agent_name]
             for model_id, scores in model_history.items():

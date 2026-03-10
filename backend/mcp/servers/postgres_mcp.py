@@ -7,8 +7,8 @@ import logging
 from typing import Any, Dict, List, Optional
 import asyncpg
 
-from backend.mcp.manager import MCPServerBase, ServerStatus
-from backend.config.settings import get_settings
+from mcp.manager import MCPServerBase, ServerStatus
+from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 

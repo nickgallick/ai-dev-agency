@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.mcp.servers.github_mcp import GitHubMCPServer
-from backend.mcp.manager import ServerStatus
+from mcp.servers.github_mcp import GitHubMCPServer
+from mcp.manager import ServerStatus
 
 
 class TestGitHubMCPServer:

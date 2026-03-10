@@ -5,8 +5,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.mcp.servers.filesystem import FilesystemMCPServer
-from backend.mcp.manager import ServerStatus
+from mcp.servers.filesystem import FilesystemMCPServer
+from mcp.manager import ServerStatus
 
 
 class TestFilesystemMCPServer:

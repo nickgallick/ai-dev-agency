@@ -10,8 +10,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 import redis.asyncio as redis
 
-from backend.mcp.manager import MCPServerBase, ServerStatus
-from backend.config.settings import get_settings
+from mcp.manager import MCPServerBase, ServerStatus
+from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 

@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.mcp.servers.slack import SlackMCPServer
-from backend.mcp.manager import ServerStatus
+from mcp.servers.slack import SlackMCPServer
+from mcp.manager import ServerStatus
 
 
 class TestSlackMCPServer:

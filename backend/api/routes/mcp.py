@@ -13,9 +13,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 
-from backend.mcp.manager import get_mcp_manager, ServerStatus
-from backend.mcp.config import MCP_SERVERS, get_enabled_servers
-from backend.mcp.credential_resolver import (
+from mcp.manager import get_mcp_manager, ServerStatus
+from mcp.config import MCP_SERVERS, get_enabled_servers
+from mcp.credential_resolver import (
     set_credential,
     delete_credential,
     get_credential,

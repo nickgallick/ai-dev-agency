@@ -11,8 +11,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Type
 from enum import Enum
 
-from backend.mcp.config import MCP_SERVERS, get_enabled_servers
-from backend.config.settings import get_settings
+from mcp.config import MCP_SERVERS, get_enabled_servers
+from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class MCPManager:
     
     async def initialize(self) -> None:
         """Initialize all enabled MCP servers."""
-        from backend.mcp.servers import (
+        from mcp.servers import (
             FilesystemMCPServer,
             GitHubMCPServer,
             PostgresMCPServer,

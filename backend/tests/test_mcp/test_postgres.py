@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.mcp.servers.postgres_mcp import PostgresMCPServer
-from backend.mcp.manager import ServerStatus
+from mcp.servers.postgres_mcp import PostgresMCPServer
+from mcp.manager import ServerStatus
 
 
 class TestPostgresMCPServer:

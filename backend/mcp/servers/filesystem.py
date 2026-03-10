@@ -9,8 +9,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from backend.mcp.manager import MCPServerBase, ServerStatus
-from backend.mcp.config import MCP_SERVERS
+from mcp.manager import MCPServerBase, ServerStatus
+from mcp.config import MCP_SERVERS
 
 logger = logging.getLogger(__name__)
 

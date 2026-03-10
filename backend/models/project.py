@@ -96,6 +96,9 @@ class Project(Base):
     agent_logs = relationship("AgentLog", back_populates="project", cascade="all, delete-orphan")
     cost_tracking = relationship("CostTracking", back_populates="project", cascade="all, delete-orphan")
     deployment_records = relationship("DeploymentRecord", back_populates="project", cascade="all, delete-orphan")
+    # Phase 9A: Agent Performance Analytics
+    agent_performance_records = relationship("AgentPerformance", back_populates="project", cascade="all, delete-orphan")
+    cost_accuracy_record = relationship("CostAccuracyTracking", back_populates="project", uselist=False, cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_project_status", "status"),

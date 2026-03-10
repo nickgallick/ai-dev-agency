@@ -4,6 +4,8 @@ from .agent_log import AgentLog
 from .cost_tracking import CostTracking
 from .deployment_record import DeploymentRecord
 from .mcp_credentials import MCPCredential
+# Phase 9A: Agent Performance Analytics
+from .agent_performance import AgentPerformance, QAFailurePattern, CostAccuracyTracking
 
 __all__ = [
     "Base",
@@ -17,4 +19,8 @@ __all__ = [
     "CostTracking",
     "DeploymentRecord",
     "MCPCredential",
+    # Phase 9A
+    "AgentPerformance",
+    "QAFailurePattern",
+    "CostAccuracyTracking",
 ]

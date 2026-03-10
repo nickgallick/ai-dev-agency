@@ -8,9 +8,9 @@ import logging
 from typing import Any, Dict, List, Optional
 import httpx
 
-from backend.mcp.manager import MCPServerBase, ServerStatus
-from backend.mcp.config import MCP_SERVERS
-from backend.config.settings import get_settings
+from mcp.manager import MCPServerBase, ServerStatus
+from mcp.config import MCP_SERVERS
+from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 

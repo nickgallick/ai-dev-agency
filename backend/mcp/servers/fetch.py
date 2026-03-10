@@ -7,7 +7,7 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 import httpx
 
-from backend.mcp.manager import MCPServerBase, ServerStatus
+from mcp.manager import MCPServerBase, ServerStatus
 
 logger = logging.getLogger(__name__)
 

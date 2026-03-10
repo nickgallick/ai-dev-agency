@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import projects_router, agents_router, costs_router, health_router
-from api.routes import revisions_router
+from api.routes import revisions_router, analytics_router
 from models import engine, Base
 
 
@@ -20,8 +20,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AI Dev Agency API",
-    description="Universal AI Development Agency System - Phase 1",
-    version="1.0.0",
+    description="Universal AI Development Agency System - Phase 9A Enhanced Analytics",
+    version="1.9.0",
     lifespan=lifespan,
 )
 
@@ -45,6 +45,7 @@ app.include_router(projects_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(costs_router, prefix="/api")
 app.include_router(revisions_router)  # Already has /api prefix in router
+app.include_router(analytics_router)  # Phase 9A: Analytics - Already has /api prefix
 
 
 @app.get("/")
