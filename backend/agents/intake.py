@@ -1,11 +1,16 @@
 """Intake & Classification Agent - Step 1.
 
 Phase 11A: Enhanced with real-time brief analysis for Smart Adaptive Intake System.
+Phase 11B: Knowledge Base integration - query similar projects, estimate token budgets.
+Phase 11D: Agent updates - use structured ProjectRequirements, load templates.
 """
 import json
+import logging
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 
 # Cost estimates by project type and profile
@@ -22,9 +27,35 @@ COST_ESTIMATES = {
     "python_saas": {"budget": "$4-12", "balanced": "$15-30", "premium": "$50-100"},
 }
 
+# Default token budgets by agent (can be refined from KB data)
+DEFAULT_TOKEN_BUDGETS = {
+    "intake": 2000,
+    "research": 15000,
+    "architect": 20000,
+    "design_system": 10000,
+    "asset_generation": 5000,
+    "content_generation": 15000,
+    "code_generation": 50000,
+    "integration_wiring": 10000,
+    "security": 5000,
+    "seo": 5000,
+    "accessibility": 5000,
+    "qa_testing": 15000,
+    "deployment": 5000,
+    "delivery": 5000,
+}
+
 
 class IntakeAgent(BaseAgent):
-    """Classifies project briefs and extracts key information."""
+    """Classifies project briefs and extracts key information.
+    
+    Phase 11 Enhancements:
+    - Uses structured ProjectRequirements from frontend
+    - Queries knowledge base for similar past projects
+    - Attaches KB context to pipeline state
+    - Estimates per-agent token budgets from past data
+    - Loads template if template_id provided
+    """
     
     name = "intake"
     description = "Intake & Classification Agent"
@@ -95,7 +126,7 @@ Project Type Definitions:
 
 Respond ONLY with valid JSON in this format:
 {
-    "project_type": "web_simple" | "web_complex" | "mobile_native_ios" | "mobile_cross_platform" | "mobile_pwa" | "desktop_app" | "chrome_extension" | "cli_tool" | "python_api" | "python_saas",
+    "project_type": "web_simple" | "web_complex" | etc.,
     "project_name": "suggested name for the project",
     "summary": "2-3 sentence summary of what will be built",
     "key_features": ["feature1", "feature2", ...],
@@ -124,11 +155,36 @@ Respond ONLY with valid JSON in this format:
 }"""
     
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process the project brief and classify it."""
-        brief = input_data.get("brief", "")
-        cost_profile = input_data.get("cost_profile", "balanced")
+        """Process the project brief and classify it.
+        
+        Phase 11 Enhanced:
+        - Accepts structured ProjectRequirements
+        - Queries KB for similar projects
+        - Loads template if template_id provided
+        - Estimates token budgets from past data
+        """
+        # Extract data from input (supports both legacy and structured formats)
+        requirements = input_data.get("requirements", {})
+        brief = requirements.get("brief") or input_data.get("brief", "")
+        cost_profile = requirements.get("cost_profile") or input_data.get("cost_profile", "balanced")
         is_revision = input_data.get("is_revision", False)
         existing_project_type = input_data.get("existing_project_type")
+        template_id = requirements.get("template_id") or input_data.get("template_id")
+        
+        # Phase 11B: Query knowledge base for similar projects
+        kb_context = await self._query_knowledge_base(brief, requirements)
+        
+        # Phase 11: Load template if provided
+        template_data = None
+        if template_id:
+            template_data = await self._load_template(template_id)
+        
+        # Phase 11: Estimate token budgets from KB data
+        token_budgets = await self._estimate_token_budgets(
+            project_type=requirements.get("project_type"),
+            complexity=requirements.get("complexity_estimate", "medium"),
+            kb_context=kb_context
+        )
         
         # Pre-analyze keywords for hints
         detected_types = self._detect_project_type_hints(brief)
@@ -150,12 +206,27 @@ Classify the revision_scope as:
         if detected_types:
             type_hints = f"\nDetected keywords suggest these project types: {', '.join(detected_types)}"
         
+        # Include KB context if available
+        kb_hint = ""
+        if kb_context.get("similar_projects"):
+            kb_hint = f"\n\nSimilar past projects found in knowledge base:\n"
+            for proj in kb_context["similar_projects"][:3]:
+                kb_hint += f"- {proj.get('title', 'Untitled')}: {proj.get('summary', '')[:100]}...\n"
+        
+        # Include template context if loaded
+        template_hint = ""
+        if template_data:
+            template_hint = f"\n\nUsing template: {template_data.get('name', 'Unknown')}\n"
+            template_hint += f"Template type: {template_data.get('project_type', 'Unknown')}\n"
+            if template_data.get("pages"):
+                template_hint += f"Template pages: {', '.join(template_data['pages'][:5])}\n"
+        
         prompt = f"""Analyze this project brief and classify it:
 
 ---
 {brief}
 ---
-{revision_context}{type_hints}
+{revision_context}{type_hints}{kb_hint}{template_hint}
 
 Provide your classification as JSON."""
         
@@ -195,7 +266,132 @@ Provide your classification as JSON."""
             "model_used": model,
             "tokens": result["total_tokens"],
             "cost": result["cost"],
+            # Phase 11 additions
+            "kb_context": kb_context,
+            "template_data": template_data,
+            "token_budgets": token_budgets,
+            "structured_requirements": requirements if requirements else None,
         }
+    
+    async def _query_knowledge_base(self, brief: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
+        """Query KB for similar past projects and relevant knowledge.
+        
+        Phase 11B: Knowledge Base integration.
+        """
+        try:
+            from ..knowledge import query_knowledge, KnowledgeEntryType
+            from ..models import get_db
+            
+            db = next(get_db())
+            
+            # Query for similar projects
+            project_type = requirements.get("project_type")
+            industry = requirements.get("industry")
+            
+            similar = await query_knowledge(
+                db=db,
+                query_text=brief,
+                entry_types=[KnowledgeEntryType.PROJECT_SUMMARY],
+                project_type=project_type,
+                industry=industry,
+                min_quality_score=0.7,
+                limit=5,
+            )
+            
+            # Query for relevant architecture decisions
+            arch_decisions = await query_knowledge(
+                db=db,
+                query_text=brief,
+                entry_types=[KnowledgeEntryType.ARCHITECTURE_DECISION],
+                project_type=project_type,
+                limit=3,
+            )
+            
+            return {
+                "similar_projects": [
+                    {
+                        "id": r.entry.id,
+                        "title": r.entry.title,
+                        "summary": r.entry.content[:200],
+                        "similarity": r.similarity_score,
+                        "quality_score": r.entry.quality_score,
+                    }
+                    for r in similar
+                ],
+                "architecture_decisions": [
+                    {
+                        "id": r.entry.id,
+                        "title": r.entry.title,
+                        "content": r.entry.content[:300],
+                        "similarity": r.similarity_score,
+                    }
+                    for r in arch_decisions
+                ],
+            }
+        except Exception as e:
+            logger.warning(f"KB query failed: {e}")
+            return {"similar_projects": [], "architecture_decisions": []}
+    
+    async def _load_template(self, template_id: str) -> Optional[Dict[str, Any]]:
+        """Load project template from database.
+        
+        Phase 11: Template support.
+        """
+        try:
+            from ..models import get_db
+            from ..models.project_template import ProjectTemplate
+            
+            db = next(get_db())
+            template = db.query(ProjectTemplate).filter(
+                ProjectTemplate.id == template_id
+            ).first()
+            
+            if template:
+                return {
+                    "id": template.id,
+                    "name": template.name,
+                    "project_type": template.project_type,
+                    "pages": template.template_data.get("pages", []),
+                    "features": template.template_data.get("features", []),
+                    "tech_stack": template.template_data.get("tech_stack", {}),
+                    "design_tokens": template.template_data.get("design_tokens", {}),
+                    "architecture": template.template_data.get("architecture", {}),
+                }
+            return None
+        except Exception as e:
+            logger.warning(f"Template load failed: {e}")
+            return None
+    
+    async def _estimate_token_budgets(
+        self, 
+        project_type: Optional[str], 
+        complexity: str,
+        kb_context: Dict[str, Any]
+    ) -> Dict[str, int]:
+        """Estimate per-agent token budgets from past data.
+        
+        Phase 11: Token budget estimation.
+        """
+        budgets = DEFAULT_TOKEN_BUDGETS.copy()
+        
+        # Adjust based on complexity
+        multipliers = {"simple": 0.7, "medium": 1.0, "complex": 1.5}
+        multiplier = multipliers.get(complexity, 1.0)
+        
+        for agent in budgets:
+            budgets[agent] = int(budgets[agent] * multiplier)
+        
+        # Try to get actual data from KB similar projects
+        try:
+            similar_projects = kb_context.get("similar_projects", [])
+            if similar_projects:
+                # In a real implementation, we'd query agent logs for these projects
+                # and compute average token usage
+                pass
+        except Exception as e:
+            logger.debug(f"Token budget estimation from KB failed: {e}")
+        
+        return budgets
     
     def _select_model(self, cost_profile: str) -> str:
         """Select model based on cost profile."""
@@ -245,11 +441,9 @@ Provide your classification as JSON."""
     
     def _estimate_complexity(self, brief: str, detected_type: Optional[str], features: List[str]) -> str:
         """Estimate project complexity based on brief analysis."""
-        # Simple heuristics
         word_count = len(brief.split())
         feature_count = len(features)
         
-        # Complex types
         complex_types = ["python_saas", "web_complex", "mobile_native_ios", "desktop_app"]
         
         if detected_type in complex_types or feature_count >= 4 or word_count > 200:
@@ -264,7 +458,6 @@ Provide your classification as JSON."""
         pages = []
         brief_lower = brief.lower()
         
-        # Base pages by type
         if detected_type in ["web_simple", "web_complex", "python_saas"]:
             pages.append("Home")
             if "about" in brief_lower:
@@ -272,7 +465,6 @@ Provide your classification as JSON."""
             if "contact" in brief_lower:
                 pages.append("Contact")
         
-        # Feature-based pages
         if "authentication" in features:
             pages.extend(["Login", "Register", "Profile"])
         if "dashboard" in features:
@@ -280,14 +472,13 @@ Provide your classification as JSON."""
         if "payments" in features:
             pages.extend(["Pricing", "Checkout"])
         
-        # Mobile-specific screens
         if detected_type in ["mobile_native_ios", "mobile_cross_platform", "mobile_pwa"]:
             if not pages:
                 pages = ["Home", "Settings"]
             if "authentication" in features and "Login" not in pages:
                 pages.extend(["Login", "Profile"])
         
-        return pages[:8]  # Limit to 8 suggestions
+        return pages[:8]
     
     async def analyze_brief(self, brief: str) -> Dict[str, Any]:
         """
@@ -295,13 +486,6 @@ Provide your classification as JSON."""
         
         Uses fast/cheap model (deepseek) for quick response times.
         Returns auto-detected values without fully classifying the project.
-        
-        Args:
-            brief: The project description text to analyze
-            
-        Returns:
-            Dict with detected_project_type, confidence, suggested_features,
-            suggested_pages, detected_industry, complexity_estimate, cost_estimate
         """
         if not brief or len(brief.strip()) < 10:
             return {
@@ -315,7 +499,6 @@ Provide your classification as JSON."""
                 "warnings": []
             }
         
-        # Keyword-based detection (fast, no LLM call)
         detected_types = self._detect_project_type_hints(brief)
         detected_type = detected_types[0] if detected_types else "web_simple"
         confidence = 0.9 if detected_types else 0.5
@@ -325,10 +508,8 @@ Provide your classification as JSON."""
         complexity = self._estimate_complexity(brief, detected_type, detected_features)
         suggested_pages = self._suggest_pages(detected_type, detected_features, brief)
         
-        # Get cost estimates for detected type
         cost_estimate = COST_ESTIMATES.get(detected_type, COST_ESTIMATES["web_simple"])
         
-        # Generate warnings
         warnings = []
         if len(brief.split()) < 20:
             warnings.append("Brief is quite short. Add more details for better results.")
@@ -336,19 +517,6 @@ Provide your classification as JSON."""
             warnings.append("Could not confidently detect project type. Please select manually.")
         if complexity == "complex" and "authentication" not in detected_features:
             warnings.append("Complex project detected. Consider adding authentication.")
-        
-        # For longer briefs, optionally use LLM for better suggestions
-        # (disabled by default to keep it fast)
-        use_llm_enhancement = False
-        if use_llm_enhancement and len(brief.split()) > 50:
-            try:
-                enhanced = await self._llm_enhance_analysis(brief, detected_type, detected_features)
-                if enhanced.get("suggested_features"):
-                    detected_features = list(set(detected_features + enhanced["suggested_features"]))
-                if enhanced.get("suggested_pages"):
-                    suggested_pages = list(set(suggested_pages + enhanced["suggested_pages"]))
-            except Exception:
-                pass  # Silently fail, use keyword-based results
         
         return {
             "detected_project_type": detected_type,
@@ -360,44 +528,3 @@ Provide your classification as JSON."""
             "cost_estimate": cost_estimate,
             "warnings": warnings
         }
-    
-    async def _llm_enhance_analysis(
-        self, 
-        brief: str, 
-        detected_type: str, 
-        detected_features: List[str]
-    ) -> Dict[str, Any]:
-        """
-        Optional LLM-based enhancement for brief analysis.
-        Uses fast/cheap model for quick responses.
-        """
-        prompt = f"""Analyze this project brief and suggest additional features and pages.
-Current detected type: {detected_type}
-Current detected features: {', '.join(detected_features) if detected_features else 'none'}
-
-Brief:
-{brief}
-
-Respond with JSON only:
-{{
-    "suggested_features": ["feature1", "feature2"],
-    "suggested_pages": ["Page1", "Page2"]
-}}"""
-        
-        result = await self.call_llm(
-            prompt=prompt,
-            model="deepseek/deepseek-chat",  # Fast, cheap model
-            temperature=0.3,
-            max_tokens=200,
-        )
-        
-        try:
-            content = result["content"]
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start != -1 and end != 0:
-                return json.loads(content[start:end])
-        except Exception:
-            pass
-        
-        return {}

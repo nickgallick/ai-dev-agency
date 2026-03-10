@@ -1,16 +1,25 @@
 """
 Asset Generation Agent - Phase 2
+
+Phase 11D: Enhanced with design preferences and both-theme asset generation.
+
 Generates visual assets using DALL-E or Stable Diffusion API.
 - Favicons (16x16, 32x32, 180x180)
 - App icons (512x512, 1024x1024)
 - Open Graph images (1200x630)
 - Placeholder images for content sections
 - SVG illustrations matching design system
+
+Phase 11 Enhancements:
+- Read requirements.design.style and color_preference
+- Read build_manifest.json for asset dimensions
+- Generate both-theme assets when dark_mode="both"
 """
 import os
 import io
 import base64
 import asyncio
+import logging
 import httpx
 from PIL import Image
 from typing import Dict, Any, Optional, List
@@ -23,9 +32,17 @@ from models.schemas import (
 )
 from utils.llm_client import StabilityAIClient, OpenRouterClient
 
+logger = logging.getLogger(__name__)
+
 
 class AssetGenerationAgent:
-    """Agent responsible for generating visual assets for the project."""
+    """Agent responsible for generating visual assets for the project.
+    
+    Phase 11 Enhancements:
+    - Read requirements.design.style and color_preference
+    - Read build_manifest.json for asset dimensions
+    - Generate both-theme assets when dark_mode="both"
+    """
     
     def __init__(
         self, 
@@ -37,6 +54,8 @@ class AssetGenerationAgent:
         self.llm_client = llm_client
         self.output_dir = Path(output_dir)
         self.name = "asset_generation"
+        self._theme_mode = "dark_only"  # Phase 11: Default theme mode
+        self._design_style = "minimal"  # Phase 11: Default design style
         
     def _ensure_clients(self):
         """Initialize clients lazily to allow for missing API keys during import."""
@@ -55,16 +74,42 @@ class AssetGenerationAgent:
         self, 
         project_brief: ProjectBrief, 
         design_system: DesignSystemOutput,
-        project_id: str
+        project_id: str,
+        requirements: Optional[Dict[str, Any]] = None,
+        build_manifest: Optional[Dict[str, Any]] = None
     ) -> AgentOutput:
-        """Generate all visual assets for the project."""
+        """Generate all visual assets for the project.
+        
+        Phase 11 Enhanced:
+        - Accepts structured requirements for design preferences
+        - Reads build_manifest for asset dimensions
+        - Generates both-theme assets when dark_mode="both"
+        """
         started_at = datetime.utcnow()
         self._ensure_clients()
+        
+        # Phase 11: Extract design preferences
+        if requirements:
+            design_prefs = requirements.get("design_preferences", {})
+            self._design_style = design_prefs.get("design_style", "minimal")
+            color_scheme = design_prefs.get("color_scheme", "system")
+            self._theme_mode = "both" if color_scheme in ["system", "both"] else f"{color_scheme}_only"
+            logger.info(f"Asset generation: style={self._design_style}, theme_mode={self._theme_mode}")
+        
+        # Phase 11: Get asset dimensions from build_manifest if available
+        asset_dimensions = {}
+        if build_manifest:
+            asset_dimensions = build_manifest.get("asset_dimensions", {})
         
         try:
             # Create project-specific output directory
             project_dir = self.output_dir / project_id
             project_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Phase 11: Create theme subdirectories if generating both themes
+            if self._theme_mode == "both":
+                (project_dir / "light").mkdir(exist_ok=True)
+                (project_dir / "dark").mkdir(exist_ok=True)
             
             # Generate all assets in parallel
             results = await asyncio.gather(

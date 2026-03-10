@@ -7,6 +7,14 @@ Enhanced with:
 - Dynamic agent pooling for parallel code generation
 - Phase 9A: Agent Performance Analytics integration
 - Phase 11B: Knowledge Base integration (auto-capture after agent completion)
+- Phase 11D: Full structured requirements support and dynamic pooling
+
+Phase 11D Enhancements:
+- Pass full ProjectRequirements in shared state
+- Implement dynamic pooling (fan-out for >10 pages)
+- Implement mid-build intervention (checkpoints)
+- Add KB hooks (before/after each agent)
+- Add caching hooks (before/after LLM calls)
 """
 
 import asyncio

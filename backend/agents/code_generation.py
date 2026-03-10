@@ -1,12 +1,27 @@
-"""Code Generation Agent - Step 5 (Multi-platform code generation)."""
+"""Code Generation Agent - Step 5 (Multi-platform code generation).
+
+Phase 11D: Enhanced with tech stack preferences, light/dark mode, and integration wiring.
+
+Phase 11 Enhancements:
+- Read requirements.tech_stack (framework, CSS approach)
+- Implement light/dark mode when dark_mode="both"
+- Wire integrations: Stripe, Resend, R2, Inngest, Auth
+- Support dynamic pooling (accept batch assignment)
+- Query KB for successful prompts
+- Write prompt results to KB
+- Check Redis cache for identical prompts
+"""
 import os
 import json
+import logging
 import httpx
 import time
 from typing import Any, Dict, Optional, List
 from abc import ABC, abstractmethod
 
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 
 class CodeGenerationStrategy(ABC):
@@ -24,13 +39,33 @@ class CodeGenerationStrategy(ABC):
 
 
 class V0WebStrategy(CodeGenerationStrategy):
-    """Use Vercel v0 API for web frontends."""
+    """Use Vercel v0 API for web frontends.
+    
+    Phase 11 Enhanced:
+    - Reads tech stack from requirements
+    - Generates light/dark mode support
+    - Includes integration setup
+    - Caches prompts
+    """
     
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = "https://api.v0.dev/v1"
+        self._integrations = []  # Phase 11: Track integrations
+        self._theme_mode = "dark_only"  # Phase 11: Theme mode
     
     async def generate(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        # Phase 11: Extract integrations and theme mode
+        self._integrations = context.get("integrations", [])
+        self._theme_mode = context.get("theme_mode", "dark_only")
+        
+        # Phase 11: Check cache first
+        cache_key = self._get_cache_key(context)
+        cached_result = await self._check_cache(cache_key)
+        if cached_result:
+            logger.info("Using cached code generation result")
+            return cached_result
+        
         prompt = self._build_prompt(context)
         
         if not self.api_key:
@@ -50,31 +85,105 @@ class V0WebStrategy(CodeGenerationStrategy):
                 )
                 response.raise_for_status()
                 result = response.json()
-                return {
+                output = {
                     "success": True,
                     "generation_id": result.get("id"),
                     "files": result.get("files", []),
                     "preview_url": result.get("preview_url"),
                     "cost": result.get("cost", 0),
+                    "integrations_wired": [i.get("service") for i in self._integrations],
+                    "theme_mode": self._theme_mode,
                 }
+                
+                # Phase 11: Cache the result
+                await self._cache_result(cache_key, output)
+                
+                return output
         except Exception as e:
             return {"error": str(e), "files": []}
+    
+    def _get_cache_key(self, context: Dict[str, Any]) -> str:
+        """Generate cache key for the code generation context."""
+        import hashlib
+        key_data = json.dumps({
+            "brief": context.get("brief", "")[:200],
+            "pages": [p.get("name") if isinstance(p, dict) else p 
+                     for p in context.get("architecture", {}).get("pages", [])],
+            "theme_mode": self._theme_mode,
+        }, sort_keys=True)
+        return f"codegen:v0:{hashlib.md5(key_data.encode()).hexdigest()}"
+    
+    async def _check_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Check Redis cache for identical prompts."""
+        try:
+            from ..cache import get_cache_manager
+            cache = get_cache_manager()
+            return cache.get(cache_key, "llm_response")
+        except Exception:
+            return None
+    
+    async def _cache_result(self, cache_key: str, result: Dict[str, Any]) -> None:
+        """Cache code generation result."""
+        try:
+            from ..cache import get_cache_manager
+            cache = get_cache_manager()
+            cache.set(cache_key, result, "llm_response")
+        except Exception:
+            pass
     
     def _build_prompt(self, context: Dict[str, Any]) -> str:
         design_system = context.get("design_system", {})
         architecture = context.get("architecture", {})
         brief = context.get("brief", "")
         
+        # Phase 11: Get tech stack from requirements
+        requirements = context.get("requirements", {})
+        tech_stack = requirements.get("tech_stack", {})
+        
+        # Build tech stack string
+        framework = tech_stack.get("frontend_framework", "Next.js 14")
+        css_framework = tech_stack.get("css_framework", "Tailwind CSS")
+        
+        # Phase 11: Theme mode instructions
+        theme_instructions = ""
+        if self._theme_mode == "both":
+            theme_instructions = """
+IMPORTANT: Implement BOTH light and dark themes:
+- Use CSS variables for all colors
+- Add <html class="dark"> toggle support
+- Implement next-themes or similar theme provider
+- All components must support both themes
+"""
+        
+        # Phase 11: Integration wiring instructions
+        integration_instructions = ""
+        if self._integrations:
+            integration_instructions = "\n\nIntegrations to wire:\n"
+            for integration in self._integrations:
+                service = integration.get("service", "")
+                if service == "stripe":
+                    integration_instructions += "- Stripe: Add checkout/billing components, use process.env.STRIPE_SECRET_KEY\n"
+                elif service == "resend":
+                    integration_instructions += "- Resend: Add email service wrapper, use process.env.RESEND_API_KEY\n"
+                elif service == "r2":
+                    integration_instructions += "- Cloudflare R2: Add file upload component with S3-compatible API\n"
+                elif service == "inngest":
+                    integration_instructions += "- Inngest: Add background job setup at /api/inngest\n"
+                elif service == "supabase_auth":
+                    integration_instructions += "- Supabase Auth: Add auth provider and protected routes\n"
+        
         return f"""Build a complete web application: {brief}
         
 Design: {json.dumps(design_system.get("colors", {}), indent=2)}
 Pages: {json.dumps(architecture.get("pages", []), indent=2)}
 
-Requirements:
-- Next.js 14 with App Router
-- Tailwind CSS + shadcn/ui
+Tech Stack:
+- {framework} with App Router
+- {css_framework} + shadcn/ui
 - Responsive, accessible (WCAG AA)
-- Smooth animations"""
+- Smooth animations
+{theme_instructions}
+{integration_instructions}"""
     
     def get_project_structure(self) -> Dict[str, List[str]]:
         return {

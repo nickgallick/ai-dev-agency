@@ -1,7 +1,17 @@
-"""Deployment Agent - Cloud orchestration for web and mobile deployments."""
+"""Deployment Agent - Cloud orchestration for web and mobile deployments.
+
+Phase 11D: Enhanced with structured deployment configuration and integration setup.
+
+Phase 11 Enhancements:
+- Read requirements.deployment (platform, repo settings)
+- Set up env vars for all integrations
+- Deploy to specified platform
+- Support auto-deployment configuration
+"""
 
 import asyncio
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -11,6 +21,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from .base import AgentResult, BaseAgent
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

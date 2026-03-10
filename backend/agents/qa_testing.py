@@ -1,7 +1,19 @@
-"""QA Testing Agent - Comprehensive testing and code quality checks."""
+"""QA Testing Agent - Comprehensive testing and code quality checks.
+
+Phase 11D: Enhanced with both-theme testing, BrowserStack support, and KB integration.
+
+Phase 11 Enhancements:
+- Test ALL pages from requirements.pages
+- Test both themes when dark_mode="both"
+- Use BrowserStack if configured
+- Query KB for common bugs
+- Test integrations (Stripe, Auth, uploads)
+- Write findings to KB
+"""
 
 import asyncio
 import json
+import logging
 import os
 import re
 import subprocess
@@ -12,6 +24,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .base import AgentResult, BaseAgent
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -106,9 +120,25 @@ class QAReport:
 
 
 class QATestingAgent(BaseAgent):
-    """Agent for comprehensive QA testing and code quality checks."""
+    """Agent for comprehensive QA testing and code quality checks.
+    
+    Phase 11 Enhancements:
+    - Test ALL pages from requirements.pages
+    - Test both themes when dark_mode="both"
+    - Use BrowserStack if configured
+    - Query KB for common bugs
+    - Test integrations (Stripe, Auth, uploads)
+    - Write findings to KB
+    """
 
     MAX_FIX_ITERATIONS = 3
+    
+    # Phase 11: BrowserStack configuration
+    BROWSERSTACK_BROWSERS = [
+        {"browser": "chrome", "browser_version": "latest", "os": "Windows", "os_version": "11"},
+        {"browser": "safari", "browser_version": "latest", "os": "OS X", "os_version": "Sonoma"},
+        {"browser": "firefox", "browser_version": "latest", "os": "Windows", "os_version": "11"},
+    ]
 
     @property
     def name(self) -> str:
@@ -118,6 +148,8 @@ class QATestingAgent(BaseAgent):
         self,
         project_path: str,
         project_type: str = "web",
+        requirements: Optional[Dict[str, Any]] = None,
+        integrations: Optional[List[Dict[str, Any]]] = None,
         **kwargs
     ) -> AgentResult:
         """

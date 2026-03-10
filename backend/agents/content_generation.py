@@ -1,13 +1,24 @@
 """
 Content Generation Agent - Phase 2
+
+Phase 11D: Enhanced with structured requirements and KB integration.
+
 Generates SEO-optimized content using OpenRouter LLM.
 - Headlines, CTAs, body text, and taglines
 - Meta descriptions and title tags
 - Alt text for all images
 - Matches tone and voice to project brief
+
+Phase 11 Enhancements:
+- Read requirements.pages (exact pages)
+- Read requirements.industry and target_audience for tone
+- Read requirements.features for feature-specific content
+- Match content to Architect's component hierarchy
+- Query KB for successful content patterns
 """
 import os
 import json
+import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -17,9 +28,19 @@ from models.schemas import (
 )
 from utils.llm_client import OpenRouterClient
 
+logger = logging.getLogger(__name__)
+
 
 class ContentGenerationAgent:
-    """Agent responsible for generating SEO-optimized content."""
+    """Agent responsible for generating SEO-optimized content.
+    
+    Phase 11 Enhancements:
+    - Read requirements.pages (exact pages)
+    - Read requirements.industry and target_audience for tone
+    - Read requirements.features for feature-specific content
+    - Match content to Architect's component hierarchy
+    - Query KB for successful content patterns
+    """
     
     def __init__(self, llm_client: Optional[OpenRouterClient] = None):
         self.llm_client = llm_client
@@ -37,16 +58,47 @@ class ContentGenerationAgent:
         self,
         project_brief: ProjectBrief,
         design_system: DesignSystemOutput,
-        project_id: str
+        project_id: str,
+        requirements: Optional[Dict[str, Any]] = None,
+        architecture: Optional[Dict[str, Any]] = None
     ) -> AgentOutput:
-        """Generate all content for the project."""
+        """Generate all content for the project.
+        
+        Phase 11 Enhanced:
+        - Reads exact pages from requirements
+        - Uses industry/target_audience for tone
+        - Generates feature-specific content
+        - Matches content to architecture components
+        - Queries KB for patterns
+        """
         started_at = datetime.utcnow()
         
         try:
             self._ensure_client()
             
-            # Determine pages based on project type
-            pages_config = self._get_pages_config(project_brief.project_type)
+            # Phase 11: Extract pages from requirements or architecture
+            pages_config = self._get_pages_from_requirements(
+                requirements, architecture, project_brief.project_type
+            )
+            
+            # Phase 11: Extract tone context from requirements
+            industry = None
+            target_audience = None
+            features = []
+            if requirements:
+                industry = requirements.get("industry")
+                target_audience = requirements.get("target_audience")
+                web_opts = requirements.get("web_complex_options", {})
+                features = web_opts.get("key_features", [])
+            
+            # Phase 11: Query KB for successful content patterns
+            kb_patterns = await self._query_knowledge_base(industry, project_brief.project_type)
+            
+            logger.info(f"Content generation: {len(pages_config)} pages, industry={industry}")
+            
+            # Use KB patterns if available
+            if kb_patterns.get("patterns"):
+                logger.info(f"Using {len(kb_patterns['patterns'])} KB content patterns")
             
             # Generate content for each page
             pages_content = []
@@ -405,3 +457,92 @@ Include:
             meta_title=f"{page_name.title()} | {brief.name}",
             meta_description=brief.description[:160]
         ))
+    
+    # ========== Phase 11 Methods ==========
+    
+    def _get_pages_from_requirements(
+        self,
+        requirements: Optional[Dict[str, Any]],
+        architecture: Optional[Dict[str, Any]],
+        project_type: ProjectType
+    ) -> Dict[str, str]:
+        """Extract pages from requirements or architecture.
+        
+        Phase 11: Uses structured requirements for exact pages.
+        """
+        pages_config = {}
+        
+        # Try requirements first
+        if requirements:
+            web_opts = requirements.get("web_complex_options", {})
+            pages_list = web_opts.get("pages", [])
+            if pages_list:
+                for page in pages_list:
+                    page_lower = page.lower()
+                    pages_config[page_lower] = f"{page} page for the project"
+                return pages_config
+            
+            simple_opts = requirements.get("web_simple_options", {})
+            sections = simple_opts.get("sections", [])
+            if sections:
+                pages_config["home"] = "Home page with sections"
+                for section in sections:
+                    pages_config[section.lower()] = f"{section} section"
+                return pages_config
+        
+        # Try architecture
+        if architecture:
+            arch_pages = architecture.get("pages", [])
+            if arch_pages:
+                for page in arch_pages:
+                    if isinstance(page, dict):
+                        route = page.get("route", "/")
+                        name = page.get("name", "Home")
+                        purpose = page.get("purpose", f"{name} page")
+                        pages_config[name.lower()] = purpose
+                    elif isinstance(page, str):
+                        pages_config[page.lower()] = f"{page} page"
+                return pages_config
+        
+        # Fallback to default config
+        return self._get_pages_config(project_type)
+    
+    async def _query_knowledge_base(
+        self,
+        industry: Optional[str],
+        project_type: str
+    ) -> Dict[str, Any]:
+        """Query KB for successful content patterns.
+        
+        Phase 11B: Knowledge Base integration.
+        """
+        try:
+            from knowledge import query_knowledge, KnowledgeEntryType
+            from models import get_db
+            
+            db = next(get_db())
+            
+            query_text = f"{industry} {project_type} content copy headlines"
+            
+            results = await query_knowledge(
+                db=db,
+                query_text=query_text,
+                entry_types=[KnowledgeEntryType.CODE_PATTERN],
+                industry=industry,
+                min_quality_score=0.7,
+                limit=3,
+            )
+            
+            return {
+                "patterns": [
+                    {
+                        "id": r.entry.id,
+                        "title": r.entry.title,
+                        "content": r.entry.content[:300],
+                    }
+                    for r in results
+                ]
+            }
+        except Exception as e:
+            logger.debug(f"KB query failed: {e}")
+            return {"patterns": []}

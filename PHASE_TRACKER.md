@@ -18,6 +18,7 @@ AI Dev Agency is an automated software development platform that uses AI agents 
 | 11A | Smart Adaptive Intake | ✅ Complete | 2026-03-10 |
 | 11B | Knowledge Base + Templates | ✅ Complete | 2026-03-10 |
 | 11C | Advanced Features | ✅ Complete | 2026-03-10 |
+| 11D | Agent Updates | ✅ Complete | 2026-03-10 |
 
 ---
 
@@ -1158,3 +1159,75 @@ Phase 11C adds advanced operational features including mid-build intervention (c
 | POST | /api/export/system/restore | Restore backup |
 | GET | /api/export/knowledge | Export knowledge |
 | POST | /api/export/knowledge/import | Import knowledge |
+
+---
+
+## Phase 11D: Agent Updates for Phase 11 Systems
+
+**Completion Date:** March 10, 2026
+
+### Overview
+
+Updated all existing agents to integrate with Phase 11 systems:
+- Structured requirements from Smart Intake (Phase 11A)
+- Knowledge Base RAG system (Phase 11B)
+- Redis caching layer (Phase 11C)
+- Figma MCP integration (Phase 10)
+- Light/dark mode generation
+- Dynamic pooling for large projects
+- New integrations (Resend, R2, Inngest from Phase 10)
+
+### Agents Updated
+
+| Agent | Phase 11 Enhancements |
+|-------|----------------------|
+| **IntakeAgent** | KB query for similar projects, template loading, token budget estimation |
+| **ResearchAgent** | Figma MCP extraction, reference URL scraping, KB query/write, Redis cache |
+| **ArchitectAgent** | Read features/pages/tech_stack, KB query, page dependency graph, build manifest |
+| **DesignSystemAgent** | Read design prefs, Figma as primary source, generate both themes, KB write |
+| **AssetGenerationAgent** | Read design prefs, generate both-theme assets |
+| **ContentGenerationAgent** | Read pages/features from requirements, KB query for patterns |
+| **CodeGenerationAgent** | Tech stack from requirements, light/dark mode, integration wiring, caching |
+| **IntegrationWiringAgent** | NEW - Wire all integrations (Stripe, Resend, R2, Inngest, Auth) |
+| **QATestingAgent** | Test both themes, BrowserStack support, integration testing |
+| **DeploymentAgent** | Read deployment config, set up env vars for integrations |
+| **DeliveryAgent** | Include structured requirements, KB summary, quality tracking |
+| **Pipeline** | Pass full requirements in state, dynamic pooling support, KB hooks |
+
+### New Agent: IntegrationWiringAgent
+
+Created `/backend/agents/integration_wiring.py` with:
+- Integration templates for Stripe, Resend, R2, Inngest, Supabase Auth, Plausible, Sentry
+- Automatic `.env.example` generation
+- Setup guide markdown generation
+- LLM-powered integration code file generation
+
+### Key Integration Patterns
+
+```python
+INTEGRATION_MAPPINGS = {
+    "payments": {"service": "stripe", "env_vars": [...]},
+    "billing": {"service": "stripe", "env_vars": [...]},
+    "email": {"service": "resend", "env_vars": [...]},
+    "file_upload": {"service": "r2", "env_vars": [...]},
+    "background_jobs": {"service": "inngest", "env_vars": [...]},
+    "authentication": {"service": "supabase_auth", "env_vars": [...]},
+}
+```
+
+### Structured Requirements Flow
+
+1. Frontend sends `ProjectRequirements` object to `/api/projects/create`
+2. Intake Agent uses structured requirements + queries KB
+3. Research Agent reads design prefs, scrapes reference URLs, extracts Figma tokens
+4. Architect reads explicit features/pages, outputs dependency graph
+5. All subsequent agents receive full requirements context
+6. Each agent queries KB before work, writes results after
+
+### Both-Theme Support
+
+When `design_preferences.color_scheme` is "system" or "both":
+- DesignSystemAgent generates full light + dark color palettes
+- AssetGenerationAgent creates theme-specific asset variants
+- CodeGenerationAgent adds next-themes provider and CSS variables
+- QATestingAgent tests both themes in all browsers

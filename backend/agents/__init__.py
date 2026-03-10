@@ -34,6 +34,9 @@ from .project_manager import ProjectManagerAgent
 from .code_review import CodeReviewAgent
 from .post_deploy_verification import PostDeployVerificationAgent
 
+# Phase 11D: Integration Wiring Agent
+from .integration_wiring import IntegrationWiringAgent
+
 __all__ = [
     # Base
     "BaseAgent",
@@ -63,4 +66,6 @@ __all__ = [
     "ProjectManagerAgent",
     "CodeReviewAgent",
     "PostDeployVerificationAgent",
+    # Phase 11D
+    "IntegrationWiringAgent",
 ]
