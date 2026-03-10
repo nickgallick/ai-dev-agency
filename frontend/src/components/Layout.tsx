@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { Home, PlusCircle, FolderOpen, Settings, Activity, DollarSign, Menu, X, LogOut, User, Sparkles, Brain } from 'lucide-react'
+import { Home, PlusCircle, FolderOpen, Settings, Activity, DollarSign, Menu, X, LogOut, User, Sparkles, Brain, Layers, HardDrive } from 'lucide-react'
 import { useState } from 'react'
 import { clsx } from 'clsx'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15,6 +15,8 @@ const secondaryNav = [
   { path: '/logs', icon: Activity, label: 'Agent Logs' },
   { path: '/costs', icon: DollarSign, label: 'Cost Dashboard' },
   { path: '/knowledge', icon: Brain, label: 'Knowledge Base' },  // Phase 11B
+  { path: '/queue', icon: Layers, label: 'Queue' },  // Phase 11C
+  { path: '/backup', icon: HardDrive, label: 'Backup' },  // Phase 11C
 ]
 
 export default function Layout() {

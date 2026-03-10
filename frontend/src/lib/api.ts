@@ -590,4 +590,248 @@ export const api = {
     const response = await apiClient.get('/knowledge/types')
     return response.data
   },
+
+  // ==================== Phase 11C: Advanced Features ====================
+
+  // Checkpoint APIs
+  getCheckpointStatus: async (projectId: string): Promise<CheckpointStatus> => {
+    const response = await apiClient.get(`/checkpoints/${projectId}/status`)
+    return response.data
+  },
+
+  setCheckpointMode: async (projectId: string, mode: string, customCheckpoints?: string[]): Promise<void> => {
+    await apiClient.post(`/checkpoints/${projectId}/mode`, {
+      mode,
+      custom_checkpoints: customCheckpoints
+    })
+  },
+
+  pauseProject: async (projectId: string): Promise<void> => {
+    await apiClient.post(`/checkpoints/${projectId}/pause`)
+  },
+
+  resumeProject: async (projectId: string, editedOutput?: Record<string, any>): Promise<void> => {
+    await apiClient.post(`/checkpoints/${projectId}/resume`, {
+      edited_output: editedOutput
+    })
+  },
+
+  editAndReplay: async (projectId: string, editedOutput: Record<string, any>, replayFromAgent?: string): Promise<void> => {
+    await apiClient.post(`/checkpoints/${projectId}/edit-and-replay`, {
+      edited_output: editedOutput,
+      replay_from_agent: replayFromAgent
+    })
+  },
+
+  restartFromAgent: async (projectId: string, agentName: string): Promise<void> => {
+    await apiClient.post(`/checkpoints/${projectId}/restart-from/${agentName}`)
+  },
+
+  clearCheckpoints: async (projectId: string): Promise<void> => {
+    await apiClient.delete(`/checkpoints/${projectId}/checkpoints`)
+  },
+
+  // Queue APIs
+  getQueueStatus: async (): Promise<QueueStatus> => {
+    const response = await apiClient.get('/queue/status')
+    return response.data
+  },
+
+  getProjectQueueStatus: async (projectId: string): Promise<ProjectQueueStatus> => {
+    const response = await apiClient.get(`/queue/${projectId}/status`)
+    return response.data
+  },
+
+  enqueueProject: async (projectId: string, priority: string = 'normal'): Promise<EnqueueResult> => {
+    const response = await apiClient.post('/queue/enqueue', {
+      project_id: projectId,
+      priority
+    })
+    return response.data
+  },
+
+  removeFromQueue: async (projectId: string): Promise<void> => {
+    await apiClient.delete(`/queue/${projectId}`)
+  },
+
+  reprioritizeProject: async (projectId: string, priority: string): Promise<void> => {
+    await apiClient.post(`/queue/${projectId}/reprioritize`, { priority })
+  },
+
+  getQueueStats: async (): Promise<QueueStats> => {
+    const response = await apiClient.get('/queue/stats')
+    return response.data
+  },
+
+  // Export APIs
+  getExportableFiles: async (projectId: string): Promise<ExportableFiles> => {
+    const response = await apiClient.get(`/export/projects/${projectId}/files`)
+    return response.data
+  },
+
+  exportProject: async (projectId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/export/projects/${projectId}`, {
+      responseType: 'blob'
+    })
+    return response.data
+  },
+
+  importProject: async (file: File): Promise<ImportResult> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await apiClient.post('/export/projects/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+  },
+
+  // System Backup APIs
+  createBackup: async (destination: string = 'local', bucketName?: string, includeProjects: boolean = false): Promise<BackupResult> => {
+    const response = await apiClient.post('/export/system/backup', {
+      destination,
+      bucket_name: bucketName,
+      include_projects: includeProjects
+    })
+    return response.data
+  },
+
+  listBackups: async (): Promise<{ backups: BackupInfo[] }> => {
+    const response = await apiClient.get('/export/system/backups')
+    return response.data
+  },
+
+  restoreBackup: async (backupPath: string, restoreDatabase: boolean = true, restoreFiles: boolean = true): Promise<RestoreResult> => {
+    const response = await apiClient.post('/export/system/restore', {
+      backup_path: backupPath,
+      restore_database: restoreDatabase,
+      restore_files: restoreFiles
+    })
+    return response.data
+  },
+
+  exportKnowledge: async (includeEmbeddings: boolean = false): Promise<Blob> => {
+    const response = await apiClient.get('/export/knowledge', {
+      params: { include_embeddings: includeEmbeddings },
+      responseType: 'blob'
+    })
+    return response.data
+  },
+
+  importKnowledge: async (file: File, merge: boolean = true): Promise<KnowledgeImportResult> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await apiClient.post('/export/knowledge/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: { merge }
+    })
+    return response.data
+  },
+}
+
+// Phase 11C Types
+export interface CheckpointStatus {
+  project_id: string
+  mode: string
+  state: string
+  paused_at?: string
+  paused_at_agent?: string
+  current_checkpoint?: Record<string, any>
+  checkpoint_history: Record<string, any>[]
+  custom_checkpoints: string[]
+  available_checkpoints: string[]
+}
+
+export interface QueueStatus {
+  queue_length: number
+  active_count: number
+  max_concurrent: number
+  has_capacity: boolean
+  queue_items: QueueItem[]
+  active_projects: Record<string, any>[]
+}
+
+export interface QueueItem {
+  project_id: string
+  priority: string
+  queued_at: string
+  position: number
+  estimated_wait_seconds: number
+}
+
+export interface ProjectQueueStatus {
+  project_id: string
+  in_queue: boolean
+  position?: number
+  priority?: string
+  estimated_wait_seconds?: number
+}
+
+export interface EnqueueResult {
+  success: boolean
+  project_id: string
+  position: number
+  priority: string
+  estimated_wait_seconds: number
+}
+
+export interface QueueStats {
+  queue_length: number
+  active_count: number
+  max_concurrent: number
+  capacity_available: boolean
+  by_priority: {
+    urgent: number
+    normal: number
+    background: number
+  }
+  average_wait_seconds: number
+}
+
+export interface ExportableFiles {
+  project_id: string
+  files: { path: string; size: number; type: string }[]
+  total_size_bytes: number
+  file_count: number
+}
+
+export interface ImportResult {
+  success: boolean
+  project_id: string
+  message: string
+}
+
+export interface BackupResult {
+  success: boolean
+  destination: string
+  path?: string
+  bucket?: string
+  key?: string
+  size_bytes?: number
+  created_at?: string
+  error?: string
+}
+
+export interface BackupInfo {
+  filename: string
+  path: string
+  size_bytes: number
+  created_at: string
+}
+
+export interface RestoreResult {
+  success: boolean
+  backup_version?: string
+  backup_created_at?: string
+  restored: {
+    tables: string[]
+    directories: string[]
+    errors: string[]
+  }
+}
+
+export interface KnowledgeImportResult {
+  success: boolean
+  imported: number
+  skipped: number
+  errors: string[]
 }

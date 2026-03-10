@@ -12,6 +12,8 @@ import Settings from './pages/Settings'
 import AgentLogs from './pages/AgentLogs'
 import CostDashboard from './pages/CostDashboard'
 import KnowledgeBase from './pages/KnowledgeBase'  // Phase 11B
+import Queue from './pages/Queue'  // Phase 11C
+import SystemBackup from './pages/SystemBackup'  // Phase 11C
 
 function AppRoutes() {
   const { isAuthenticated, setupRequired, isLoading } = useAuth()
@@ -45,6 +47,8 @@ function AppRoutes() {
         <Route path="logs" element={<AgentLogs />} />
         <Route path="costs" element={<CostDashboard />} />
         <Route path="knowledge" element={<KnowledgeBase />} />
+        <Route path="queue" element={<Queue />} />
+        <Route path="backup" element={<SystemBackup />} />
       </Route>
     </Routes>
   )

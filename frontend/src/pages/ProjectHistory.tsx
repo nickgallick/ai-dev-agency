@@ -1,17 +1,48 @@
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { Search, ExternalLink, Github, FolderOpen, CheckCircle, Play, AlertCircle, Clock } from 'lucide-react'
-import { useState } from 'react'
+import { Search, ExternalLink, Github, FolderOpen, CheckCircle, Play, AlertCircle, Clock, Download, Upload } from 'lucide-react'
+import { useState, useRef } from 'react'
 import { format } from 'date-fns'
 
 export default function ProjectHistory() {
   const [search, setSearch] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data: projects, isLoading } = useQuery({
+  const { data: projects, isLoading, refetch } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects({ limit: 50 }),
   })
+
+  const exportMutation = useMutation({
+    mutationFn: (projectId: string) => api.exportProject(projectId),
+    onSuccess: (blob, projectId) => {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `project_${projectId}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    },
+  })
+
+  const importMutation = useMutation({
+    mutationFn: (file: File) => api.importProject(file),
+    onSuccess: () => {
+      refetch()
+      alert('Project imported successfully!')
+    },
+    onError: (error) => {
+      alert('Import failed: ' + (error as Error).message)
+    },
+  })
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      importMutation.mutate(file)
+    }
+  }
 
   const filteredProjects = projects?.filter(
     (p) =>
@@ -22,14 +53,34 @@ export default function ProjectHistory() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="mb-2">
-        <h1 className="text-2xl lg:text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--text-primary)' }}>
-          <FolderOpen className="w-7 h-7" style={{ color: 'var(--accent-primary)' }} />
-          Project History
-        </h1>
-        <p className="mt-1" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-base)' }}>
-          All your past projects
-        </p>
+      <div className="mb-2 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--text-primary)' }}>
+            <FolderOpen className="w-7 h-7" style={{ color: 'var(--accent-primary)' }} />
+            Project History
+          </h1>
+          <p className="mt-1" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-base)' }}>
+            All your past projects
+          </p>
+        </div>
+        <div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".zip"
+            onChange={handleImport}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importMutation.isPending}
+            className="btn-secondary flex items-center gap-2"
+            style={{ padding: 'var(--space-2) var(--space-4)' }}
+          >
+            <Upload className="w-4 h-4" />
+            Import Project
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -93,6 +144,18 @@ export default function ProjectHistory() {
               </Link>
               
               <div className="flex items-center gap-2 pt-3 lg:pt-0" style={{ borderTop: '1px solid var(--glass-border)' }}>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    exportMutation.mutate(project.id)
+                  }}
+                  disabled={exportMutation.isPending}
+                  className="btn-ghost"
+                  style={{ padding: 'var(--space-2)' }}
+                  title="Export Project"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
                 {project.github_repo && (
                   <a
                     href={project.github_repo}

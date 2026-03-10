@@ -9,6 +9,9 @@ from api.routes import revisions_router, analytics_router, integrations_router
 from api.routes.presets import router as presets_router  # Phase 11A
 from api.routes.templates import router as templates_router  # Phase 11B
 from api.routes.knowledge import router as knowledge_router  # Phase 11B
+from api.routes.checkpoints import router as checkpoints_router  # Phase 11C
+from api.routes.queue import router as queue_router  # Phase 11C
+from api.routes.export import router as export_router  # Phase 11C
 from auth import auth_router
 from models import engine, Base
 
@@ -24,8 +27,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AI Dev Agency API",
-    description="Universal AI Development Agency System - Phase 11B Knowledge Base + Templates",
-    version="1.11.1",
+    description="Universal AI Development Agency System - Phase 11C Advanced Features",
+    version="1.11.2",
     lifespan=lifespan,
 )
 
@@ -55,6 +58,9 @@ app.include_router(integrations_router, prefix="/api")  # Phase 10: Integrations
 app.include_router(presets_router, prefix="/api")  # Phase 11A: Presets
 app.include_router(templates_router)  # Phase 11B: Templates - Already has /api prefix
 app.include_router(knowledge_router)  # Phase 11B: Knowledge - Already has /api prefix
+app.include_router(checkpoints_router, prefix="/api")  # Phase 11C: Checkpoints
+app.include_router(queue_router, prefix="/api")  # Phase 11C: Queue
+app.include_router(export_router, prefix="/api")  # Phase 11C: Export
 
 
 @app.get("/")

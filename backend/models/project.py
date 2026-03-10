@@ -98,6 +98,16 @@ class Project(Base):
     # Phase 11A: Structured requirements (full ProjectRequirements object)
     requirements = Column(JSONB, default=dict)      # Complete structured requirements
     
+    # Phase 11C: Checkpoint system
+    checkpoint_mode = Column(String(20), default="auto")  # auto, supervised, manual
+    checkpoint_state = Column(JSONB, default=dict)        # Checkpoint data and history
+    paused_at = Column(DateTime, nullable=True)           # When project was paused at checkpoint
+    
+    # Phase 11C: Queue management
+    queue_priority = Column(String(20), default="normal")  # urgent, normal, background
+    queue_position = Column(Float, nullable=True)          # Position in queue (for sorting)
+    queued_at = Column(DateTime, nullable=True)            # When added to queue
+    
     # Relationships
     agent_logs = relationship("AgentLog", back_populates="project", cascade="all, delete-orphan")
     cost_tracking = relationship("CostTracking", back_populates="project", cascade="all, delete-orphan")

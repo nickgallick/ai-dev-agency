@@ -1,15 +1,18 @@
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/Card'
 import { Badge } from '@/components/Badge'
 import { PipelineVisualization } from '@/components/PipelineVisualization'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { api } from '@/lib/api'
-import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe } from 'lucide-react'
+import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2 } from 'lucide-react'
 import { Button } from '@/components/Button'
+import { useState } from 'react'
 
 export default function ProjectView() {
   const { id } = useParams<{ id: string }>()
+  const queryClient = useQueryClient()
+  const [showCheckpointModal, setShowCheckpointModal] = useState(false)
 
   const { data: project, isLoading, refetch } = useQuery({
     queryKey: ['project', id],
@@ -22,6 +25,38 @@ export default function ProjectView() {
     queryKey: ['projectOutputs', id],
     queryFn: () => api.getProjectOutputs(id!),
     enabled: !!project,
+  })
+
+  // Phase 11C: Checkpoint status
+  const { data: checkpointStatus } = useQuery({
+    queryKey: ['checkpointStatus', id],
+    queryFn: () => api.getCheckpointStatus(id!),
+    enabled: !!project && project.status !== 'completed' && project.status !== 'failed',
+    refetchInterval: 5000,
+  })
+
+  // Checkpoint mutations
+  const pauseMutation = useMutation({
+    mutationFn: () => api.pauseProject(id!),
+    onSuccess: () => {
+      refetch()
+      queryClient.invalidateQueries({ queryKey: ['checkpointStatus', id] })
+    },
+  })
+
+  const resumeMutation = useMutation({
+    mutationFn: () => api.resumeProject(id!),
+    onSuccess: () => {
+      refetch()
+      queryClient.invalidateQueries({ queryKey: ['checkpointStatus', id] })
+    },
+  })
+
+  const setModeMutation = useMutation({
+    mutationFn: (mode: string) => api.setCheckpointMode(id!, mode),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['checkpointStatus', id] })
+    },
   })
 
   if (isLoading) {
@@ -93,6 +128,88 @@ export default function ProjectView() {
         <h3 className="font-medium text-text-primary mb-4">Pipeline Progress</h3>
         <PipelineVisualization agents={agents} />
       </Card>
+
+      {/* Phase 11C: Checkpoint Controls */}
+      {project.status !== 'completed' && project.status !== 'failed' && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Settings2 className="w-5 h-5 text-accent-primary" />
+              <h3 className="font-medium text-text-primary">Build Controls</h3>
+            </div>
+            {checkpointStatus && (
+              <Badge variant={checkpointStatus.state === 'paused' ? 'warning' : 'info'}>
+                {checkpointStatus.state}
+              </Badge>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-3 mb-4">
+            {/* Pause/Resume Button */}
+            {project.status === 'paused' || checkpointStatus?.state === 'paused' ? (
+              <Button
+                onClick={() => resumeMutation.mutate()}
+                disabled={resumeMutation.isPending}
+                variant="primary"
+                size="sm"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Resume Build
+              </Button>
+            ) : (
+              <Button
+                onClick={() => pauseMutation.mutate()}
+                disabled={pauseMutation.isPending}
+                variant="secondary"
+                size="sm"
+              >
+                <Pause className="w-4 h-4 mr-2" />
+                Pause Build
+              </Button>
+            )}
+
+            {/* Mode Selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-text-secondary">Mode:</span>
+              <select
+                value={checkpointStatus?.mode || 'auto'}
+                onChange={(e) => setModeMutation.mutate(e.target.value)}
+                className="bg-background-tertiary border border-border-subtle rounded px-2 py-1 text-sm text-text-primary"
+              >
+                <option value="auto">Auto (no checkpoints)</option>
+                <option value="supervised">Supervised (pause at key points)</option>
+                <option value="manual">Manual (custom checkpoints)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Current Checkpoint Info */}
+          {checkpointStatus?.current_checkpoint && (
+            <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                <span className="text-sm font-medium text-yellow-400">Paused at Checkpoint</span>
+              </div>
+              <p className="text-sm text-text-primary">
+                Agent: <strong>{checkpointStatus.paused_at_agent}</strong>
+              </p>
+              <p className="text-xs text-text-secondary mt-1">
+                Paused at: {checkpointStatus.paused_at ? new Date(checkpointStatus.paused_at).toLocaleString() : 'N/A'}
+              </p>
+              <p className="text-xs text-text-tertiary mt-2">
+                Will auto-continue in 5 minutes if not resumed
+              </p>
+            </div>
+          )}
+
+          {/* Available Checkpoints Info */}
+          {checkpointStatus?.mode === 'supervised' && (
+            <div className="mt-3 text-xs text-text-secondary">
+              <span className="font-medium">Default checkpoints:</span> {checkpointStatus.available_checkpoints?.join(', ')}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Links */}
       {(project.github_repo || project.live_url || deploymentReport?.deployments?.some((d: any) => d.url)) && (
