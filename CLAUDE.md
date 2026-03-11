@@ -134,6 +134,7 @@ backend/api/routes/presets.py            Project preset templates
 backend/api/routes/templates.py          Project template management
 backend/api/routes/revisions.py          Project revision handling
 backend/api/routes/analytics.py          Analytics dashboards
+backend/api/routes/chat.py               Pre-build chat + mid-pipeline clarification endpoints
 ```
 
 ### Task Queue
@@ -227,6 +228,15 @@ GET    /api/projects/{id}/checkpoints   Get checkpoint history
 GET    /api/projects/{id}/audit-log     Get structured audit log
 ```
 
+### Chat & Clarification
+```
+POST   /api/chat/                              Send message in pre-build conversation
+GET    /api/chat/{conversation_id}             Get conversation history
+POST   /api/chat/start-build                   Convert conversation to brief and start pipeline
+POST   /api/chat/interrupt/{project_id}/answer Answer mid-pipeline clarification
+GET    /api/chat/interrupt/{project_id}/status  Check for pending clarification
+```
+
 ### Health & Monitoring
 ```
 GET    /health                          Basic health check
@@ -268,6 +278,7 @@ presets               — project preset templates
 project_templates     — reusable project templates
 users                 — single-user JWT auth
 refresh_tokens        — JWT refresh token storage
+pre_build_conversations — pre-build chat messages (conversation_id, role, message, metadata, ready_to_build)
 ```
 
 ***
@@ -414,6 +425,27 @@ These features are complete and integrated. Do not re-implement them.
 - Build output: separate `MonacoDiffEditor-*.js` chunk (~5KB, Monaco loads from CDN on demand)
 - "Compare Outputs" button appears in ProjectView when 2+ agents have completed
 - Dependency: `@monaco-editor/react` (CDN-loaded Monaco, no local bundle)
+
+### Conversational Clarification System (#10)
+- **Where:** `backend/api/routes/chat.py`, `backend/models/conversation.py`, `backend/agents/base.py`, `backend/orchestration/executor.py`, `frontend/src/pages/NewProject.tsx`, `frontend/src/pages/ProjectView.tsx`, `frontend/src/lib/api.ts`
+- **Mode 1 — Pre-Build Chat:** Chat interface on NewProject page where AI asks clarifying questions before pipeline starts
+  - Toggle between "Chat with AI" and "Form Builder" modes
+  - LLM calls via OpenRouter (Claude Haiku) with JSON-structured responses
+  - Detects project type, features, pages, industry from conversation
+  - "Start Build" converts conversation into structured brief and creates project
+  - Conversations stored in `pre_build_conversations` table
+- **Mode 2 — Mid-Pipeline Clarification Interrupts:** Any agent can call `self.request_clarification(question, context)` to pause the pipeline and ask the user a question
+  - `ClarificationNeeded` exception caught by executor, saves question to `checkpoint_state`
+  - Executor polls DB every 2s (10min timeout) waiting for user answer
+  - Answer injected into pipeline context, node re-executed automatically
+  - Purple-themed clarification card in ProjectView with question display and answer input
+  - Frontend polls interrupt status every 3s during active builds
+- **Endpoints:**
+  - `POST /api/chat/` — Send message in pre-build conversation
+  - `GET /api/chat/{conversation_id}` — Get conversation history
+  - `POST /api/chat/start-build` — Convert conversation to brief and start pipeline
+  - `POST /api/chat/interrupt/{project_id}/answer` — Answer mid-pipeline clarification
+  - `GET /api/chat/interrupt/{project_id}/status` — Check for pending clarification
 
 ***
 

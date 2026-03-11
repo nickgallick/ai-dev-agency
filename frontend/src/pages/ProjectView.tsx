@@ -7,7 +7,7 @@ import { PipelineDAG } from '@/components/PipelineDAG'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { ActivityFeed } from '@/components/ActivityFeed'
 import { api } from '@/lib/api'
-import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock, ArrowLeftRight } from 'lucide-react'
+import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock, ArrowLeftRight, MessageCircle, Send, HelpCircle } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { AgentOutputTimeline } from '@/components/AgentOutputTimeline'
@@ -24,6 +24,8 @@ export default function ProjectView() {
   const [showCheckpointModal, setShowCheckpointModal] = useState(false)
   const [editingOutput, setEditingOutput] = useState<string | null>(null)
   const [showDiffModal, setShowDiffModal] = useState(false)
+  const [clarificationAnswer, setClarificationAnswer] = useState('')
+  const [answeringClarification, setAnsweringClarification] = useState(false)
   const [editedOutputText, setEditedOutputText] = useState('')
 
   const { data: project, isLoading, refetch } = useQuery({
@@ -63,6 +65,29 @@ export default function ProjectView() {
     enabled: !!project && project.status !== 'completed' && project.status !== 'failed',
     refetchInterval: 5000,
   })
+
+  // Mid-pipeline clarification interrupt status
+  const { data: interruptStatus } = useQuery({
+    queryKey: ['interruptStatus', id],
+    queryFn: () => api.getInterruptStatus(id!),
+    enabled: !!project && project.status !== 'completed' && project.status !== 'failed',
+    refetchInterval: 3000,
+  })
+
+  const handleAnswerClarification = async () => {
+    if (!clarificationAnswer.trim() || !id) return
+    setAnsweringClarification(true)
+    try {
+      await api.answerInterrupt(id, clarificationAnswer)
+      setClarificationAnswer('')
+      queryClient.invalidateQueries({ queryKey: ['interruptStatus', id] })
+      refetch()
+    } catch (e) {
+      console.error('Failed to answer clarification:', e)
+    } finally {
+      setAnsweringClarification(false)
+    }
+  }
 
   // Checkpoint mutations
   const pauseMutation = useMutation({
@@ -294,6 +319,48 @@ export default function ProjectView() {
               </select>
             </div>
           </div>
+
+          {/* ── Mid-Pipeline Clarification Interrupt ───────────────── */}
+          {interruptStatus?.has_question && (
+            <div className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/30">
+              <div className="flex items-center gap-2 mb-3">
+                <HelpCircle className="w-5 h-5 text-purple-400" />
+                <span className="font-semibold text-purple-400">
+                  Clarification Needed — {interruptStatus.agent_name?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </span>
+              </div>
+
+              <p className="text-sm text-text-primary mb-2 font-medium">
+                {interruptStatus.question}
+              </p>
+
+              {interruptStatus.context && (
+                <p className="text-xs text-text-tertiary mb-3 italic">
+                  Context: {interruptStatus.context}
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={clarificationAnswer}
+                  onChange={(e) => setClarificationAnswer(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAnswerClarification() }}
+                  placeholder="Type your answer..."
+                  className="flex-1 px-3 py-2 bg-background-secondary border border-border-subtle rounded-lg text-sm text-text-primary"
+                />
+                <Button
+                  onClick={handleAnswerClarification}
+                  disabled={!clarificationAnswer.trim() || answeringClarification}
+                  variant="primary"
+                  size="sm"
+                >
+                  <Send className="w-4 h-4 mr-1" />
+                  Answer
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* ── HITL Approval Gate ────────────────────────────────── */}
           {checkpointStatus?.state === 'paused' && checkpointStatus?.current_checkpoint && (

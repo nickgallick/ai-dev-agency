@@ -23,6 +23,15 @@ if TYPE_CHECKING:
     from knowledge.types import KnowledgeQueryResult
 
 
+class ClarificationNeeded(Exception):
+    """Raised when an agent needs clarification from the user before proceeding."""
+    def __init__(self, question: str, context: str = "", agent_name: str = ""):
+        self.question = question
+        self.context = context
+        self.agent_name = agent_name
+        super().__init__(question)
+
+
 class AgentStatus(Enum):
     """Agent execution status."""
     IDLE = "idle"
@@ -150,6 +159,19 @@ class BaseAgent(ABC):
             alternatives_considered=alternatives_considered or [],
             confidence=confidence,
             constraints=constraints or [],
+        )
+
+    def request_clarification(self, question: str, context: str = "") -> None:
+        """Interrupt the pipeline to ask the user a clarification question.
+
+        Raises ClarificationNeeded which is caught by the executor to pause
+        the pipeline, surface the question to the frontend, and wait for the
+        user's answer before resuming.
+        """
+        raise ClarificationNeeded(
+            question=question,
+            context=context,
+            agent_name=self.name,
         )
 
     def get_model(self, context: Optional[Dict[str, Any]] = None) -> str:

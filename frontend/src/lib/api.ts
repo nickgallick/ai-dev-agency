@@ -822,6 +822,33 @@ export const api = {
     })
     return response.data
   },
+
+  // ── Conversational Clarification System ─────────────────────────────
+
+  sendChatMessage: async (message: string, conversationId?: string): Promise<ChatMessageResponse> => {
+    const response = await apiClient.post('/chat/', { message, conversation_id: conversationId })
+    return response.data
+  },
+
+  getChatHistory: async (conversationId: string): Promise<ChatMessage[]> => {
+    const response = await apiClient.get(`/chat/${conversationId}`)
+    return response.data
+  },
+
+  startBuildFromChat: async (params: { conversation_id: string; project_type?: string; cost_profile?: string; name?: string }): Promise<StartBuildResponse> => {
+    const response = await apiClient.post('/chat/start-build', params)
+    return response.data
+  },
+
+  answerInterrupt: async (projectId: string, answer: string): Promise<{ status: string }> => {
+    const response = await apiClient.post(`/chat/interrupt/${projectId}/answer`, { answer })
+    return response.data
+  },
+
+  getInterruptStatus: async (projectId: string): Promise<InterruptStatus> => {
+    const response = await apiClient.get(`/chat/interrupt/${projectId}/status`)
+    return response.data
+  },
 }
 
 // Phase 11C Types
@@ -943,4 +970,34 @@ export interface KnowledgeImportResult {
   imported: number
   skipped: number
   errors: string[]
+}
+
+// Conversational Clarification System Types
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  message: string
+  timestamp?: string
+  ready_to_build?: boolean
+}
+
+export interface ChatMessageResponse {
+  conversation_id: string
+  role: string
+  message: string
+  ready_to_build: boolean
+  suggestions: string[]
+}
+
+export interface StartBuildResponse {
+  project_id: string
+  brief: string
+  name?: string
+}
+
+export interface InterruptStatus {
+  has_question: boolean
+  question?: string
+  context?: string
+  agent_name?: string
+  asked_at?: string
 }

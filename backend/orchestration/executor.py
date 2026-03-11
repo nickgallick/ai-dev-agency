@@ -15,6 +15,7 @@ import traceback
 from typing import Any, Dict, Optional, Callable
 from datetime import datetime
 
+from agents.base import ClarificationNeeded
 from .pipeline import Pipeline, PipelineConfig, NodeStatus
 from .checkpointing import save_checkpoint, get_latest_checkpoint, delete_checkpoints
 from .checkpoints import CheckpointManager, get_checkpoint_manager
@@ -447,6 +448,49 @@ class PipelineExecutor:
                 details=completion_details,
             )
 
+        except ClarificationNeeded as clarify:
+            # Mid-pipeline clarification interrupt
+            logger.info(f"Agent {agent_name} needs clarification: {clarify.question}")
+
+            self._emit_activity(
+                project_id, "clarification_needed",
+                f"{agent_name.replace('_', ' ').title()} needs your input",
+                agent_name=agent_name,
+                details={
+                    "question": clarify.question,
+                    "context": clarify.context,
+                    "requires_answer": True,
+                },
+            )
+
+            # Pause and wait for user answer
+            if self.db:
+                answer = await self._wait_for_clarification(
+                    project_id, agent_name, clarify.question, clarify.context, pipeline
+                )
+                # Inject the answer into pipeline context and re-run the node
+                pipeline.context[f"{agent_name}_clarification_answer"] = answer
+                pipeline.context.setdefault("clarification_answers", {})[agent_name] = answer
+
+                # Reset node to PENDING so it re-runs with the answer
+                node.status = NodeStatus.PENDING
+                node.result = None
+
+                self._emit_activity(
+                    project_id, "clarification_answered",
+                    f"Resuming {agent_name.replace('_', ' ').title()} with your answer",
+                    agent_name=agent_name,
+                    progress=start_progress,
+                )
+
+                # Re-execute the node
+                await self._execute_node_with_activity(
+                    project_id, pipeline, node, agent_progress, results
+                )
+            else:
+                results[node.id] = None
+            return  # Skip checkpoint logic below — will be handled by re-execution
+
         except Exception as e:
             duration_ms = int((time.time() - agent_start) * 1000)
             logger.error(f"Agent {agent_name} failed: {e}")
@@ -641,6 +685,66 @@ class PipelineExecutor:
             )
         except Exception as e:
             logger.warning(f"Knowledge capture failed for {agent_name}: {e}")
+
+    async def _wait_for_clarification(
+        self,
+        project_id: str,
+        agent_name: str,
+        question: str,
+        context_text: str,
+        pipeline: Pipeline,
+    ) -> str:
+        """Pause the pipeline and wait for the user to answer a clarification question.
+
+        Stores the question in checkpoint_state and polls until the user
+        submits an answer via ``POST /api/chat/interrupt/{project_id}/answer``.
+        """
+        from models import Project
+
+        project = self.db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            return ""
+
+        state = project.checkpoint_state or {}
+        state["status"] = "waiting_clarification"
+        state["clarification_question"] = question
+        state["clarification_context"] = context_text
+        state["clarification_agent"] = agent_name
+        state["clarification_asked_at"] = datetime.utcnow().isoformat()
+        project.checkpoint_state = state
+        project.paused_at = datetime.utcnow()
+        self.db.commit()
+
+        # Poll for the answer (check every 2s, max 10 min)
+        MAX_WAIT = 600
+        elapsed = 0
+        while elapsed < MAX_WAIT:
+            await asyncio.sleep(2)
+            elapsed += 2
+            self.db.refresh(project)
+            state = project.checkpoint_state or {}
+            if state.get("clarification_answer"):
+                answer = state["clarification_answer"]
+                # Clean up clarification fields
+                for key in [
+                    "clarification_question", "clarification_context",
+                    "clarification_agent", "clarification_asked_at",
+                    "clarification_answer", "clarification_answered_at",
+                ]:
+                    state.pop(key, None)
+                state["status"] = "running"
+                project.checkpoint_state = state
+                project.paused_at = None
+                self.db.commit()
+                return answer
+
+        # Timeout — return empty and let agent proceed with default behavior
+        logger.warning(f"Clarification timeout for {agent_name} on project {project_id}")
+        state["status"] = "running"
+        project.checkpoint_state = state
+        project.paused_at = None
+        self.db.commit()
+        return ""
 
     async def _update_project_status(self, project_id: str, status: str):
         """Update project status in database."""

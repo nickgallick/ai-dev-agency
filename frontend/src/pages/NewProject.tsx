@@ -6,16 +6,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { api, BriefAnalysis, BriefScoreResult, Preset, ProjectTemplate, PipelineEstimate } from '@/lib/api'
+import { api, BriefAnalysis, BriefScoreResult, Preset, ProjectTemplate, PipelineEstimate, ChatMessage } from '@/lib/api'
 import VoiceInput from '@/components/VoiceInput'
 import TemplateBrowser from '@/components/TemplateBrowser'
-import { 
+import {
   Globe, Smartphone, Monitor, Chrome, Terminal, Server, Sparkles,
   ArrowRight, Zap, Shield, Crown, ChevronDown, ChevronUp, Save,
   Figma, Info, AlertCircle, Check, Plus, X, Palette, Settings2,
   Rocket, FileCode, Layers, Database, Mail, CreditCard, Users,
   Bell, Search, Upload, MessageSquare, Moon, Sun, LayoutTemplate,
-  DollarSign, Clock, CheckCircle, Wand2
+  DollarSign, Clock, CheckCircle, Wand2, Send, Bot, User, Loader2
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -188,6 +188,15 @@ export default function NewProject() {
   const [estimate, setEstimate] = useState<PipelineEstimate | null>(null)
   const [showEstimate, setShowEstimate] = useState(false)
   const [isEstimating, setIsEstimating] = useState(false)
+
+  // Pre-build chat mode
+  const [chatMode, setChatMode] = useState(true)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [chatReadyToBuild, setChatReadyToBuild] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Load presets
   const { data: presets = [] } = useQuery({
@@ -364,6 +373,73 @@ export default function NewProject() {
     }))
   }
 
+  // ── Pre-Build Chat handlers ──────────────────────────────────────────
+
+  const handleSendChatMessage = async () => {
+    const msg = chatInput.trim()
+    if (!msg || chatLoading) return
+
+    setChatInput('')
+    setChatLoading(true)
+    setChatMessages(prev => [...prev, { role: 'user', message: msg }])
+
+    try {
+      const response = await api.sendChatMessage(msg, conversationId || undefined)
+      setConversationId(response.conversation_id)
+      setChatMessages(prev => [
+        ...prev,
+        { role: 'assistant', message: response.message, ready_to_build: response.ready_to_build },
+      ])
+      if (response.ready_to_build) {
+        setChatReadyToBuild(true)
+      }
+    } catch (e) {
+      setChatMessages(prev => [
+        ...prev,
+        { role: 'assistant', message: 'Sorry, I had trouble connecting. Please try again or skip to the form.' },
+      ])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  // Scroll to bottom of chat when new messages arrive
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  const handleChatKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendChatMessage()
+    }
+  }
+
+  const handleStartBuildFromChat = async () => {
+    if (!conversationId) return
+    setChatLoading(true)
+    try {
+      const result = await api.startBuildFromChat({
+        conversation_id: conversationId,
+        cost_profile: 'balanced',
+      })
+      localStorage.removeItem(STORAGE_KEY)
+      navigate(`/project/${result.project_id}`)
+    } catch (e: any) {
+      setSubmitError(e?.response?.data?.detail || e?.message || 'Failed to start build')
+      setChatLoading(false)
+    }
+  }
+
+  const handleSwitchToForm = () => {
+    // Populate brief from chat conversation
+    const userMessages = chatMessages.filter(m => m.role === 'user').map(m => m.message)
+    if (userMessages.length > 0) {
+      setForm(prev => ({ ...prev, brief: userMessages.join('\n\n') }))
+    }
+    setChatMode(false)
+  }
+
   // Build the requirements object (shared by estimate + submit)
   const buildRequirements = () => {
     const requirements: Record<string, any> = {
@@ -533,9 +609,175 @@ export default function NewProject() {
           New Project
         </h1>
         <p className="mt-1" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-base)' }}>
-          Tell us what you want to build
+          {chatMode ? 'Describe what you want to build — I\'ll ask clarifying questions' : 'Tell us what you want to build'}
         </p>
       </div>
+
+      {/* ── Mode Toggle ───────────────────────────────────────────────── */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setChatMode(true)}
+          className={clsx(
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+            chatMode
+              ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/40'
+              : 'bg-background-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+          )}
+        >
+          <MessageSquare className="w-4 h-4" />
+          Chat with AI
+        </button>
+        <button
+          type="button"
+          onClick={() => setChatMode(false)}
+          className={clsx(
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+            !chatMode
+              ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/40'
+              : 'bg-background-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+          )}
+        >
+          <Settings2 className="w-4 h-4" />
+          Form Builder
+        </button>
+      </div>
+
+      {/* ── Pre-Build Chat Mode ──────────────────────────────────────── */}
+      {chatMode && (
+        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+          {/* Chat header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+            <Bot className="w-5 h-5 text-accent-primary" />
+            <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              Project Clarification Chat
+            </span>
+            {chatReadyToBuild && (
+              <span className="ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--accent-success-bg, rgba(74,222,128,0.15))', color: 'var(--accent-success)' }}>
+                <CheckCircle className="w-3 h-3" />
+                Ready to build
+              </span>
+            )}
+          </div>
+
+          {/* Messages */}
+          <div className="h-[400px] overflow-y-auto px-4 py-4 space-y-4" style={{ background: 'var(--background-primary)' }}>
+            {chatMessages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-center" style={{ color: 'var(--text-tertiary)' }}>
+                <Bot className="w-10 h-10 mb-3 opacity-40" />
+                <p className="text-sm font-medium mb-1">What would you like to build?</p>
+                <p className="text-xs max-w-sm">
+                  Describe your project idea and I'll ask clarifying questions to make sure we build exactly what you need.
+                </p>
+              </div>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={clsx('flex gap-3', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                {msg.role === 'assistant' && (
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'var(--accent-primary-bg, rgba(59,130,246,0.15))' }}>
+                    <Bot className="w-4 h-4 text-accent-primary" />
+                  </div>
+                )}
+                <div
+                  className={clsx(
+                    'max-w-[80%] px-3.5 py-2.5 rounded-xl text-sm leading-relaxed',
+                    msg.role === 'user'
+                      ? 'rounded-br-sm'
+                      : 'rounded-bl-sm'
+                  )}
+                  style={{
+                    background: msg.role === 'user' ? 'var(--accent-primary)' : 'var(--background-secondary)',
+                    color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
+                    border: msg.role === 'assistant' ? '1px solid var(--border-subtle)' : 'none',
+                  }}
+                >
+                  {msg.message}
+                </div>
+                {msg.role === 'user' && (
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'var(--accent-primary)' }}>
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'var(--accent-primary-bg, rgba(59,130,246,0.15))' }}>
+                  <Bot className="w-4 h-4 text-accent-primary" />
+                </div>
+                <div className="px-3.5 py-2.5 rounded-xl rounded-bl-sm text-sm" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border-subtle)' }}>
+                  <Loader2 className="w-4 h-4 animate-spin text-accent-primary" />
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input area */}
+          <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border-subtle)', background: 'var(--background-secondary)' }}>
+            <div className="flex gap-2">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={handleChatKeyDown}
+                placeholder="Describe your project idea..."
+                rows={1}
+                className="flex-1 px-3 py-2 rounded-lg text-sm resize-none"
+                style={{
+                  background: 'var(--background-primary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-primary)',
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleSendChatMessage}
+                disabled={!chatInput.trim() || chatLoading}
+                className="flex items-center justify-center w-10 h-10 rounded-lg transition-colors disabled:opacity-40"
+                style={{ background: 'var(--accent-primary)', color: '#fff' }}
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Chat actions */}
+          {chatMessages.length > 0 && (
+            <div className="px-4 py-3 border-t flex flex-wrap gap-2" style={{ borderColor: 'var(--border-subtle)', background: 'var(--background-secondary)' }}>
+              <button
+                type="button"
+                onClick={handleStartBuildFromChat}
+                disabled={chatLoading}
+                className="btn-primary flex items-center gap-2"
+                style={{ padding: '8px 16px', fontSize: 'var(--text-sm)' }}
+              >
+                <Rocket className="w-4 h-4" />
+                Start Build
+              </button>
+              <button
+                type="button"
+                onClick={handleSwitchToForm}
+                className="btn-secondary flex items-center gap-2"
+                style={{ padding: '8px 16px', fontSize: 'var(--text-sm)' }}
+              >
+                <Settings2 className="w-4 h-4" />
+                Configure Details
+              </button>
+            </div>
+          )}
+
+          {submitError && (
+            <div className="px-4 py-2" style={{ color: 'var(--accent-error)', fontSize: 'var(--text-sm)' }}>
+              <AlertCircle className="w-4 h-4 inline mr-1" />
+              {submitError}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Form Builder Mode (existing UI) ──────────────────────────── */}
+      {!chatMode && <>
 
       {/* Phase 11B: Template Browser Section */}
       <div className="glass-card" style={{ padding: 'var(--space-4)' }}>
@@ -1817,6 +2059,8 @@ export default function NewProject() {
           </div>
         </div>
       )}
+
+      </>}
 
       {/* Phase 11B: Template Browser Modal */}
       <TemplateBrowser
