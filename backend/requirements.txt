@@ -48,6 +48,12 @@ playwright>=1.41.0
 structlog>=24.1.0
 loguru>=0.7.0
 
+# Image Processing
+Pillow>=10.2.0
+
+# Numerical / Embeddings
+numpy>=1.26.0
+
 # Utilities
 typing-extensions>=4.9.0
 

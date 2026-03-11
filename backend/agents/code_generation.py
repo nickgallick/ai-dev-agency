@@ -266,14 +266,34 @@ Generate these files:
     async def generate(self, context: Dict[str, Any]) -> Dict[str, Any]:
         template = self.templates.get(self.project_type, "")
         prompt = self._build_prompt(context, template)
-        
+
         result = await self.llm_client(
             prompt=prompt,
             model="anthropic/claude-sonnet-4",
             temperature=0.3,
         )
-        
-        files = self._parse_code_blocks(result.get("content", ""))
+
+        # Check for LLM errors (missing API key, auth failure, etc.)
+        if result.get("error"):
+            return {
+                "success": False,
+                "files": [],
+                "cost": result.get("cost", 0),
+                "error": result.get("error_message") or result.get("error"),
+            }
+
+        content = result.get("content", "")
+        files = self._parse_code_blocks(content)
+
+        if not files:
+            return {
+                "success": False,
+                "files": [],
+                "cost": result.get("cost", 0),
+                "error": "Code generation produced no files. The LLM response could not be parsed into code files.",
+                "raw_content_preview": content[:500] if content else "(empty response)",
+            }
+
         return {
             "success": True,
             "files": files,
@@ -298,13 +318,58 @@ Generate complete, production-ready code. Format each file as:
 ```"""
     
     def _parse_code_blocks(self, content: str) -> List[Dict[str, str]]:
-        """Parse code blocks from LLM response."""
+        """Parse code blocks from LLM response.
+
+        Supports formats:
+          ```filename:path/to/file.ext   (preferred)
+          ```path/to/file.ext            (bare path with extension)
+        """
         files = []
         import re
-        pattern = r"```(?:filename:)?([^\n]+)\n(.*?)```"
+
+        # Primary: explicit filename: prefix
+        pattern = r"```filename:([^\n]+)\n(.*?)```"
         matches = re.findall(pattern, content, re.DOTALL)
         for filename, code in matches:
-            files.append({"path": filename.strip(), "content": code.strip()})
+            path = filename.strip()
+            if path and code.strip():
+                files.append({"path": path, "content": code.strip()})
+
+        if files:
+            return files
+
+        # Fallback: code blocks with a file-path-like language tag (has / or .)
+        pattern2 = r"```([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)\n(.*?)```"
+        matches2 = re.findall(pattern2, content, re.DOTALL)
+        for filename, code in matches2:
+            path = filename.strip()
+            if path and code.strip():
+                files.append({"path": path, "content": code.strip()})
+
+        if files:
+            return files
+
+        # Last resort: any fenced code blocks with a language tag — assign sequential names
+        pattern3 = r"```(\w+)\n(.*?)```"
+        matches3 = re.findall(pattern3, content, re.DOTALL)
+        ext_map = {
+            "typescript": "tsx", "tsx": "tsx", "ts": "ts",
+            "javascript": "js", "jsx": "jsx", "js": "js",
+            "python": "py", "py": "py",
+            "html": "html", "css": "css", "json": "json",
+            "yaml": "yml", "yml": "yml", "sql": "sql",
+            "swift": "swift", "kotlin": "kt", "dart": "dart",
+            "rust": "rs", "go": "go", "java": "java",
+        }
+        for i, (lang, code) in enumerate(matches3):
+            lang_lower = lang.lower()
+            ext = ext_map.get(lang_lower, lang_lower)
+            if code.strip():
+                files.append({
+                    "path": f"src/file_{i + 1}.{ext}",
+                    "content": code.strip(),
+                })
+
         return files
     
     def get_project_structure(self) -> Dict[str, List[str]]:

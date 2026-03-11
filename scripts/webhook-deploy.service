@@ -1,0 +1,18 @@
+[Unit]
+Description=GitHub Webhook Auto-Deploy Listener
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/ai-dev-agency
+ExecStart=/usr/bin/python3 /home/ubuntu/ai-dev-agency/scripts/webhook-listener.py
+Restart=always
+RestartSec=5
+Environment=WEBHOOK_SECRET=
+Environment=DEPLOY_BRANCH=master
+Environment=DEPLOY_SCRIPT=/home/ubuntu/ai-dev-agency/scripts/deploy.sh
+Environment=WEBHOOK_PORT=9000
+
+[Install]
+WantedBy=multi-user.target

@@ -223,6 +223,51 @@ class PipelineExecutor:
                 delete_checkpoints(self.db, project_id)
 
             duration_ms = int((time.time() - pipeline_start) * 1000)
+
+            # Check for critical agent failures that mean the build didn't actually produce anything
+            critical_failures = []
+            for agent_name in ("code_generation", "code_generation_openhands"):
+                agent_result = results.get(agent_name)
+                if agent_result and hasattr(agent_result, 'success') and not agent_result.success:
+                    error_msg = ""
+                    if hasattr(agent_result, 'data') and isinstance(agent_result.data, dict):
+                        error_msg = agent_result.data.get("error", "")
+                    elif hasattr(agent_result, 'errors') and agent_result.errors:
+                        error_msg = agent_result.errors[0]
+                    critical_failures.append((agent_name, error_msg))
+
+            if critical_failures:
+                agent_name, error_msg = critical_failures[0]
+                failure_message = (
+                    f"Build completed but code generation failed: {error_msg}" if error_msg
+                    else "Build completed but no code was generated. Check your API keys in Settings."
+                )
+                audit_pipeline_failed(self.db, project_id, failure_message, duration_ms)
+                record_pipeline_failure(cost_profile, project_type, duration_ms / 1000.0)
+
+                self._emit_activity(
+                    project_id, "pipeline_error",
+                    failure_message,
+                    progress=100,
+                    details={"error": failure_message, "failed_agent": agent_name},
+                )
+
+                if self.db:
+                    # Still save partial results so user can see what was produced
+                    await self._save_project_results(
+                        project_id, results,
+                        pipeline.total_cost, pipeline.cost_breakdown,
+                        status="failed",
+                    )
+
+                return {
+                    "success": False,
+                    "project_id": project_id,
+                    "status": "failed",
+                    "error": failure_message,
+                    "total_cost": pipeline.total_cost,
+                }
+
             audit_pipeline_complete(self.db, project_id, pipeline.total_cost, duration_ms)
             record_pipeline_complete(cost_profile, project_type, duration_ms / 1000.0)
 
@@ -835,7 +880,8 @@ class PipelineExecutor:
         project_id: str,
         results: Dict[str, Any],
         total_cost: float,
-        cost_breakdown: Dict[str, float]
+        cost_breakdown: Dict[str, float],
+        status: str = "completed",
     ):
         """Save final results to database."""
         from models import Project, CostTracking
@@ -862,7 +908,7 @@ class PipelineExecutor:
             update(Project)
             .where(Project.id == project_id)
             .values(
-                status="completed",
+                status=status,
                 agent_outputs=agent_outputs,
                 github_repo=github_repo,
                 updated_at=datetime.utcnow(),
