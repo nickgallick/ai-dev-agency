@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/Card'
 import { Badge } from '@/components/Badge'
 import { PipelineVisualization } from '@/components/PipelineVisualization'
+import { PipelineDAG } from '@/components/PipelineDAG'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { ActivityFeed } from '@/components/ActivityFeed'
 import { api } from '@/lib/api'
@@ -132,11 +133,23 @@ export default function ProjectView() {
         </div>
       </div>
 
-      {/* Pipeline Visualization */}
-      <Card>
-        <h3 className="font-medium text-text-primary mb-4">Pipeline Progress</h3>
-        <PipelineVisualization agents={agents} />
+      {/* Real-Time Pipeline DAG */}
+      <Card className="!p-0 overflow-hidden">
+        <PipelineDAG
+          projectId={id!}
+          projectStatus={project.status}
+        />
       </Card>
+
+      {/* Fallback compact view (mobile / accessibility) */}
+      <details className="group">
+        <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary px-1 py-2">
+          Show compact pipeline list
+        </summary>
+        <Card>
+          <PipelineVisualization agents={agents} />
+        </Card>
+      </details>
 
       {/* Real-time Activity Feed */}
       {project.status !== 'completed' && project.status !== 'failed' && (

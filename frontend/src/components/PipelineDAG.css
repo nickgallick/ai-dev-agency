@@ -1,0 +1,331 @@
+/* ── DAG Container ─────────────────────────────────────────────────── */
+
+.dag-container {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* ── Header bar ────────────────────────────────────────────────────── */
+
+.dag-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dag-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dag-header-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.dag-connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: background 0.3s;
+}
+
+.dag-connection-dot.live {
+  background: var(--accent-success);
+  box-shadow: 0 0 6px var(--accent-success);
+  animation: dag-pulse 2s ease-in-out infinite;
+}
+
+.dag-connection-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dag-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dag-progress-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.dag-progress-bar {
+  width: 100px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--background-tertiary);
+  overflow: hidden;
+}
+
+.dag-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent-primary);
+  transition: width 0.5s ease-out;
+}
+
+.dag-progress-pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ── Legend ─────────────────────────────────────────────────────────── */
+
+.dag-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dag-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.dag-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dag-legend-pending   { background: var(--border-primary); }
+.dag-legend-running   { background: var(--accent-primary); animation: dag-pulse 2s ease-in-out infinite; }
+.dag-legend-completed { background: var(--accent-success); }
+.dag-legend-failed    { background: var(--accent-error); }
+.dag-legend-skipped   { background: var(--text-tertiary); }
+
+/* ── Canvas ────────────────────────────────────────────────────────── */
+
+.dag-canvas {
+  height: 420px;
+  background: var(--background-primary);
+}
+
+/* React Flow overrides */
+.dag-canvas .react-flow__renderer {
+  background: transparent !important;
+}
+
+.dag-canvas .react-flow__background {
+  opacity: 0.4;
+}
+
+/* Controls styling */
+.dag-controls {
+  background: var(--background-secondary) !important;
+  border: 1px solid var(--border-primary) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.dag-controls button {
+  background: var(--background-secondary) !important;
+  color: var(--text-primary) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+.dag-controls button:hover {
+  background: var(--background-tertiary) !important;
+}
+
+.dag-controls button svg {
+  fill: var(--text-primary) !important;
+}
+
+/* MiniMap styling */
+.dag-minimap {
+  background: var(--background-secondary) !important;
+  border: 1px solid var(--border-primary) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+/* ── Agent Node ────────────────────────────────────────────────────── */
+
+.dag-node {
+  position: relative;
+  min-width: 130px;
+  max-width: 160px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border-primary);
+  background: var(--background-secondary);
+  font-family: var(--font-sans);
+  transition: all 0.3s ease;
+  cursor: default;
+}
+
+/* Status-based styling */
+.dag-node-pending {
+  border-color: var(--border-primary);
+  background: var(--background-secondary);
+  opacity: 0.6;
+}
+
+.dag-node-running {
+  border-color: var(--accent-primary);
+  background: var(--background-secondary);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.3), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+  animation: dag-node-glow 2s ease-in-out infinite;
+  opacity: 1;
+}
+
+.dag-node-completed {
+  border-color: var(--accent-success);
+  background: var(--background-secondary);
+  opacity: 1;
+}
+
+.dag-node-failed {
+  border-color: var(--accent-error);
+  background: rgba(239, 68, 68, 0.05);
+  opacity: 1;
+}
+
+.dag-node-skipped {
+  border-color: var(--text-tertiary);
+  border-style: dashed;
+  background: var(--background-secondary);
+  opacity: 0.5;
+}
+
+/* Node header */
+.dag-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dag-node-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.dag-node-pending .dag-node-icon   { color: var(--text-tertiary); }
+.dag-node-running .dag-node-icon   { color: var(--accent-primary); }
+.dag-node-completed .dag-node-icon { color: var(--accent-success); }
+.dag-node-failed .dag-node-icon    { color: var(--accent-error); }
+.dag-node-skipped .dag-node-icon   { color: var(--text-tertiary); }
+
+.dag-node-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dag-node-skipped .dag-node-label {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+/* Status dot (top-right indicator) */
+.dag-node-status-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--background-secondary);
+}
+
+.dag-node-status-dot.dag-node-pending   { background: var(--border-primary); }
+.dag-node-status-dot.dag-node-running   { background: var(--accent-primary); animation: dag-pulse 1.5s ease-in-out infinite; }
+.dag-node-status-dot.dag-node-completed { background: var(--accent-success); }
+.dag-node-status-dot.dag-node-failed    { background: var(--accent-error); }
+.dag-node-status-dot.dag-node-skipped   { background: var(--text-tertiary); }
+
+/* Running message */
+.dag-node-message {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--accent-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 136px;
+}
+
+/* Completed meta (duration, cost) */
+.dag-node-meta {
+  margin-top: 4px;
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+/* Handles */
+.dag-handle {
+  width: 6px !important;
+  height: 6px !important;
+  background: var(--border-primary) !important;
+  border: none !important;
+}
+
+/* ── Animations ────────────────────────────────────────────────────── */
+
+@keyframes dag-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes dag-node-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.2), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4), inset 0 0 0 1px rgba(59, 130, 246, 0.2);
+  }
+}
+
+/* ── Responsive ────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .dag-canvas {
+    height: 320px;
+  }
+
+  .dag-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .dag-legend {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .dag-progress-bar {
+    width: 80px;
+  }
+}
