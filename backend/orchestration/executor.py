@@ -228,7 +228,13 @@ class PipelineExecutor:
             critical_failures = []
             for agent_name in ("code_generation", "code_generation_openhands"):
                 agent_result = results.get(agent_name)
-                if agent_result and hasattr(agent_result, 'success') and not agent_result.success:
+                if agent_result is None:
+                    # Agent was skipped (dependency failed) or never ran
+                    # Check if the node was skipped due to dependency failure
+                    node = pipeline.nodes.get(agent_name)
+                    if node and node.status in (NodeStatus.FAILED, NodeStatus.SKIPPED):
+                        critical_failures.append((agent_name, "Agent was skipped because an earlier stage failed. Check your API keys in Settings."))
+                elif hasattr(agent_result, 'success') and not agent_result.success:
                     error_msg = ""
                     if hasattr(agent_result, 'data') and isinstance(agent_result.data, dict):
                         error_msg = agent_result.data.get("error", "")
@@ -373,8 +379,24 @@ class PipelineExecutor:
             "security", "seo", "accessibility", "qa"
         ]
 
+        # Track which nodes we've already emitted skip activity for
+        _skipped_emitted: set = set()
+
         # Run agents in proper order respecting dependencies
         while True:
+            # Emit activity for newly skipped nodes (dependency failures)
+            for node in pipeline.nodes.values():
+                if node.status == NodeStatus.SKIPPED and node.id not in _skipped_emitted:
+                    _skipped_emitted.add(node.id)
+                    progress_info = agent_progress.get(node.id, (50, 60, ""))
+                    audit_agent_skipped(self.db, project_id, node.id, "dependency_failed")
+                    self._emit_activity(
+                        project_id, "agent_skipped",
+                        f"Skipped {node.id.replace('_', ' ').title()} (earlier stage failed)",
+                        agent_name=node.id,
+                        progress=progress_info[1],
+                    )
+
             ready_nodes = pipeline.get_ready_nodes()
             if not ready_nodes:
                 # Check if QA failed and we should retry code generation
