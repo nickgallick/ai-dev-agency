@@ -14,6 +14,20 @@
   --bg-secondary: #202222;
   --bg-tertiary: #2A2B2B;
   --bg-elevated: #313333;
+
+  /* Backward-compat aliases (used by KnowledgeBase.css and legacy code) */
+  --background-primary: var(--bg-primary);
+  --background-secondary: var(--bg-secondary);
+  --background-tertiary: var(--bg-tertiary);
+  --background-input: var(--bg-tertiary);
+
+  /* RGB channel values for Tailwind opacity-modifier support */
+  --accent-primary-rgb:   32, 184, 205;   /* #20B8CD */
+  --accent-secondary-rgb: 91, 158, 244;   /* #5B9EF4 */
+  --accent-success-rgb:   52, 211, 153;   /* #34D399 */
+  --accent-warning-rgb:  251, 191,  36;   /* #FBBF24 */
+  --accent-error-rgb:    248, 113, 113;   /* #F87171 */
+  --accent-purple-rgb:   167, 139, 250;   /* #A78BFA */
   
   /* Glass Effects */
   --glass-bg: rgba(255, 255, 255, 0.03);
@@ -97,6 +111,20 @@
   --bg-secondary: #FFFFFF;
   --bg-tertiary: #F5F4F2;
   --bg-elevated: #FAFAF9;
+
+  /* Backward-compat aliases */
+  --background-primary: var(--bg-primary);
+  --background-secondary: var(--bg-secondary);
+  --background-tertiary: var(--bg-tertiary);
+  --background-input: var(--bg-tertiary);
+
+  /* RGB channel values for light mode */
+  --accent-primary-rgb:    8, 145, 178;   /* #0891B2 */
+  --accent-secondary-rgb: 59, 130, 246;   /* #3B82F6 */
+  --accent-success-rgb:   16, 185, 129;   /* #10B981 */
+  --accent-warning-rgb:  245, 158,  11;   /* #F59E0B */
+  --accent-error-rgb:    239,  68,  68;   /* #EF4444 */
+  --accent-purple-rgb:   139,  92, 246;   /* #8B5CF6 */
   
   /* Glass Effects - Higher opacity for light mode */
   --glass-bg: rgba(255, 255, 255, 0.55);
@@ -180,6 +208,20 @@
     --bg-secondary: #FFFFFF;
     --bg-tertiary: #F5F4F2;
     --bg-elevated: #FAFAF9;
+
+    /* Backward-compat aliases */
+    --background-primary: var(--bg-primary);
+    --background-secondary: var(--bg-secondary);
+    --background-tertiary: var(--bg-tertiary);
+    --background-input: var(--bg-tertiary);
+
+    /* RGB channel values for system light mode */
+    --accent-primary-rgb:    8, 145, 178;
+    --accent-secondary-rgb: 59, 130, 246;
+    --accent-success-rgb:   16, 185, 129;
+    --accent-warning-rgb:  245, 158,  11;
+    --accent-error-rgb:    239,  68,  68;
+    --accent-purple-rgb:   139,  92, 246;
     
     /* Glass Effects */
     --glass-bg: rgba(255, 255, 255, 0.55);
@@ -1168,4 +1210,98 @@ body::before {
 .bloom-content {
   position: relative;
   z-index: 1;
+}
+
+/* ─── Select / Option light-mode fix ─────────────────────────────────────── */
+/* Native <select> dropdowns inherit the OS/browser chrome.  In light mode    */
+/* the dark glass-input background makes option text unreadable.  We override */
+/* the background and colour so both the closed control and its open list are  */
+/* readable in every theme.                                                    */
+
+select.glass-input,
+select.glass-input option {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* Ensure disabled options are visually distinct */
+select.glass-input option:disabled {
+  color: var(--text-tertiary);
+}
+
+/* ─── Badge / pill background fixes ─────────────────────────────────────── */
+/* Some badges use the accent CSS variables directly via inline style.         */
+/* These classes ensure consistent badge rendering without hardcoded hex.      */
+
+.badge-neutral {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ─── Table & empty-state polish ─────────────────────────────────────────── */
+
+.table-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-4);
+  color: var(--text-tertiary);
+  gap: var(--space-3);
+}
+
+.table-empty-state svg {
+  opacity: 0.4;
+}
+
+/* ─── Focus ring standardisation ─────────────────────────────────────────── */
+/* Ensure all interactive elements have a visible focus ring that works in     */
+/* both themes.                                                                */
+
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* ─── Scrollbar theming ──────────────────────────────────────────────────── */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border-default);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--border-focus);
+}
+
+/* ─── Mobile header / nav backdrop ──────────────────────────────────────── */
+
+:root,
+[data-theme="dark"] {
+  --mobile-header-bg: rgba(13, 14, 14, 0.92);
+}
+
+[data-theme="light"] {
+  --mobile-header-bg: rgba(255, 255, 255, 0.92);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --mobile-header-bg: rgba(255, 255, 255, 0.92);
+  }
 }

@@ -162,8 +162,16 @@ function LogRow({ log }: { log: AgentLog }) {
 
 function ClearDialog({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-bg-secondary border border-border-subtle rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={onCancel}
+      onKeyDown={(e) => e.key === 'Escape' && onCancel()}
+      tabIndex={-1}
+    >
+      <div
+        className="bg-bg-secondary border border-border-subtle rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="text-base font-semibold text-text-primary mb-2">Clear All Logs?</h3>
         <p className="text-sm text-text-secondary mb-6">
           This will permanently delete all visible logs. This action cannot be undone.

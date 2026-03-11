@@ -57,10 +57,10 @@ export default function Queue() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'urgent': return 'text-red-400 bg-red-500/10'
-      case 'normal': return 'text-blue-400 bg-blue-500/10'
-      case 'background': return 'text-gray-400 bg-gray-500/10'
-      default: return 'text-text-secondary bg-background-tertiary'
+      case 'urgent': return 'text-accent-error bg-accent-error/10'
+      case 'normal': return 'text-accent-secondary bg-accent-secondary/10'
+      case 'background': return 'text-text-tertiary bg-bg-secondary'
+      default: return 'text-text-secondary bg-bg-secondary'
     }
   }
 
@@ -98,8 +98,8 @@ export default function Queue() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10">
-              <Layers className="w-5 h-5 text-blue-400" />
+            <div className="p-2 rounded-lg bg-accent-secondary/10">
+              <Layers className="w-5 h-5 text-accent-secondary" />
             </div>
             <div>
               <p className="text-2xl font-semibold text-text-primary">
@@ -112,8 +112,8 @@ export default function Queue() {
 
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-500/10">
-              <Activity className="w-5 h-5 text-green-400" />
+            <div className="p-2 rounded-lg bg-accent-success/10">
+              <Activity className="w-5 h-5 text-accent-success" />
             </div>
             <div>
               <p className="text-2xl font-semibold text-text-primary">
@@ -126,8 +126,8 @@ export default function Queue() {
 
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-red-500/10">
-              <Zap className="w-5 h-5 text-red-400" />
+            <div className="p-2 rounded-lg bg-accent-error/10">
+              <Zap className="w-5 h-5 text-accent-error" />
             </div>
             <div>
               <p className="text-2xl font-semibold text-text-primary">
@@ -140,8 +140,8 @@ export default function Queue() {
 
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-yellow-500/10">
-              <Clock className="w-5 h-5 text-yellow-400" />
+            <div className="p-2 rounded-lg bg-accent-warning/10">
+              <Clock className="w-5 h-5 text-accent-warning" />
             </div>
             <div>
               <p className="text-2xl font-semibold text-text-primary">
@@ -182,12 +182,12 @@ export default function Queue() {
       {queueStatus?.active_projects && queueStatus.active_projects.length > 0 && (
         <Card>
           <h3 className="font-medium text-text-primary mb-4 flex items-center gap-2">
-            <PlayCircle className="w-5 h-5 text-green-400" />
+            <PlayCircle className="w-5 h-5 text-accent-success" />
             Currently Processing
           </h3>
           <div className="space-y-3">
             {queueStatus.active_projects.map((project: any, idx: number) => (
-              <div key={idx} className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+              <div key={idx} className="p-3 bg-accent-success/10 rounded-lg border border-accent-success/20">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-text-primary">
@@ -286,7 +286,7 @@ export default function Queue() {
                         variant="ghost"
                         size="sm"
                         onClick={() => removeMutation.mutate(item.project_id)}
-                        className="text-red-400 hover:text-red-300"
+                        className="text-accent-error hover:opacity-80"
                         title="Remove from Queue"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -304,15 +304,15 @@ export default function Queue() {
         <h4 className="text-sm font-medium text-text-primary mb-3">Priority Levels</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="flex items-start gap-3">
-            <span className="px-2 py-0.5 rounded text-xs text-red-400 bg-red-500/10">urgent</span>
+            <span className="px-2 py-0.5 rounded text-xs text-accent-error bg-accent-error/10">urgent</span>
             <p className="text-text-secondary">Processed immediately, jumps queue</p>
           </div>
           <div className="flex items-start gap-3">
-            <span className="px-2 py-0.5 rounded text-xs text-blue-400 bg-blue-500/10">normal</span>
+            <span className="px-2 py-0.5 rounded text-xs text-accent-secondary bg-accent-secondary/10">normal</span>
             <p className="text-text-secondary">Standard FIFO processing</p>
           </div>
           <div className="flex items-start gap-3">
-            <span className="px-2 py-0.5 rounded text-xs text-gray-400 bg-gray-500/10">background</span>
+            <span className="px-2 py-0.5 rounded text-xs text-text-tertiary bg-bg-secondary">background</span>
             <p className="text-text-secondary">Yields to higher priorities</p>
           </div>
         </div>

@@ -103,9 +103,9 @@ export default function Layout() {
       </aside>
 
       {/* Mobile Header */}
-      <header className="lg:hidden flex items-center justify-between p-4" 
-              style={{ 
-                background: 'rgba(13, 14, 14, 0.9)', 
+      <header className="lg:hidden flex items-center justify-between p-4"
+              style={{
+                background: 'var(--mobile-header-bg)',
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
                 borderBottom: '1px solid var(--glass-border)'
@@ -131,8 +131,8 @@ export default function Layout() {
       {/* Mobile Dropdown Menu */}
       {mobileMenuOpen && (
         <div className="lg:hidden absolute inset-x-0 top-16 z-50"
-             style={{ 
-               background: 'rgba(13, 14, 14, 0.95)', 
+             style={{
+               background: 'var(--mobile-header-bg)',
                backdropFilter: 'blur(40px)',
                WebkitBackdropFilter: 'blur(40px)',
                borderBottom: '1px solid var(--glass-border)'

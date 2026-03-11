@@ -45,10 +45,7 @@ export default function Home() {
     <div className="space-y-6">
       {/* Missing required API keys banner */}
       {missingKeys && missingKeys.count > 0 && (
-        <div className="glass-card flex items-start gap-3" style={{
-          background: 'rgba(248, 113, 113, 0.1)',
-          borderColor: 'rgba(248, 113, 113, 0.3)',
-        }}>
+        <div className="glass-card flex items-start gap-3 bg-accent-error/10 border-accent-error/30">
           <Key className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-error)' }} />
           <div className="flex-1">
             <p className="font-medium" style={{ color: 'var(--accent-error)' }}>
@@ -129,8 +126,8 @@ export default function Home() {
         {/* Deployed Stat */}
         <div className="bento-item">
           <div className="stat-card h-full">
-            <div className="stat-card-icon" style={{ background: 'rgba(52, 211, 153, 0.15)' }}>
-              <Rocket className="w-5 h-5" style={{ color: 'var(--accent-success)' }} />
+            <div className="stat-card-icon bg-accent-success/15">
+              <Rocket className="w-5 h-5 text-accent-success" />
             </div>
             <div className="stat-card-value">
               {loadingProjects ? '-' : completedProjects.length}
@@ -142,8 +139,8 @@ export default function Home() {
         {/* Cost Stat */}
         <div className="bento-item">
           <div className="stat-card h-full">
-            <div className="stat-card-icon" style={{ background: 'rgba(251, 191, 36, 0.15)' }}>
-              <DollarSign className="w-5 h-5" style={{ color: 'var(--accent-warning)' }} />
+            <div className="stat-card-icon bg-accent-warning/15">
+              <DollarSign className="w-5 h-5 text-accent-warning" />
             </div>
             <div className="stat-card-value">
               ${loadingCosts ? '-' : (costSummary?.total_cost?.toFixed(2) || '0.00')}
@@ -155,8 +152,8 @@ export default function Home() {
         {/* This Month */}
         <div className="bento-item">
           <div className="stat-card h-full">
-            <div className="stat-card-icon" style={{ background: 'rgba(91, 158, 244, 0.15)' }}>
-              <Calendar className="w-5 h-5" style={{ color: 'var(--accent-secondary)' }} />
+            <div className="stat-card-icon bg-accent-secondary/15">
+              <Calendar className="w-5 h-5 text-accent-secondary" />
             </div>
             <div className="stat-card-value">
               {loadingProjects ? '-' : projects?.length || 0}
@@ -193,13 +190,13 @@ export default function Home() {
                     {['Intake', 'Architect', 'Code', 'Deploy'].map((step, i) => (
                       <div key={step} className="flex items-center">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs
-                          ${i === 0 ? 'bg-green-500/20 text-green-400' : 
-                            i === 1 ? 'bg-cyan-500/20 text-cyan-400' : 
-                            'bg-gray-700/50 text-gray-500'}`}>
+                          ${i === 0 ? 'bg-accent-success/20 text-accent-success' :
+                            i === 1 ? 'bg-accent-primary/20 text-accent-primary' :
+                            'bg-bg-secondary text-text-tertiary'}`}>
                           {i < 2 ? '✓' : i + 1}
                         </div>
                         {i < 3 && (
-                          <div className={`w-8 h-0.5 ${i < 1 ? 'bg-green-500/50' : 'bg-gray-700'}`} />
+                          <div className={`w-8 h-0.5 ${i < 1 ? 'bg-accent-success/50' : 'bg-border-subtle'}`} />
                         )}
                       </div>
                     ))}
