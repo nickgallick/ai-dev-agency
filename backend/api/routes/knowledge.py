@@ -2,7 +2,10 @@
 
 API routes for interacting with the knowledge base.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+import io
+import uuid
+from datetime import datetime
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
@@ -286,3 +289,81 @@ async def get_entry_types():
             for t in KnowledgeEntryType
         ]
     }
+
+
+@router.post("/upload", response_model=KnowledgeEntryResponse)
+async def upload_knowledge_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Upload a PDF, TXT, or MD file and save its content to the knowledge base."""
+    allowed = {"text/plain", "text/markdown", "application/pdf", "application/octet-stream"}
+    filename = file.filename or "upload"
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+    if ext not in ("txt", "md", "pdf"):
+        raise HTTPException(status_code=400, detail="Only .txt, .md, and .pdf files are supported")
+
+    raw = await file.read()
+
+    if ext == "pdf":
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(raw))
+            text = "\n\n".join(page.extract_text() or "" for page in reader.pages)
+        except ImportError:
+            # Fallback: try pdfminer
+            try:
+                from pdfminer.high_level import extract_text as pdf_extract
+                text = pdf_extract(io.BytesIO(raw))
+            except ImportError:
+                raise HTTPException(status_code=500, detail="PDF parsing not available — install pypdf or pdfminer.six")
+    else:
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+
+    text = text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="File appears to be empty")
+
+    # Truncate to 10 000 chars to keep knowledge entries manageable
+    MAX_CHARS = 10_000
+    truncated = len(text) > MAX_CHARS
+    content = text[:MAX_CHARS] + ("\n\n[…truncated]" if truncated else "")
+
+    title = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
+
+    entry = KnowledgeBase(
+        id=uuid.uuid4(),
+        entry_type="user_preference",  # generic type for user-uploaded docs
+        title=title,
+        content=content,
+        entry_metadata={"source": f"file:{filename}", "file_type": ext, "truncated": truncated},
+        quality_score=0.8,
+        usage_count=0,
+        tags=[ext, "uploaded"],
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    return KnowledgeEntryResponse(
+        id=str(entry.id),
+        entry_type=entry.entry_type,
+        title=entry.title,
+        content=entry.content,
+        project_id=None,
+        project_type=None,
+        industry=None,
+        tech_stack=None,
+        agent_name=None,
+        tags=entry.tags or [],
+        quality_score=entry.quality_score,
+        usage_count=entry.usage_count,
+        last_used_at=None,
+        created_at=entry.created_at.isoformat() if entry.created_at else "",
+    )

@@ -1,9 +1,9 @@
 /**
  * Phase 11B: Knowledge Base Page
- * 
+ *
  * Displays knowledge base statistics, recent learnings, and user preferences.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api, KnowledgeStats, KnowledgeEntry, PreferenceCreate } from '../lib/api'
 import '../styles/KnowledgeBase.css'
 
@@ -14,10 +14,21 @@ function KnowledgeBase() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [searching, setSearching] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'search' | 'preferences'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'search' | 'preferences' | 'upload'>('overview')
   const [entryTypeFilter, setEntryTypeFilter] = useState('')
   const [agentFilter, setAgentFilter] = useState('')
-  
+
+  // File upload state
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadResult, setUploadResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+
+  // Text/manual entry state
+  const [manualTitle, setManualTitle] = useState('')
+  const [manualContent, setManualContent] = useState('')
+  const [manualSaving, setManualSaving] = useState(false)
+
   // Preference form state
   const [showPreferenceForm, setShowPreferenceForm] = useState(false)
   const [newPreference, setNewPreference] = useState<PreferenceCreate>({
@@ -104,6 +115,56 @@ function KnowledgeBase() {
     }
   }
 
+  const handleFileUpload = async (file: File) => {
+    if (!file) return
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (!['pdf', 'txt', 'md'].includes(ext || '')) {
+      setUploadResult({ success: false, message: 'Only .pdf, .txt, and .md files are supported' })
+      return
+    }
+    setUploading(true)
+    setUploadResult(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/knowledge/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail || 'Upload failed')
+      }
+      setUploadResult({ success: true, message: `"${file.name}" uploaded successfully` })
+      loadData()
+    } catch (error: any) {
+      setUploadResult({ success: false, message: error.message })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleManualSave = async () => {
+    if (!manualTitle.trim() || !manualContent.trim()) return
+    setManualSaving(true)
+    try {
+      await api.storePreference({
+        title: manualTitle.trim(),
+        preference: manualContent.trim(),
+        category: 'other',
+      })
+      setManualTitle('')
+      setManualContent('')
+      setUploadResult({ success: true, message: 'Entry saved to knowledge base' })
+      loadData()
+    } catch (error: any) {
+      setUploadResult({ success: false, message: error.message })
+    } finally {
+      setManualSaving(false)
+    }
+  }
+
   const formatEntryType = (type: string) => {
     return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
   }
@@ -138,6 +199,12 @@ function KnowledgeBase() {
           onClick={() => setActiveTab('search')}
         >
           Browse & Search
+        </button>
+        <button
+          className={`tab ${activeTab === 'upload' ? 'active' : ''}`}
+          onClick={() => setActiveTab('upload')}
+        >
+          Upload / Add
         </button>
         <button
           className={`tab ${activeTab === 'preferences' ? 'active' : ''}`}
@@ -201,6 +268,91 @@ function KnowledgeBase() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'upload' && (
+        <div className="upload-tab" style={{ maxWidth: 640 }}>
+          {/* Status feedback */}
+          {uploadResult && (
+            <div className={`upload-result ${uploadResult.success ? 'success' : 'error'}`}
+                 style={{ marginBottom: '1.5rem', padding: '0.75rem 1rem', borderRadius: '0.5rem',
+                   background: uploadResult.success ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                   border: `1px solid ${uploadResult.success ? '#22c55e40' : '#ef444440'}`,
+                   color: uploadResult.success ? '#22c55e' : '#ef4444' }}>
+              {uploadResult.message}
+            </div>
+          )}
+
+          {/* File Upload */}
+          <section style={{ marginBottom: '2rem' }}>
+            <h2 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 600 }}>Upload File</h2>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              Upload a PDF, TXT, or Markdown file. The content will be parsed and saved to the knowledge base.
+            </p>
+            <div
+              className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
+              style={{ border: '2px dashed var(--glass-border)', borderRadius: '0.75rem', padding: '2.5rem 1rem',
+                textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.15s',
+                borderColor: dragOver ? 'var(--accent-primary)' : undefined }}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f) }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.txt,.md"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f) }}
+              />
+              {uploading ? (
+                <p style={{ color: 'var(--text-secondary)' }}>Uploading…</p>
+              ) : (
+                <>
+                  <p style={{ fontWeight: 500, marginBottom: '0.25rem' }}>Drop file here or click to browse</p>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>PDF, TXT, MD — max 10 000 characters extracted</p>
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* Manual text entry */}
+          <section>
+            <h2 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 600 }}>Add Text Manually</h2>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              Type or paste knowledge directly — coding preferences, guidelines, architecture notes, etc.
+            </p>
+            <input
+              type="text"
+              placeholder="Title (e.g. 'API Design Guidelines')"
+              value={manualTitle}
+              onChange={(e) => setManualTitle(e.target.value)}
+              style={{ width: '100%', marginBottom: '0.75rem', padding: '0.625rem 0.875rem',
+                borderRadius: '0.5rem', border: '1px solid var(--glass-border)',
+                background: 'var(--glass-bg)', color: 'var(--text-primary)', fontSize: '0.875rem' }}
+            />
+            <textarea
+              placeholder="Paste your knowledge here…"
+              value={manualContent}
+              onChange={(e) => setManualContent(e.target.value)}
+              rows={8}
+              style={{ width: '100%', marginBottom: '0.75rem', padding: '0.625rem 0.875rem',
+                borderRadius: '0.5rem', border: '1px solid var(--glass-border)',
+                background: 'var(--glass-bg)', color: 'var(--text-primary)', fontSize: '0.875rem',
+                resize: 'vertical', fontFamily: 'inherit' }}
+            />
+            <button
+              onClick={handleManualSave}
+              disabled={manualSaving || !manualTitle.trim() || !manualContent.trim()}
+              style={{ padding: '0.625rem 1.5rem', borderRadius: '0.5rem', fontWeight: 600,
+                background: 'var(--accent-primary)', color: 'white', cursor: 'pointer',
+                opacity: manualSaving ? 0.6 : 1, border: 'none' }}
+            >
+              {manualSaving ? 'Saving…' : 'Save to Knowledge Base'}
+            </button>
+          </section>
         </div>
       )}
 

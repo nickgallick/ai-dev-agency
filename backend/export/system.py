@@ -38,11 +38,19 @@ BACKUP_TABLES = [
     "users",
 ]
 
-# Directories to include in backup
+# Project root (two levels up from this file: backend/export/ -> backend/ -> project/)
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+# Directories to include in backup (absolute, skip if they don't exist)
 BACKUP_DIRS = [
-    "/home/ubuntu/ai-dev-agency/generated_assets",
-    "/home/ubuntu/ai-dev-agency/templates",
+    str(_PROJECT_ROOT / "generated_assets"),
+    str(_PROJECT_ROOT / "templates"),
+    "/home/ubuntu/ai-dev-agency/generated_assets",  # legacy path
+    "/home/ubuntu/ai-dev-agency/templates",          # legacy path
 ]
+
+# Local backup destination
+_LOCAL_BACKUP_DIR = _PROJECT_ROOT / "backups"
 
 
 def backup_system(
@@ -75,12 +83,13 @@ def backup_system(
         db_backup_dir = backup_dir / "database"
         db_backup_dir.mkdir()
         
+        from sqlalchemy import text as _sql_text
         for table_name in BACKUP_TABLES:
             try:
                 # Export table to JSON using raw SQL
-                result = db.execute(f"SELECT row_to_json(t) FROM {table_name} t")
+                result = db.execute(_sql_text(f"SELECT row_to_json(t) FROM {table_name} t"))
                 rows = [row[0] for row in result]
-                
+
                 with open(db_backup_dir / f"{table_name}.json", "w") as f:
                     json.dump(rows, f, indent=2, default=str)
             except Exception as e:
@@ -138,10 +147,14 @@ def backup_system(
         
         # 6. Upload to destination
         if destination == "local":
-            # Save locally
-            local_backup_dir = Path("/home/ubuntu/ai-dev-agency/backups")
-            local_backup_dir.mkdir(exist_ok=True)
-            
+            # Save locally — use project-root/backups, fall back to /tmp
+            local_backup_dir = _LOCAL_BACKUP_DIR
+            try:
+                local_backup_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                local_backup_dir = Path(tempfile.gettempdir()) / "ai_dev_agency_backups"
+                local_backup_dir.mkdir(parents=True, exist_ok=True)
+
             final_path = local_backup_dir / f"{backup_name}.zip"
             import shutil
             shutil.copy2(zip_path, final_path)

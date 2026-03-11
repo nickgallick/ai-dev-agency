@@ -269,9 +269,9 @@ async def list_backups():
     import os
     from pathlib import Path
     
-    settings = get_settings()
-    backup_dir = Path(settings.project_temp_dir) / "backups"
-    
+    from export.system import _LOCAL_BACKUP_DIR
+    backup_dir = _LOCAL_BACKUP_DIR
+
     if not backup_dir.exists():
         return {"backups": []}
     

@@ -8,6 +8,7 @@ env_path = Path(__file__).parent.parent / ".env"
 if env_path.exists():
     load_dotenv(env_path)
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,13 +28,47 @@ from auth import auth_router
 from models import engine, Base
 
 
+async def _run_pipeline_from_queue(project_id: str, db):
+    """Execute pipeline for a project dequeued by the queue worker."""
+    from orchestration.executor import PipelineExecutor
+    from models.project import Project
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return
+    executor = PipelineExecutor(db_session=db)
+    await executor.execute(
+        project_id=str(project.id),
+        brief=project.brief or "",
+        cost_profile=project.cost_profile.value if project.cost_profile else "balanced",
+        requirements=project.requirements or {},
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup: Create tables if they don't exist
     Base.metadata.create_all(bind=engine)
+
+    # Start the queue worker background task
+    queue_worker_task = None
+    try:
+        from task_queue.worker import QueueWorker
+        worker = QueueWorker(pipeline_executor=_run_pipeline_from_queue)
+        queue_worker_task = asyncio.create_task(worker.start())
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Queue worker failed to start: {e}")
+
     yield
-    # Shutdown: cleanup if needed
+
+    # Shutdown: stop the queue worker
+    if queue_worker_task and not queue_worker_task.done():
+        queue_worker_task.cancel()
+        try:
+            await queue_worker_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
