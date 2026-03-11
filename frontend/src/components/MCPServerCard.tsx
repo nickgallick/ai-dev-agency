@@ -20,27 +20,27 @@ interface MCPServerCardProps {
 }
 
 const statusConfig = {
-  connected: { 
-    icon: CheckCircle, 
-    color: 'var(--accent-success)', 
-    bg: 'rgba(52, 211, 153, 0.15)',
+  connected: {
+    icon: CheckCircle,
+    color: 'var(--accent-success)',
+    bg: 'var(--accent-success-bg, rgba(52,211,153,0.15))',
     label: 'Connected'
   },
-  degraded: { 
-    icon: AlertTriangle, 
-    color: 'var(--accent-warning)', 
-    bg: 'rgba(251, 191, 36, 0.15)',
+  degraded: {
+    icon: AlertTriangle,
+    color: 'var(--accent-warning)',
+    bg: 'var(--accent-warning-bg, rgba(251,191,36,0.15))',
     label: 'Degraded'
   },
-  disconnected: { 
-    icon: XCircle, 
-    color: 'var(--accent-error)', 
-    bg: 'rgba(248, 113, 113, 0.15)',
+  disconnected: {
+    icon: XCircle,
+    color: 'var(--accent-error)',
+    bg: 'var(--accent-error-bg, rgba(248,113,113,0.15))',
     label: 'Disconnected'
   },
-  disabled: { 
-    icon: Power, 
-    color: 'var(--text-tertiary)', 
+  disabled: {
+    icon: Power,
+    color: 'var(--text-tertiary)',
     bg: 'var(--glass-bg)',
     label: 'Disabled'
   },
@@ -157,12 +157,8 @@ export function MCPServerCard({
       {/* Error Message */}
       {errorMessage && (
         <div 
-          className="glass-card mb-3" 
-          style={{ 
-            background: 'rgba(248, 113, 113, 0.1)', 
-            borderColor: 'rgba(248, 113, 113, 0.3)',
-            padding: 'var(--space-3)'
-          }}
+          className="glass-card mb-3 bg-accent-error/10 border-accent-error/30"
+          style={{ padding: 'var(--space-3)' }}
         >
           <p style={{ color: 'var(--accent-error)', fontSize: 'var(--text-sm)' }}>{errorMessage}</p>
         </div>
@@ -249,12 +245,9 @@ export function MCPServerCard({
       {/* Test Result */}
       {testResult && (
         <div
-          className="glass-card mt-2"
-          style={{ 
-            background: testResult.success ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)',
-            borderColor: testResult.success ? 'rgba(52, 211, 153, 0.3)' : 'rgba(248, 113, 113, 0.3)',
-            padding: 'var(--space-2) var(--space-3)'
-          }}
+          className={`glass-card mt-2 px-3 py-2 ${
+            testResult.success ? 'bg-accent-success/10 border-accent-success/30' : 'bg-accent-error/10 border-accent-error/30'
+          }`}
         >
           <p style={{ 
             color: testResult.success ? 'var(--accent-success)' : 'var(--accent-error)',

@@ -78,7 +78,7 @@ export default function Layout() {
           <div className="glass-card" style={{ padding: 'var(--space-3)' }}>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full flex items-center justify-center" 
-                   style={{ background: 'rgba(32, 184, 205, 0.15)' }}>
+                   style={{ background: 'var(--accent-primary-subtle, rgba(32,184,205,0.15))' }}>
                 <User className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
               </div>
               <div className="flex-1 min-w-0">
@@ -93,7 +93,7 @@ export default function Layout() {
           </div>
           <button
             onClick={handleLogout}
-            className="sidebar-nav-item w-full mt-2 hover:text-red-400"
+            className="sidebar-nav-item w-full mt-2 hover:text-accent-error"
             style={{ color: 'var(--text-secondary)' }}
           >
             <LogOut />
@@ -157,7 +157,7 @@ export default function Layout() {
             <div className="pt-4 mt-4" style={{ borderTop: '1px solid var(--glass-border)' }}>
               <div className="flex items-center gap-3 p-3">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center"
-                     style={{ background: 'rgba(32, 184, 205, 0.15)' }}>
+                     style={{ background: 'var(--accent-primary-subtle, rgba(32,184,205,0.15))' }}>
                   <User className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -171,7 +171,7 @@ export default function Layout() {
               </div>
               <button
                 onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
-                className="sidebar-nav-item w-full hover:text-red-400"
+                className="sidebar-nav-item w-full hover:text-accent-error"
               >
                 <LogOut />
                 Sign Out
