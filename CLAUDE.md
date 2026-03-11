@@ -162,6 +162,7 @@ frontend/src/pages/Login.tsx             Auth — admin setup + login
 ```
 frontend/src/components/Layout.tsx               Glassmorphic sidebar, mobile header, nav
 frontend/src/components/PipelineDAG.tsx           React Flow interactive DAG with SSE live status
+frontend/src/components/PipelinePlanReview.tsx    Interactive pre-build pipeline plan review with agent toggle
 frontend/src/components/PipelineVisualization.tsx Linear pipeline progress bar
 frontend/src/components/ActivityFeed.tsx          SSE-powered live event stream with error-category icons
 frontend/src/components/ArtifactViewer.tsx        Project output display — preview, files, GitHub link
@@ -222,6 +223,7 @@ POST   /api/projects/analyze-brief      Real-time brief analysis (keyword-based,
 POST   /api/projects/score-brief        Brief completeness scoring (8 dimensions)
 POST   /api/projects/enhance-brief      Brief enhancement with template-based gap filling
 POST   /api/projects/estimate           Pre-execution cost/time estimate (per-agent breakdown)
+POST   /api/projects/generate-plan      Generate pipeline execution plan for user review
 GET    /api/projects/{id}/outputs       Get agent outputs
 POST   /api/projects/{id}/resume        Resume failed/paused project from checkpoint
 GET    /api/projects/{id}/checkpoints   Get checkpoint history
@@ -425,6 +427,22 @@ These features are complete and integrated. Do not re-implement them.
 - Build output: separate `MonacoDiffEditor-*.js` chunk (~5KB, Monaco loads from CDN on demand)
 - "Compare Outputs" button appears in ProjectView when 2+ agents have completed
 - Dependency: `@monaco-editor/react` (CDN-loaded Monaco, no local bundle)
+
+### Granular Pipeline Plan Review Before Execution (#13)
+- **Where:** `backend/api/projects.py`, `backend/orchestration/executor.py`, `frontend/src/components/PipelinePlanReview.tsx`, `frontend/src/pages/NewProject.tsx`, `frontend/src/lib/api.ts`
+- Full interactive DAG-based plan review before any tokens are spent
+- After filling project details, user clicks "Review Plan & Build" to see the full pipeline plan
+- Interactive React Flow DAG showing all 20 agents with dependencies, parallel groups
+- Per-agent estimated cost, time, model, and description
+- Agents color-coded: active (blue), required (red), checkpoint (purple), skipped (gray)
+- Sidebar agent list with toggle checkboxes to skip/enable optional agents
+- Required agents cannot be skipped; project-type skips pre-applied (e.g., SEO skipped for CLI tools)
+- Checkpoint agents highlighted based on selected autonomy tier
+- Summary bar shows active agent count, total cost, estimated time, token count, checkpoint count
+- User approves plan to start build; skipped agent list stored in project requirements
+- Executor honors user-customized skip list from `pipeline_plan.skipped_agents` in requirements
+- Falls back to legacy estimate modal if plan generation fails
+- Endpoint: `POST /api/projects/generate-plan`
 
 ### Conversational Clarification System (#10)
 - **Where:** `backend/api/routes/chat.py`, `backend/models/conversation.py`, `backend/agents/base.py`, `backend/orchestration/executor.py`, `frontend/src/pages/NewProject.tsx`, `frontend/src/pages/ProjectView.tsx`, `frontend/src/lib/api.ts`

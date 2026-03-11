@@ -58,6 +58,8 @@ class ProjectCreate(BaseModel):
     integration_config: Optional[dict] = Field(None, description="Integration configuration")
     # Phase 11A: Structured requirements
     requirements: Optional[dict] = Field(None, description="Full structured requirements")
+    # Phase 13: Approved pipeline plan (user-reviewed agent skip list)
+    pipeline_plan: Optional[dict] = Field(None, description="User-approved pipeline execution plan")
 
 
 class ProjectResponse(BaseModel):
@@ -179,6 +181,166 @@ async def estimate_project_cost(request: EstimateRequest):
         raise HTTPException(status_code=500, detail=f"Estimation failed: {str(e)}")
 
 
+# ============ Pipeline Plan Generation (#13) ============
+
+
+class GeneratePlanRequest(BaseModel):
+    """Request for generating a pipeline execution plan."""
+    brief: str = Field(..., min_length=1)
+    project_type: str = Field("web_simple")
+    cost_profile: str = Field("balanced")
+    num_features: int = Field(0, ge=0)
+    num_pages: int = Field(0, ge=0)
+    build_mode: str = Field("autonomous")
+
+
+@router.post("/generate-plan")
+async def generate_pipeline_plan(request: GeneratePlanRequest):
+    """Generate a granular pipeline execution plan for user review.
+
+    Returns the full DAG of agents with per-agent cost/time estimates,
+    skip status (based on project type), checkpoint status (based on
+    autonomy tier), and dependency information. The user reviews and
+    optionally customizes this plan before starting the build.
+    """
+    from utils.estimation import estimate_pipeline_cost
+    from config.autonomy import resolve_tier, ALL_PIPELINE_AGENTS
+    from orchestration.pipeline import PROJECT_TYPE_CONFIGS
+
+    # Get cost/time estimates
+    try:
+        estimate = estimate_pipeline_cost(
+            brief=request.brief,
+            project_type=request.project_type,
+            cost_profile=request.cost_profile,
+            num_features=request.num_features,
+            num_pages=request.num_pages,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Estimation failed: {str(e)}")
+
+    # Get project type skip config
+    type_config = PROJECT_TYPE_CONFIGS.get(
+        request.project_type, PROJECT_TYPE_CONFIGS.get("web_simple", {})
+    )
+    skip_agents = set(type_config.get("skip_agents", []))
+    required_agents = set(type_config.get("required_agents", []))
+
+    # Get autonomy tier checkpoint info
+    tier = resolve_tier(request.build_mode)
+    checkpoint_agents = set(tier.checkpoint_agents)
+
+    # Agent descriptions for the plan UI
+    agent_descriptions = {
+        "intake": "Classifies the project, extracts key requirements",
+        "research": "Researches similar projects, best practices, and technology options",
+        "architect": "Designs system architecture, data models, and API structure",
+        "design_system": "Creates design tokens, color palette, typography, spacing",
+        "asset_generation": "Generates images, icons, and visual assets",
+        "content_generation": "Writes copy, placeholder content, and microcopy",
+        "pm_checkpoint_1": "Validates coherence between architecture and design",
+        "code_generation": "Generates the application source code",
+        "integration_wiring": "Wires third-party integrations and APIs",
+        "pm_checkpoint_2": "Validates completeness of code and integrations",
+        "code_review": "Reviews code for quality, patterns, and best practices",
+        "security": "Scans for security vulnerabilities and OWASP issues",
+        "seo": "Optimizes for search engines and web performance",
+        "accessibility": "Audits for WCAG compliance and accessibility",
+        "qa": "Runs tests, identifies bugs, and validates functionality",
+        "deployment": "Deploys the application to hosting infrastructure",
+        "post_deploy_verification": "Verifies the deployed app is working correctly",
+        "analytics_monitoring": "Sets up analytics, monitoring, and alerting",
+        "coding_standards": "Enforces coding standards and documentation",
+        "delivery": "Creates GitHub repo and delivers final artifacts",
+    }
+
+    # Agent dependencies (mirrors Pipeline._setup_default_pipeline)
+    agent_dependencies = {
+        "intake": [],
+        "research": ["intake"],
+        "architect": ["research"],
+        "design_system": ["architect"],
+        "asset_generation": ["architect"],
+        "content_generation": ["architect"],
+        "pm_checkpoint_1": ["design_system", "asset_generation", "content_generation"],
+        "code_generation": ["pm_checkpoint_1"],
+        "integration_wiring": ["code_generation"],
+        "pm_checkpoint_2": ["integration_wiring"],
+        "code_review": ["pm_checkpoint_2"],
+        "security": ["code_review"],
+        "seo": ["code_review"],
+        "accessibility": ["code_review"],
+        "qa": ["security", "seo", "accessibility"],
+        "deployment": ["qa"],
+        "post_deploy_verification": ["deployment"],
+        "analytics_monitoring": ["post_deploy_verification"],
+        "coding_standards": ["post_deploy_verification"],
+        "delivery": ["analytics_monitoring", "coding_standards"],
+    }
+
+    # Parallel groups
+    parallel_groups = {
+        "asset_generation": "content_assets",
+        "content_generation": "content_assets",
+        "design_system": None,
+        "security": "quality",
+        "seo": "quality",
+        "accessibility": "quality",
+        "analytics_monitoring": "post_deploy",
+        "coding_standards": "post_deploy",
+    }
+
+    # Build the plan: one entry per agent with all metadata
+    estimate_by_agent = {a.agent_id: a.to_dict() for a in estimate.agents}
+    plan_agents = []
+
+    for agent_id in ALL_PIPELINE_AGENTS:
+        is_skipped = agent_id in skip_agents
+        is_required = agent_id in required_agents
+        is_checkpoint = agent_id in checkpoint_agents
+        est = estimate_by_agent.get(agent_id, {})
+
+        plan_agents.append({
+            "agent_id": agent_id,
+            "description": agent_descriptions.get(agent_id, ""),
+            "dependencies": agent_dependencies.get(agent_id, []),
+            "parallel_group": parallel_groups.get(agent_id),
+            "skipped": is_skipped,
+            "required": is_required,
+            "is_checkpoint": is_checkpoint,
+            "model": est.get("model", ""),
+            "estimated_cost": est.get("cost", 0),
+            "estimated_time_seconds": est.get("time_seconds", 0),
+            "estimated_input_tokens": est.get("input_tokens", 0),
+            "estimated_output_tokens": est.get("output_tokens", 0),
+        })
+
+    # Calculate active (non-skipped) summary
+    active_agents = [a for a in plan_agents if not a["skipped"]]
+    active_cost = sum(a["estimated_cost"] for a in active_agents)
+
+    return {
+        "project_type": request.project_type,
+        "cost_profile": request.cost_profile,
+        "autonomy_tier": tier.id,
+        "agents": plan_agents,
+        "summary": {
+            "total_agents": len(plan_agents),
+            "active_agents": len(active_agents),
+            "skipped_agents": len(plan_agents) - len(active_agents),
+            "checkpoint_count": len([a for a in plan_agents if a["is_checkpoint"] and not a["skipped"]]),
+            "total_cost": round(estimate.total_cost, 2),
+            "active_cost": round(active_cost, 2),
+            "min_cost": round(estimate.min_cost, 2),
+            "max_cost": round(estimate.max_cost, 2),
+            "total_time_display": estimate.to_dict()["total_time_display"],
+            "total_time_seconds": round(estimate.total_time_seconds),
+            "total_tokens": estimate.total_input_tokens + estimate.total_output_tokens,
+            "confidence": round(estimate.confidence, 2),
+        },
+    }
+
+
 # ============ Project CRUD Endpoints ============
 
 @router.post("/", response_model=ProjectResponse, status_code=201)
@@ -220,7 +382,11 @@ async def create_project(
         figma_url=project.figma_url,
         integration_config=project.integration_config or {},
         # Phase 11A: Store structured requirements
-        requirements=project.requirements or {},
+        requirements={
+            **(project.requirements or {}),
+            # Phase 13: Store user-approved pipeline plan (skip customizations)
+            **({"pipeline_plan": project.pipeline_plan} if project.pipeline_plan else {}),
+        },
         project_metadata={
             "reference_urls": project.reference_urls or [],
             "tech_stack_override": project.tech_stack_override,

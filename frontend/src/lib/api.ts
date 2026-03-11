@@ -395,6 +395,45 @@ export interface AutonomyTier {
   allow_output_editing: boolean
 }
 
+// Pipeline Plan types (#13)
+export interface PlanAgent {
+  agent_id: string
+  description: string
+  dependencies: string[]
+  parallel_group: string | null
+  skipped: boolean
+  required: boolean
+  is_checkpoint: boolean
+  model: string
+  estimated_cost: number
+  estimated_time_seconds: number
+  estimated_input_tokens: number
+  estimated_output_tokens: number
+}
+
+export interface PlanSummary {
+  total_agents: number
+  active_agents: number
+  skipped_agents: number
+  checkpoint_count: number
+  total_cost: number
+  active_cost: number
+  min_cost: number
+  max_cost: number
+  total_time_display: string
+  total_time_seconds: number
+  total_tokens: number
+  confidence: number
+}
+
+export interface PipelinePlan {
+  project_type: string
+  cost_profile: string
+  autonomy_tier: string
+  agents: PlanAgent[]
+  summary: PlanSummary
+}
+
 export const api = {
   // Autonomy tiers (#26)
   getAutonomyTiers: async (): Promise<AutonomyTier[]> => {
@@ -412,6 +451,7 @@ export const api = {
     figma_url?: string
     integration_config?: Record<string, any>
     requirements?: Partial<ProjectRequirements>
+    pipeline_plan?: { skipped_agents: string[] }
   }): Promise<Project> => {
     const response = await apiClient.post('/projects/', data)
     return response.data
@@ -448,6 +488,19 @@ export const api = {
     num_pages?: number
   }): Promise<PipelineEstimate> => {
     const response = await apiClient.post('/projects/estimate', data)
+    return response.data
+  },
+
+  // Pipeline plan generation (#13)
+  generatePlan: async (data: {
+    brief: string
+    project_type: string
+    cost_profile: string
+    num_features?: number
+    num_pages?: number
+    build_mode?: string
+  }): Promise<PipelinePlan> => {
+    const response = await apiClient.post('/projects/generate-plan', data)
     return response.data
   },
 

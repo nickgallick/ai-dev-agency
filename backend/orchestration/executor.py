@@ -118,6 +118,15 @@ class PipelineExecutor:
             "requirements": requirements or {},
         }
 
+        # ── Apply user-approved pipeline plan (skip customizations) ──
+        pipeline_plan = (requirements or {}).get("pipeline_plan")
+        if pipeline_plan and isinstance(pipeline_plan, dict):
+            user_skipped = pipeline_plan.get("skipped_agents", [])
+            for agent_id in user_skipped:
+                if agent_id in pipeline.nodes:
+                    pipeline.nodes[agent_id].status = NodeStatus.SKIPPED
+                    logger.info(f"User skipped agent '{agent_id}' via pipeline plan")
+
         # ── Check for existing checkpoint to resume from ─────────────
         checkpoint = None
         if resume and self.db:

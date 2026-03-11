@@ -6,7 +6,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { api, BriefAnalysis, BriefScoreResult, Preset, ProjectTemplate, PipelineEstimate, ChatMessage } from '@/lib/api'
+import { api, BriefAnalysis, BriefScoreResult, Preset, ProjectTemplate, PipelineEstimate, ChatMessage, PipelinePlan } from '@/lib/api'
+import PipelinePlanReview from '@/components/PipelinePlanReview'
 import VoiceInput from '@/components/VoiceInput'
 import TemplateBrowser from '@/components/TemplateBrowser'
 import {
@@ -188,6 +189,11 @@ export default function NewProject() {
   const [estimate, setEstimate] = useState<PipelineEstimate | null>(null)
   const [showEstimate, setShowEstimate] = useState(false)
   const [isEstimating, setIsEstimating] = useState(false)
+
+  // Pipeline plan review (#13)
+  const [pipelinePlan, setPipelinePlan] = useState<PipelinePlan | null>(null)
+  const [showPlanReview, setShowPlanReview] = useState(false)
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false)
 
   // Pre-build chat mode
   const [chatMode, setChatMode] = useState(true)
@@ -418,6 +424,44 @@ export default function NewProject() {
   const handleStartBuildFromChat = async () => {
     if (!conversationId) return
     setChatLoading(true)
+
+    // Build a brief from user messages for plan generation
+    const userMessages = chatMessages.filter(m => m.role === 'user').map(m => m.message)
+    const chatBrief = userMessages.join('\n\n')
+
+    try {
+      // Generate plan for review
+      const plan = await api.generatePlan({
+        brief: chatBrief || 'Project from chat',
+        project_type: 'web_simple',
+        cost_profile: 'balanced',
+        build_mode: form.buildMode,
+      })
+      setPipelinePlan(plan)
+      setShowPlanReview(true)
+    } catch {
+      // Fall back to direct build if plan fails
+      try {
+        const result = await api.startBuildFromChat({
+          conversation_id: conversationId,
+          cost_profile: 'balanced',
+        })
+        localStorage.removeItem(STORAGE_KEY)
+        navigate(`/project/${result.project_id}`)
+        return
+      } catch (e: any) {
+        setSubmitError(e?.response?.data?.detail || e?.message || 'Failed to start build')
+      }
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  // Handle plan approval from chat mode
+  const handleApprovePlanFromChat = async (skippedAgents: string[]) => {
+    if (!conversationId) return
+    setShowPlanReview(false)
+    setChatLoading(true)
     try {
       const result = await api.startBuildFromChat({
         conversation_id: conversationId,
@@ -511,35 +555,65 @@ export default function NewProject() {
     return requirements
   }
 
-  // Handle form submit — first fetch estimate, then show approval
+  // Handle form submit — generate pipeline plan for review
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.brief.trim() || !form.projectType) return
     setSubmitError(null)
 
-    // Fetch estimate before starting
-    setIsEstimating(true)
-    api.estimateProject({
+    // Generate pipeline plan for review before starting
+    setIsGeneratingPlan(true)
+    api.generatePlan({
       brief: form.brief,
       project_type: form.projectType,
       cost_profile: form.costProfile,
       num_features: form.selectedFeatures.length,
       num_pages: form.pages.length || form.numPages || 0,
+      build_mode: form.buildMode,
     })
-      .then((est) => {
-        setEstimate(est)
-        setShowEstimate(true)
+      .then((plan) => {
+        setPipelinePlan(plan)
+        setShowPlanReview(true)
       })
       .catch((err) => {
-        // If estimation fails, allow direct submission
-        setSubmitError(`Estimation failed: ${err.message}. You can still proceed.`)
-        setShowEstimate(true)
-        setEstimate(null)
+        // If plan generation fails, fall back to estimate modal
+        setSubmitError(`Plan generation failed: ${err.message}. You can still proceed.`)
+        api.estimateProject({
+          brief: form.brief,
+          project_type: form.projectType!,
+          cost_profile: form.costProfile,
+          num_features: form.selectedFeatures.length,
+          num_pages: form.pages.length || form.numPages || 0,
+        })
+          .then((est) => {
+            setEstimate(est)
+            setShowEstimate(true)
+          })
+          .catch(() => {
+            setShowEstimate(true)
+            setEstimate(null)
+          })
       })
-      .finally(() => setIsEstimating(false))
+      .finally(() => setIsGeneratingPlan(false))
   }
 
-  // Approve estimate and start the build
+  // Approve plan and start the build (from PipelinePlanReview)
+  const handleApprovePlan = (skippedAgents: string[]) => {
+    setShowPlanReview(false)
+    const requirements = buildRequirements()
+
+    createProject.mutate({
+      brief: form.brief,
+      name: form.name || undefined,
+      cost_profile: form.costProfile,
+      project_type: form.projectType!,
+      figma_url: form.figmaUrl || undefined,
+      requirements,
+      pipeline_plan: skippedAgents.length > 0 ? { skipped_agents: skippedAgents } : undefined,
+    })
+  }
+
+  // Approve estimate and start the build (fallback when plan fails)
   const handleApproveAndBuild = () => {
     setShowEstimate(false)
     const requirements = buildRequirements()
@@ -1809,7 +1883,7 @@ export default function NewProject() {
           <button
             type="submit"
             className="btn-iridescent w-full"
-            disabled={!form.brief.trim() || !form.projectType || createProject.isPending || isEstimating}
+            disabled={!form.brief.trim() || !form.projectType || createProject.isPending || isGeneratingPlan}
           >
             {createProject.isPending ? (
               <span className="flex items-center justify-center gap-2">
@@ -1819,18 +1893,18 @@ export default function NewProject() {
                 </svg>
                 Starting Build...
               </span>
-            ) : isEstimating ? (
+            ) : isGeneratingPlan ? (
               <span className="flex items-center justify-center gap-2">
                 <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Estimating Cost...
+                Generating Plan...
               </span>
             ) : (
               <span className="flex items-center justify-center gap-2">
-                <DollarSign className="w-5 h-5" />
-                Estimate &amp; Build
+                <Layers className="w-5 h-5" />
+                Review Plan &amp; Build
                 <ArrowRight className="w-5 h-5" />
               </span>
             )}
@@ -1922,7 +1996,7 @@ export default function NewProject() {
             <button
               type="submit"
               className="btn-iridescent w-full"
-              disabled={!form.brief.trim() || !form.projectType || createProject.isPending}
+              disabled={!form.brief.trim() || !form.projectType || createProject.isPending || isGeneratingPlan}
             >
               {createProject.isPending ? (
                 <span className="flex items-center justify-center gap-2">
@@ -1932,10 +2006,18 @@ export default function NewProject() {
                   </svg>
                   Starting Build...
                 </span>
+              ) : isGeneratingPlan ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Generating Plan...
+                </span>
               ) : (
                 <span className="flex items-center justify-center gap-2">
-                  <Rocket className="w-5 h-5" />
-                  Start Building
+                  <Layers className="w-5 h-5" />
+                  Review Plan &amp; Build
                   <ArrowRight className="w-5 h-5" />
                 </span>
               )}
@@ -2061,6 +2143,16 @@ export default function NewProject() {
       )}
 
       </>}
+
+      {/* Pipeline Plan Review (#13) */}
+      {showPlanReview && pipelinePlan && (
+        <PipelinePlanReview
+          plan={pipelinePlan}
+          onApprove={chatMode && conversationId ? handleApprovePlanFromChat : handleApprovePlan}
+          onCancel={() => setShowPlanReview(false)}
+          isSubmitting={createProject.isPending || chatLoading}
+        />
+      )}
 
       {/* Phase 11B: Template Browser Modal */}
       <TemplateBrowser
