@@ -266,6 +266,8 @@ Generate these files:
     async def generate(self, context: Dict[str, Any]) -> Dict[str, Any]:
         template = self.templates.get(self.project_type, "")
         prompt = self._build_prompt(context, template)
+        logger.info(f"[CODE_GEN_LLM] Calling LLM with prompt length={len(prompt)}, "
+                     f"project_type={self.project_type}")
 
         result = await self.llm_client(
             prompt=prompt,
@@ -273,8 +275,13 @@ Generate these files:
             temperature=0.3,
         )
 
+        logger.info(f"[CODE_GEN_LLM] LLM response: content_len={len(result.get('content', ''))}, "
+                     f"tokens={result.get('total_tokens', 0)}, cost=${result.get('cost', 0):.4f}, "
+                     f"error={result.get('error', 'none')}")
+
         # Check for LLM errors (missing API key, auth failure, etc.)
         if result.get("error"):
+            logger.error(f"[CODE_GEN_LLM] LLM call failed: {result.get('error_message') or result.get('error')}")
             return {
                 "success": False,
                 "files": [],
@@ -284,6 +291,7 @@ Generate these files:
 
         content = result.get("content", "")
         files = self._parse_code_blocks(content)
+        logger.info(f"[CODE_GEN_LLM] Parsed {len(files)} files from LLM response")
 
         if not files:
             return {
@@ -613,11 +621,16 @@ class CodeGenerationAgent(BaseAgent):
         architecture = input_data.get("architecture", {})
         design_system = input_data.get("design_system", {})
         brief = input_data.get("brief", "")
-        
+
+        logger.info(f"[CODE_GEN] Starting code generation — project_type={project_type}, "
+                     f"brief_len={len(brief)}, has_architecture={bool(architecture)}, "
+                     f"has_design_system={bool(design_system)}")
+
         start_time = time.time()
-        
+
         # Select strategy
         strategy_type = self.STRATEGY_MAP.get(project_type, "llm")
+        logger.info(f"[CODE_GEN] Selected strategy: {strategy_type} for project_type={project_type}")
         
         context = {
             "brief": brief,
@@ -645,9 +658,18 @@ class CodeGenerationAgent(BaseAgent):
         
         # Use LLM strategy if v0 wasn't selected or failed
         if result is None:
+            logger.info(f"[CODE_GEN] Using LLM strategy (project_type={project_type})")
             strategy = LLMCodeStrategy(self.call_llm, project_type)
             result = await strategy.generate(context)
-        
+
+        files_count = len(result.get("files", []))
+        logger.info(f"[CODE_GEN] Strategy returned: success={result.get('success')}, "
+                     f"files={files_count}, error={result.get('error', 'none')}")
+        if not result.get("success"):
+            logger.error(f"[CODE_GEN] Code generation FAILED: {result.get('error', 'unknown')}")
+            if result.get("raw_content_preview"):
+                logger.error(f"[CODE_GEN] Raw content preview: {result['raw_content_preview']}")
+
         result["project_structure"] = strategy.get_project_structure() if hasattr(strategy, 'get_project_structure') else {}
         result["strategy_used"] = strategy_type
         result["project_type"] = project_type

@@ -637,6 +637,84 @@ async def get_project_audit_log(
     }
 
 
+@router.get("/{project_id}/diagnose")
+async def diagnose_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+):
+    """Diagnose why a project build may have failed or produced no artifacts."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    outputs = project.agent_outputs or {}
+    diagnosis = {
+        "project_id": str(project.id),
+        "status": project.status,
+        "project_type": (project.requirements or {}).get("project_type", "unknown"),
+        "cost_profile": project.cost_profile,
+        "agents_ran": list(outputs.keys()),
+        "agents_missing": [],
+        "code_generation": None,
+        "issues": [],
+    }
+
+    # Check which agents have output
+    expected_agents = [
+        "intake", "research", "architect", "design_system",
+        "asset_generation", "content_generation", "pm_checkpoint_1",
+        "code_generation", "integration_wiring",
+    ]
+    for a in expected_agents:
+        if a not in outputs:
+            diagnosis["agents_missing"].append(a)
+
+    # Check code_generation specifically
+    cg = outputs.get("code_generation")
+    if cg:
+        files = cg.get("files", cg.get("generated_files", []))
+        diagnosis["code_generation"] = {
+            "success": cg.get("success"),
+            "files_count": len(files) if isinstance(files, list) else 0,
+            "error": cg.get("error"),
+            "strategy_used": cg.get("strategy_used"),
+            "has_content": any(
+                bool(f.get("content")) for f in files
+            ) if isinstance(files, list) else False,
+        }
+    else:
+        diagnosis["issues"].append(
+            "code_generation agent produced no output — likely skipped due to upstream failure"
+        )
+
+    # Check for upstream failures
+    for agent_name in expected_agents:
+        agent_out = outputs.get(agent_name, {})
+        if isinstance(agent_out, dict):
+            if agent_out.get("error"):
+                diagnosis["issues"].append(
+                    f"{agent_name} failed: {agent_out.get('error', '')[:200]}"
+                )
+            elif agent_out.get("skipped"):
+                diagnosis["issues"].append(f"{agent_name} was skipped")
+
+    # Check audit log for failures
+    try:
+        from models.audit_log import AuditLog
+        failures = db.query(AuditLog).filter(
+            AuditLog.project_id == project_id,
+            AuditLog.event_type.in_(["agent_failed", "pipeline_failed"]),
+        ).all()
+        for f in failures:
+            diagnosis["issues"].append(
+                f"[audit] {f.event_type}: {f.agent_name or 'pipeline'} — {(f.message or '')[:200]}"
+            )
+    except Exception:
+        pass
+
+    return diagnosis
+
+
 async def run_pipeline(project_id: str, brief: str, cost_profile: str, requirements: dict = None):
     """Run the pipeline directly (used by queue worker).
 

@@ -455,6 +455,21 @@ class PipelineExecutor:
                             project_id, pipeline, node, agent_progress, results
                         )
 
+        # Log final pipeline state summary
+        logger.info("=" * 60)
+        logger.info("PIPELINE EXECUTION SUMMARY")
+        logger.info("=" * 60)
+        for node_id, node in pipeline.nodes.items():
+            status_str = node.status.value if hasattr(node.status, 'value') else str(node.status)
+            result = results.get(node_id)
+            success_str = ""
+            if result and hasattr(result, 'success'):
+                success_str = f" success={result.success}"
+                if not result.success and hasattr(result, 'errors') and result.errors:
+                    success_str += f" errors={result.errors[:1]}"
+            logger.info(f"  {node_id:40s} → {status_str:12s}{success_str}")
+        logger.info("=" * 60)
+
         return results
 
     async def _execute_node_with_activity(
