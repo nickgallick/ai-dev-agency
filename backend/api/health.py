@@ -81,3 +81,18 @@ async def reset_circuit_breaker(provider: str = None):
         "success": True,
         "reset": provider or "all",
     }
+
+
+@router.get("/health/model-routing")
+async def model_routing_summary():
+    """Get the full model routing table for all agents and cost profiles.
+
+    Shows which model each agent uses under budget/balanced/premium profiles.
+    """
+    from config.model_routing import get_routing_summary, AGENT_COMPLEXITY
+
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "routing": get_routing_summary(),
+        "complexity": AGENT_COMPLEXITY,
+    }

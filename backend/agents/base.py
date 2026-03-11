@@ -108,6 +108,30 @@ class BaseAgent(ABC):
         """Execute the agent's main task."""
         pass
 
+    def get_model(self, context: Optional[Dict[str, Any]] = None) -> str:
+        """Get the optimal model for this agent via centralized routing.
+
+        Uses the cost_profile from context (set by PipelineConfig) and
+        the agent's pipeline ID to look up the best model from the
+        routing table in config/model_routing.py.
+
+        Falls back to the agent's own _select_model() if it exists,
+        or the default model if routing is unavailable.
+        """
+        from config.model_routing import get_model_for_agent
+
+        # Derive agent_id from class name: "IntakeAgent" → "intake"
+        agent_id = self.__class__.__name__.replace("Agent", "").lower()
+        # Allow context to override with explicit agent_id
+        if context and "agent_id" in context:
+            agent_id = context["agent_id"]
+
+        cost_profile = "balanced"
+        if context:
+            cost_profile = context.get("cost_profile", "balanced")
+
+        return get_model_for_agent(agent_id, cost_profile=cost_profile)
+
     async def run(self, context: Dict[str, Any]) -> AgentResult:
         """Run the agent with status tracking and timing."""
         import time

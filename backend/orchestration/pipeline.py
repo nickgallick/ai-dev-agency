@@ -553,6 +553,12 @@ class Pipeline:
 
             # Create and run agent with Layer 2 retry for transient failures
             from utils.retry import retry_agent_execution
+            from orchestration.refinement import (
+                score_agent_output,
+                should_refine,
+                build_refinement_feedback,
+                RefinementConfig,
+            )
 
             _settings = self.settings
             _context = self.context
@@ -571,6 +577,41 @@ class Pipeline:
                 max_delay=30.0,
                 agent_name=node.id,
             )
+
+            # Iterative refinement: re-run agent if quality is below threshold
+            refinement_config = RefinementConfig()
+            iteration = 0
+            while result.success:
+                score = score_agent_output(node.id, result)
+                if not should_refine(node.id, score, iteration, refinement_config):
+                    # Store quality score in result data for downstream visibility
+                    if isinstance(result.data, dict):
+                        result.data["_quality_score"] = score.overall
+                        result.data["_quality_issues"] = score.issues
+                        result.data["_refinement_iterations"] = iteration
+                    break
+
+                # Inject feedback and re-run
+                iteration += 1
+                feedback = build_refinement_feedback(node.id, result, score)
+                _context["refinement_feedback"] = feedback
+                _context["refinement_iteration"] = iteration
+                self.logger.info(
+                    f"Refinement loop: re-running {node.id} "
+                    f"(iteration {iteration}, score={score.overall:.2f})"
+                )
+
+                result = await retry_agent_execution(
+                    _run_agent,
+                    max_retries=1,
+                    base_delay=3.0,
+                    max_delay=30.0,
+                    agent_name=f"{node.id}_refinement_{iteration}",
+                )
+
+            # Clean up refinement context keys
+            _context.pop("refinement_feedback", None)
+            _context.pop("refinement_iteration", None)
 
             node.result = result
             node.status = (
