@@ -208,10 +208,10 @@ export default function ProjectView() {
 
           {/* Current Checkpoint Info */}
           {checkpointStatus?.current_checkpoint && (
-            <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
+            <div className="p-3 bg-accent-warning/10 rounded-lg border border-accent-warning/20">
               <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm font-medium text-yellow-400">Paused at Checkpoint</span>
+                <AlertTriangle className="w-4 h-4 text-accent-warning" />
+                <span className="text-sm font-medium text-accent-warning">Paused at Checkpoint</span>
               </div>
               <p className="text-sm text-text-primary">
                 Agent: <strong>{checkpointStatus.paused_at_agent}</strong>
@@ -265,7 +265,7 @@ export default function ProjectView() {
               href={d.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 rounded-lg text-green-400 hover:bg-green-500/30 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-accent-success/20 rounded-lg text-accent-success hover:bg-accent-success/30 transition-colors"
             >
               <Rocket className="w-4 h-4" />
               {d.platform} Deployment
@@ -302,9 +302,9 @@ export default function ProjectView() {
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {pmCheckpoint1.issues.slice(0, 10).map((issue: any, idx: number) => (
                   <div key={idx} className={`p-2 rounded border-l-2 ${
-                    issue.severity === 'critical' ? 'border-red-400 bg-red-500/10' :
-                    issue.severity === 'warning' ? 'border-yellow-400 bg-yellow-500/10' :
-                    'border-blue-400 bg-blue-500/10'
+                    issue.severity === 'critical' ? 'border-accent-error bg-accent-error/10' :
+                    issue.severity === 'warning' ? 'border-accent-warning bg-accent-warning/10' :
+                    'border-accent-secondary bg-accent-secondary/10'
                   }`}>
                     <div className="flex items-center gap-2">
                       <Badge variant={issue.severity === 'critical' ? 'error' : issue.severity === 'warning' ? 'warning' : 'info'}>
@@ -368,16 +368,16 @@ export default function ProjectView() {
               <div className="text-xl font-bold text-text-primary">{codeReviewReport.total_issues || 0}</div>
               <div className="text-xs text-text-secondary">Total Issues</div>
             </div>
-            <div className="bg-red-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-red-400">{codeReviewReport.issues_by_severity?.critical || 0}</div>
+            <div className="bg-accent-error/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-accent-error">{codeReviewReport.issues_by_severity?.critical || 0}</div>
               <div className="text-xs text-text-secondary">Critical</div>
             </div>
-            <div className="bg-yellow-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-yellow-400">{codeReviewReport.issues_by_severity?.high || 0}</div>
+            <div className="bg-accent-warning/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-accent-warning">{codeReviewReport.issues_by_severity?.high || 0}</div>
               <div className="text-xs text-text-secondary">High</div>
             </div>
-            <div className="bg-green-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-green-400">{codeReviewReport.auto_fixes_applied?.length || 0}</div>
+            <div className="bg-accent-success/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-accent-success">{codeReviewReport.auto_fixes_applied?.length || 0}</div>
               <div className="text-xs text-text-secondary">Auto-Fixed</div>
             </div>
           </div>
@@ -390,17 +390,17 @@ export default function ProjectView() {
               <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
                 {codeReviewReport.issues.slice(0, 15).map((issue: any, idx: number) => (
                   <div key={idx} className={`p-2 rounded border-l-2 ${
-                    issue.severity === 'critical' ? 'border-red-400 bg-red-500/10' :
-                    issue.severity === 'high' ? 'border-orange-400 bg-orange-500/10' :
-                    issue.severity === 'medium' ? 'border-yellow-400 bg-yellow-500/10' :
-                    'border-blue-400 bg-blue-500/10'
+                    issue.severity === 'critical' ? 'border-accent-error bg-accent-error/10' :
+                    issue.severity === 'high' ? 'border-accent-error/60 bg-accent-error/10' :
+                    issue.severity === 'medium' ? 'border-accent-warning bg-accent-warning/10' :
+                    'border-accent-secondary bg-accent-secondary/10'
                   }`}>
                     <div className="flex items-center gap-2">
                       <Badge variant={issue.severity === 'critical' || issue.severity === 'high' ? 'error' : 'warning'} className="text-xs">
                         {issue.category}
                       </Badge>
                       <span className="text-sm text-text-primary">{issue.rule}</span>
-                      {issue.auto_fixable && <span className="text-xs text-green-400">🔧 Auto-fixable</span>}
+                      {issue.auto_fixable && <span className="text-xs text-accent-success">🔧 Auto-fixable</span>}
                     </div>
                     <p className="text-xs text-text-secondary mt-1">{issue.message}</p>
                     <p className="text-xs text-text-tertiary">{issue.file}:{issue.line}</p>
@@ -436,16 +436,16 @@ export default function ProjectView() {
               <div className="text-2xl font-bold text-text-primary">{qaReport.total_tests || 0}</div>
               <div className="text-sm text-text-secondary">Total Tests</div>
             </div>
-            <div className="bg-green-500/10 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-green-400">{qaReport.passed || 0}</div>
+            <div className="bg-accent-success/10 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-accent-success">{qaReport.passed || 0}</div>
               <div className="text-sm text-text-secondary">Passed</div>
             </div>
-            <div className="bg-red-500/10 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-red-400">{qaReport.failed || 0}</div>
+            <div className="bg-accent-error/10 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-accent-error">{qaReport.failed || 0}</div>
               <div className="text-sm text-text-secondary">Failed</div>
             </div>
-            <div className="bg-yellow-500/10 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-yellow-400">{qaReport.skipped || 0}</div>
+            <div className="bg-accent-warning/10 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-accent-warning">{qaReport.skipped || 0}</div>
               <div className="text-sm text-text-secondary">Skipped</div>
             </div>
           </div>
@@ -460,11 +460,11 @@ export default function ProjectView() {
                 {qaReport.test_results.slice(0, 20).map((test: any, idx: number) => (
                   <div key={idx} className="flex items-center gap-3 p-2 bg-background-tertiary rounded">
                     {test.status === 'passed' ? (
-                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-accent-success flex-shrink-0" />
                     ) : test.status === 'failed' ? (
-                      <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <XCircle className="w-4 h-4 text-accent-error flex-shrink-0" />
                     ) : (
-                      <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                      <AlertTriangle className="w-4 h-4 text-accent-warning flex-shrink-0" />
                     )}
                     <span className="text-sm text-text-primary truncate">{test.name}</span>
                     {test.duration > 0 && (
@@ -485,12 +485,12 @@ export default function ProjectView() {
           {qaReport.quality_issues?.length > 0 && (
             <details className="group mt-4">
               <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                <AlertTriangle className="w-4 h-4 text-accent-warning" />
                 <span>Code Quality Issues ({qaReport.quality_issues.length})</span>
               </summary>
               <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
                 {qaReport.quality_issues.slice(0, 10).map((issue: any, idx: number) => (
-                  <div key={idx} className="p-2 bg-background-tertiary rounded border-l-2 border-yellow-400">
+                  <div key={idx} className="p-2 bg-background-tertiary rounded border-l-2 border-accent-warning">
                     <div className="flex items-center gap-2">
                       <Badge variant={issue.severity === 'error' ? 'error' : 'warning'} className="text-xs">
                         {issue.tool}
@@ -511,7 +511,7 @@ export default function ProjectView() {
               <p className="text-sm text-text-secondary">
                 Fix Iterations: <span className="text-text-primary font-medium">{qaReport.fix_iterations} / 3</span>
                 {qaReport.all_tests_passing && (
-                  <span className="ml-2 text-green-400">✓ All tests passing</span>
+                  <span className="ml-2 text-accent-success">✓ All tests passing</span>
                 )}
               </p>
             </div>
@@ -548,7 +548,7 @@ export default function ProjectView() {
                   )}
                 </div>
                 {deployment.error_message && (
-                  <p className="text-sm text-red-400 mt-2">{deployment.error_message}</p>
+                  <p className="text-sm text-accent-error mt-2">{deployment.error_message}</p>
                 )}
                 {deployment.logs?.length > 0 && (
                   <details className="mt-2">
@@ -566,8 +566,8 @@ export default function ProjectView() {
 
           {/* GitHub Actions */}
           {deploymentReport.github_actions_generated && (
-            <div className="mt-4 p-3 bg-green-500/10 rounded-lg">
-              <p className="text-sm text-green-400 flex items-center gap-2">
+            <div className="mt-4 p-3 bg-accent-success/10 rounded-lg">
+              <p className="text-sm text-accent-success flex items-center gap-2">
                 <CheckCircle className="w-4 h-4" />
                 GitHub Actions workflows generated
               </p>
@@ -611,15 +611,15 @@ export default function ProjectView() {
           
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="bg-green-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-green-400">{deployVerificationReport.checks_passed || 0}</div>
+            <div className="bg-accent-success/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-accent-success">{deployVerificationReport.checks_passed || 0}</div>
               <div className="text-xs text-text-secondary">Checks Passed</div>
             </div>
-            <div className="bg-red-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-red-400">{deployVerificationReport.checks_failed || 0}</div>
+            <div className="bg-accent-error/10 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold text-accent-error">{deployVerificationReport.checks_failed || 0}</div>
               <div className="text-xs text-text-secondary">Checks Failed</div>
             </div>
-            <div className={`rounded-lg p-3 text-center ${deployVerificationReport.ssl_valid ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+            <div className={`rounded-lg p-3 text-center ${deployVerificationReport.ssl_valid ? 'bg-accent-success/10' : 'bg-accent-error/10'}`}>
               <div className="text-xl font-bold text-text-primary">{deployVerificationReport.ssl_valid ? '🔒' : '🔓'}</div>
               <div className="text-xs text-text-secondary">SSL {deployVerificationReport.ssl_valid ? 'Valid' : 'Invalid'}</div>
             </div>
@@ -640,18 +640,18 @@ export default function ProjectView() {
               <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
                 {deployVerificationReport.endpoint_checks.map((check: any, idx: number) => (
                   <div key={idx} className={`p-2 rounded flex items-center justify-between ${
-                    check.passed ? 'bg-green-500/10' : 'bg-red-500/10'
+                    check.passed ? 'bg-accent-success/10' : 'bg-accent-error/10'
                   }`}>
                     <div className="flex items-center gap-2">
                       {check.passed ? (
-                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        <CheckCircle className="w-4 h-4 text-accent-success" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-red-400" />
+                        <XCircle className="w-4 h-4 text-accent-error" />
                       )}
                       <span className="text-sm text-text-primary truncate max-w-[200px]">{check.url}</span>
                     </div>
                     <div className="flex items-center gap-3 text-xs">
-                      <span className={check.passed ? 'text-green-400' : 'text-red-400'}>{check.status_code}</span>
+                      <span className={check.passed ? 'text-accent-success' : 'text-accent-error'}>{check.status_code}</span>
                       <span className="text-text-tertiary">{check.response_time_ms}ms</span>
                     </div>
                   </div>
@@ -669,12 +669,12 @@ export default function ProjectView() {
               <div className="mt-3 space-y-2">
                 {deployVerificationReport.verification_results.map((result: any, idx: number) => (
                   <div key={idx} className={`p-2 rounded flex items-center gap-2 ${
-                    result.passed ? 'bg-green-500/10' : result.severity === 'critical' ? 'bg-red-500/10' : 'bg-yellow-500/10'
+                    result.passed ? 'bg-accent-success/10' : result.severity === 'critical' ? 'bg-accent-error/10' : 'bg-accent-warning/10'
                   }`}>
                     {result.passed ? (
-                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-accent-success flex-shrink-0" />
                     ) : (
-                      <XCircle className={`w-4 h-4 flex-shrink-0 ${result.severity === 'critical' ? 'text-red-400' : 'text-yellow-400'}`} />
+                      <XCircle className={`w-4 h-4 flex-shrink-0 ${result.severity === 'critical' ? 'text-accent-error' : 'text-accent-warning'}`} />
                     )}
                     <div>
                       <span className="text-sm text-text-primary">{result.check}</span>
@@ -716,11 +716,11 @@ export default function ProjectView() {
             {monitoringReport.services?.map((service: any, idx: number) => (
               <div 
                 key={idx} 
-                className={`p-3 rounded-lg ${service.configured ? 'bg-green-500/10' : 'bg-background-tertiary'}`}
+                className={`p-3 rounded-lg ${service.configured ? 'bg-accent-success/10' : 'bg-background-tertiary'}`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   {service.configured ? (
-                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <CheckCircle className="w-4 h-4 text-accent-success" />
                   ) : (
                     <XCircle className="w-4 h-4 text-text-tertiary" />
                   )}
@@ -746,10 +746,10 @@ export default function ProjectView() {
 
           {/* Lighthouse CI Status */}
           {monitoringReport.lighthouse_ci_configured && (
-            <div className="p-3 bg-blue-500/10 rounded-lg mb-4">
+            <div className="p-3 bg-accent-secondary/10 rounded-lg mb-4">
               <div className="flex items-center gap-2">
-                <Gauge className="w-4 h-4 text-blue-400" />
-                <span className="text-sm font-medium text-blue-400">Lighthouse CI Configured</span>
+                <Gauge className="w-4 h-4 text-accent-secondary" />
+                <span className="text-sm font-medium text-accent-secondary">Lighthouse CI Configured</span>
               </div>
               <p className="text-xs text-text-secondary mt-1">
                 Performance monitoring runs on every push to main branch
@@ -793,9 +793,9 @@ export default function ProjectView() {
           {/* Generated Documents */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {codingStandardsReport.documents?.filter((d: any) => d.generated).map((doc: any, idx: number) => (
-              <div key={idx} className="p-3 bg-green-500/10 rounded-lg">
+              <div key={idx} className="p-3 bg-accent-success/10 rounded-lg">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  <CheckCircle className="w-4 h-4 text-accent-success" />
                   <span className="text-sm text-text-primary">{doc.name}</span>
                 </div>
                 <span className="text-xs text-text-tertiary capitalize">{doc.type.replace('_', ' ')}</span>

@@ -613,10 +613,7 @@ export function Settings() {
           </section>
 
           {/* Design Philosophy */}
-          <section className="glass-card" style={{ 
-            background: `var(--gradient-cool)`,
-            borderColor: 'rgba(91, 158, 244, 0.2)'
-          }}>
+          <section className="glass-card border-accent-secondary/20" style={{ background: `var(--gradient-cool)` }}>
             <div className="flex items-start gap-3">
               <Moon className="w-5 h-5 mt-0.5" style={{ color: 'var(--accent-secondary)' }} />
               <div>
@@ -746,7 +743,7 @@ export function Settings() {
                             {isTesting ? 'Testing...' : 'Test Connection'}
                           </button>
                           {testResult && (
-                            <span className={`text-xs font-medium ${testResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                            <span className={`text-xs font-medium ${testResult.success ? 'text-accent-success' : 'text-accent-error'}`}>
                               {testResult.success ? '✓' : '✗'} {testResult.message}
                             </span>
                           )}
@@ -812,22 +809,22 @@ export function Settings() {
             <div className="stat-card-label">Total Servers</div>
           </div>
           <div className="stat-card">
-            <div className="stat-card-icon" style={{ background: 'rgba(52, 211, 153, 0.15)' }}>
-              <CheckCircle className="w-5 h-5" style={{ color: 'var(--accent-success)' }} />
+            <div className="stat-card-icon bg-accent-success/15">
+              <CheckCircle className="w-5 h-5 text-accent-success" />
             </div>
             <div className="stat-card-value" style={{ color: 'var(--accent-success)' }}>{stats.connected}</div>
             <div className="stat-card-label">Connected</div>
           </div>
           <div className="stat-card">
-            <div className="stat-card-icon" style={{ background: 'rgba(251, 191, 36, 0.15)' }}>
-              <AlertTriangle className="w-5 h-5" style={{ color: 'var(--accent-warning)' }} />
+            <div className="stat-card-icon bg-accent-warning/15">
+              <AlertTriangle className="w-5 h-5 text-accent-warning" />
             </div>
             <div className="stat-card-value" style={{ color: 'var(--accent-warning)' }}>{stats.degraded}</div>
             <div className="stat-card-label">Degraded</div>
           </div>
           <div className="stat-card">
-            <div className="stat-card-icon" style={{ background: 'rgba(248, 113, 113, 0.15)' }}>
-              <XCircle className="w-5 h-5" style={{ color: 'var(--accent-error)' }} />
+            <div className="stat-card-icon bg-accent-error/15">
+              <XCircle className="w-5 h-5 text-accent-error" />
             </div>
             <div className="stat-card-value" style={{ color: 'var(--accent-error)' }}>{stats.disconnected}</div>
             <div className="stat-card-label">Disconnected</div>
@@ -836,10 +833,7 @@ export function Settings() {
 
         {/* Error Message */}
         {error && (
-          <div className="glass-card mb-4" style={{ 
-            background: 'rgba(248, 113, 113, 0.1)', 
-            borderColor: 'rgba(248, 113, 113, 0.3)' 
-          }}>
+          <div className="glass-card mb-4 bg-accent-error/10 border-accent-error/30">
             <p style={{ color: 'var(--accent-error)' }}>{error}</p>
           </div>
         )}
@@ -887,10 +881,7 @@ export function Settings() {
         )}
 
         {/* Documentation Link */}
-        <section className="glass-card" style={{ 
-          background: 'rgba(91, 158, 244, 0.08)',
-          borderColor: 'rgba(91, 158, 244, 0.2)'
-        }}>
+        <section className="glass-card bg-accent-secondary/10 border-accent-secondary/20">
           <div className="flex items-start gap-3">
             <HelpCircle className="w-5 h-5 mt-0.5" style={{ color: 'var(--accent-secondary)' }} />
             <div>
@@ -923,10 +914,7 @@ export function Settings() {
 
           {/* Missing required keys banner */}
           {apiKeys.some((k) => k.required && !k.configured) && (
-            <div className="glass-card flex items-start gap-3" style={{
-              background: 'rgba(248, 113, 113, 0.1)',
-              borderColor: 'rgba(248, 113, 113, 0.3)',
-            }}>
+            <div className="glass-card flex items-start gap-3 bg-accent-error/10 border-accent-error/30">
               <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-error)' }} />
               <div>
                 <p className="font-medium" style={{ color: 'var(--accent-error)' }}>Required keys missing</p>
@@ -948,9 +936,7 @@ export function Settings() {
               {apiKeys.map((key) => {
                 const testResult = keyTestResults[key.key_id];
                 return (
-                  <div key={key.key_id} className="glass-card" style={{
-                    borderColor: key.required && !key.configured ? 'rgba(248, 113, 113, 0.3)' : undefined,
-                  }}>
+                  <div key={key.key_id} className={`glass-card${key.required && !key.configured ? ' border-accent-error/30' : ''}`}>
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <div className="flex items-center gap-2">
@@ -1039,11 +1025,11 @@ export function Settings() {
 
                     {/* Test result */}
                     {testResult && (
-                      <div className="mt-2 glass-card" style={{
-                        padding: 'var(--space-2) var(--space-3)',
-                        background: testResult.success ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)',
-                        borderColor: testResult.success ? 'rgba(52, 211, 153, 0.3)' : 'rgba(248, 113, 113, 0.3)',
-                      }}>
+                      <div className={`mt-2 glass-card px-3 py-2 ${
+                        testResult.success
+                          ? 'bg-accent-success/10 border-accent-success/30'
+                          : 'bg-accent-error/10 border-accent-error/30'
+                      }`}>
                         <p style={{
                           color: testResult.success ? 'var(--accent-success)' : 'var(--accent-error)',
                           fontSize: 'var(--text-sm)',
