@@ -176,10 +176,10 @@ class AnalyticsMonitoringAgent(BaseAgent):
         report = MonitoringReport(project_name=project_name)
         self.logger.info(f"Setting up monitoring for {project_name}")
         
-        # Get API keys from environment
-        plausible_key = os.environ.get("PLAUSIBLE_API_KEY")
-        sentry_dsn = os.environ.get("SENTRY_DSN")
-        uptimerobot_key = os.environ.get("UPTIMEROBOT_API_KEY")
+        # Get API keys from integration store (UI-saved keys + env fallback)
+        plausible_key = self.get_integration_key("PLAUSIBLE_API_KEY")
+        sentry_dsn = self.get_integration_key("SENTRY_DSN")
+        uptimerobot_key = self.get_integration_key("UPTIMEROBOT_API_KEY")
         lighthouse_token = os.environ.get("LIGHTHOUSE_CI_TOKEN")
         ga4_id = os.environ.get("GA4_MEASUREMENT_ID")
         

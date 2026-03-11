@@ -540,7 +540,7 @@ class CodeGenerationAgent(BaseAgent):
     
     def __init__(self, settings=None):
         super().__init__(settings)
-        self.v0_api_key = os.getenv("VERCEL_V0_API_KEY")
+        self.v0_api_key = self.get_integration_key("VERCEL_V0_API_KEY")
     
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate code using appropriate strategy based on project type."""

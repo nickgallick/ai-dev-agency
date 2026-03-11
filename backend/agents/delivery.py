@@ -40,7 +40,7 @@ class DeliveryAgent(BaseAgent):
     
     def __init__(self, settings=None):
         super().__init__(settings)
-        self.github_token = os.getenv("GITHUB_TOKEN")
+        self.github_token = self.get_integration_key("GITHUB_TOKEN")
         self.github_api_url = "https://api.github.com"
     
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -70,6 +70,8 @@ class DeliveryAgent(BaseAgent):
         }
         
         # Create GitHub repository
+        if not self.github_token:
+            self.logger.warning("GITHUB_TOKEN not configured — skipping GitHub repo creation")
         if self.github_token:
             repo_result = await self._create_github_repo(project_name)
             if repo_result.get("success"):

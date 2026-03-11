@@ -496,3 +496,29 @@ class BaseAgent(ABC):
             sections.append(f"\n{entry.content}\n")
         
         return "\n".join(sections)
+
+    # ── Integration Key Helpers ───────────────────────────────────────────────
+
+    @staticmethod
+    def get_integration_key(env_key: str, required: bool = False) -> Optional[str]:
+        """Get an integration key, checking the UI store first then env vars.
+
+        Args:
+            env_key: The environment variable name (e.g. ``GITHUB_TOKEN``).
+            required: If ``True``, log a warning when the key is missing.
+
+        Returns:
+            The key value, or ``None`` if not configured.
+        """
+        try:
+            from api.routes.integrations import get_integration_value
+            value = get_integration_value(env_key)
+        except Exception:
+            value = os.environ.get(env_key) or None
+
+        if not value and required:
+            logging.getLogger("agents.base").warning(
+                f"Integration key {env_key} is not configured — "
+                "the agent will skip features that depend on it"
+            )
+        return value

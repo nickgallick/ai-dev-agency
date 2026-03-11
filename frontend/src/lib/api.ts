@@ -658,6 +658,10 @@ export const api = {
     await apiClient.post(`/queue/${projectId}/reprioritize`, { priority })
   },
 
+  moveProjectInQueue: async (projectId: string, direction: 'up' | 'down'): Promise<void> => {
+    await apiClient.post(`/queue/${projectId}/move`, { direction })
+  },
+
   getQueueStats: async (): Promise<QueueStats> => {
     const response = await apiClient.get('/queue/stats')
     return response.data

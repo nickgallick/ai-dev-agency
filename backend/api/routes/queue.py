@@ -250,6 +250,45 @@ async def reprioritize_project(
     }
 
 
+class MoveRequest(BaseModel):
+    direction: str = Field(..., description="'up' or 'down'")
+
+
+@router.post("/{project_id}/move")
+async def move_project_in_queue(
+    project_id: UUID,
+    request: MoveRequest,
+    db: Session = Depends(get_db)
+):
+    """Move a queued project up or down one position."""
+    if request.direction not in ("up", "down"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="direction must be 'up' or 'down'"
+        )
+
+    manager = get_queue_manager()
+    success = manager.move_in_queue(str(project_id), request.direction)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot move project (not in queue or already at boundary)"
+        )
+
+    new_position = manager.get_queue_position(str(project_id))
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project:
+        project.queue_position = new_position
+        db.commit()
+
+    return {
+        "success": True,
+        "project_id": str(project_id),
+        "new_position": new_position,
+    }
+
+
 @router.get("/stats")
 async def get_queue_stats():
     """
