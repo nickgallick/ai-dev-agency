@@ -119,7 +119,7 @@
 /* ── Canvas ────────────────────────────────────────────────────────── */
 
 .dag-canvas {
-  height: 420px;
+  height: 280px;
   background: var(--background-primary);
 }
 
@@ -462,7 +462,7 @@
 
 @media (max-width: 768px) {
   .dag-canvas {
-    height: 320px;
+    height: 220px;
   }
 
   .dag-header {

@@ -98,11 +98,11 @@
   --bg-tertiary: #F5F4F2;
   --bg-elevated: #FAFAF9;
   
-  /* Glass Effects - Higher opacity for light mode */
-  --glass-bg: rgba(255, 255, 255, 0.55);
-  --glass-bg-hover: rgba(255, 255, 255, 0.65);
-  --glass-bg-elevated: rgba(255, 255, 255, 0.70);
-  --glass-bg-active: rgba(255, 255, 255, 0.80);
+  /* Glass Effects - High opacity for readability in light mode */
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-bg-hover: rgba(255, 255, 255, 0.95);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.97);
+  --glass-bg-active: rgba(255, 255, 255, 0.98);
   --glass-border: rgba(0, 0, 0, 0.06);
   --glass-border-hover: rgba(0, 0, 0, 0.08);
   --glass-border-focus: rgba(59, 130, 246, 0.5);
@@ -181,11 +181,11 @@
     --bg-tertiary: #F5F4F2;
     --bg-elevated: #FAFAF9;
     
-    /* Glass Effects */
-    --glass-bg: rgba(255, 255, 255, 0.55);
-    --glass-bg-hover: rgba(255, 255, 255, 0.65);
-    --glass-bg-elevated: rgba(255, 255, 255, 0.70);
-    --glass-bg-active: rgba(255, 255, 255, 0.80);
+    /* Glass Effects - High opacity for readability */
+    --glass-bg: rgba(255, 255, 255, 0.92);
+    --glass-bg-hover: rgba(255, 255, 255, 0.95);
+    --glass-bg-elevated: rgba(255, 255, 255, 0.97);
+    --glass-bg-active: rgba(255, 255, 255, 0.98);
     --glass-border: rgba(0, 0, 0, 0.06);
     --glass-border-hover: rgba(0, 0, 0, 0.08);
     --glass-border-focus: rgba(59, 130, 246, 0.5);
