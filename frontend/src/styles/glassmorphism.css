@@ -1212,6 +1212,41 @@ body::before {
   z-index: 1;
 }
 
+/* ─── Accent primary muted / subtle (for card hover states) ─────────────── */
+:root,
+[data-theme="dark"] {
+  --accent-primary-muted:  rgba(32, 184, 205, 0.3);
+  --accent-primary-subtle: rgba(32, 184, 205, 0.08);
+}
+
+[data-theme="light"] {
+  --accent-primary-muted:  rgba(8, 145, 178, 0.3);
+  --accent-primary-subtle: rgba(8, 145, 178, 0.08);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --accent-primary-muted:  rgba(8, 145, 178, 0.3);
+    --accent-primary-subtle: rgba(8, 145, 178, 0.08);
+  }
+}
+
+/* ─── Grid line variable for full-page backgrounds ──────────────────────── */
+:root,
+[data-theme="dark"] {
+  --grid-line: rgba(255, 255, 255, 0.015);
+}
+
+[data-theme="light"] {
+  --grid-line: rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --grid-line: rgba(0, 0, 0, 0.04);
+  }
+}
+
 /* ─── Accent convenience aliases (for inline-style usage) ───────────────── */
 :root,
 [data-theme="dark"] {

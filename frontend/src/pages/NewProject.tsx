@@ -624,12 +624,9 @@ export default function NewProject() {
 
         {/* Analysis Warnings */}
         {analysis?.warnings && analysis.warnings.length > 0 && (
-          <div className="glass-card" style={{ 
-            background: 'rgba(251, 191, 36, 0.1)', 
-            borderColor: 'rgba(251, 191, 36, 0.3)' 
-          }}>
+          <div className="glass-card bg-accent-warning/10 border-accent-warning/30">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" style={{ color: '#FBBF24' }} />
+              <AlertCircle className="w-5 h-5 flex-shrink-0 text-accent-warning" />
               <div className="space-y-1">
                 {analysis.warnings.map((warning, i) => (
                   <p key={i} className="text-sm" style={{ color: 'var(--text-secondary)' }}>{warning}</p>
@@ -659,8 +656,8 @@ export default function NewProject() {
                     isSelected && 'glass-card-iridescent'
                   )}
                   style={{
-                    borderColor: isSelected ? 'var(--accent-primary)' : isDetected ? 'rgba(32, 184, 205, 0.3)' : undefined,
-                    background: isSelected ? 'rgba(32, 184, 205, 0.08)' : undefined
+                    borderColor: isSelected ? 'var(--accent-primary)' : isDetected ? 'var(--accent-primary-muted, rgba(32,184,205,0.3))' : undefined,
+                    background: isSelected ? 'var(--accent-primary-subtle, rgba(32,184,205,0.08))' : undefined
                   }}
                 >
                   {isDetected && !isSelected && (
@@ -849,7 +846,7 @@ export default function NewProject() {
                               isSelected && 'glass-card-iridescent'
                             )}
                             style={{
-                              borderColor: isSelected ? 'var(--accent-primary)' : isSuggested ? 'rgba(32, 184, 205, 0.3)' : undefined,
+                              borderColor: isSelected ? 'var(--accent-primary)' : isSuggested ? 'var(--accent-primary-muted, rgba(32,184,205,0.3))' : undefined,
                             }}
                           >
                             {isSuggested && !isSelected && (
@@ -1433,10 +1430,9 @@ export default function NewProject() {
             </p>
           )}
           {submitError && (
-            <div className="flex items-start gap-2 rounded-lg p-3"
-                 style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
-              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#ef4444' }} />
-              <p className="text-sm" style={{ color: '#ef4444' }}>{submitError}</p>
+            <div className="flex items-start gap-2 rounded-lg p-3 bg-accent-error/10 border border-accent-error/30">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-accent-error" />
+              <p className="text-sm text-accent-error">{submitError}</p>
             </div>
           )}
           <button
@@ -1534,12 +1530,9 @@ export default function NewProject() {
 
             {/* Error message */}
             {submitError && (
-              <div
-                className="flex items-start gap-2 rounded-lg p-3"
-                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}
-              >
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#ef4444' }} />
-                <p className="text-sm" style={{ color: '#ef4444' }}>{submitError}</p>
+              <div className="flex items-start gap-2 rounded-lg p-3 bg-accent-error/10 border border-accent-error/30">
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-accent-error" />
+                <p className="text-sm text-accent-error">{submitError}</p>
               </div>
             )}
 

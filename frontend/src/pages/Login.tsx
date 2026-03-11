@@ -57,7 +57,7 @@ export default function Login() {
       className="min-h-screen flex items-center justify-center p-4" 
       style={{ 
         background: 'var(--bg-base)',
-        backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px)',
+        backgroundImage: 'linear-gradient(var(--grid-line, rgba(255,255,255,0.015)) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line, rgba(255,255,255,0.015)) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }}
     >
@@ -84,13 +84,8 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Error Message */}
               {error && (
-                <div 
-                  className="glass-card flex items-center gap-2"
-                  style={{ 
-                    background: 'rgba(248, 113, 113, 0.1)', 
-                    borderColor: 'rgba(248, 113, 113, 0.3)',
-                    padding: 'var(--space-3)'
-                  }}
+                <div className="glass-card flex items-center gap-2 bg-accent-error/10 border-accent-error/30"
+                     style={{ padding: 'var(--space-3)' }}
                 >
                   <AlertCircle className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--accent-error)' }} />
                   <span style={{ color: 'var(--accent-error)', fontSize: 'var(--text-sm)' }}>{error}</span>
