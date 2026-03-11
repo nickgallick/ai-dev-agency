@@ -96,3 +96,18 @@ async def model_routing_summary():
         "routing": get_routing_summary(),
         "complexity": AGENT_COMPLEXITY,
     }
+
+
+@router.get("/health/autonomy-tiers")
+async def autonomy_tiers_summary():
+    """Get available autonomy tiers and their configuration.
+
+    Returns the three tiers (supervised, guided, autonomous) with
+    checkpoint agents, timeouts, and descriptions.
+    """
+    from config.autonomy import get_tiers_summary
+
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "tiers": get_tiers_summary(),
+    }

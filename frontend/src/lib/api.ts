@@ -386,7 +386,22 @@ export interface PipelineEstimate {
   agents: AgentEstimate[]
 }
 
+export interface AutonomyTier {
+  id: string
+  label: string
+  description: string
+  checkpoint_agents: string[]
+  auto_continue_timeout: number
+  allow_output_editing: boolean
+}
+
 export const api = {
+  // Autonomy tiers (#26)
+  getAutonomyTiers: async (): Promise<AutonomyTier[]> => {
+    const response = await apiClient.get('/health/autonomy-tiers')
+    return response.data.tiers
+  },
+
   // Projects
   createProject: async (data: {
     brief: string

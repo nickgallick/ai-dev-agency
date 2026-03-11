@@ -104,6 +104,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Prometheus metrics middleware — exposes /metrics endpoint
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    Instrumentator(
+        should_group_status_codes=True,
+        should_ignore_untemplated=True,
+        excluded_handlers=["/metrics", "/health", "/health/ready"],
+    ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=True)
+except ImportError:
+    pass  # prometheus_fastapi_instrumentator not installed — skip
+
 # Include routers
 app.include_router(health_router)
 app.include_router(auth_router)  # Phase 9B: Authentication - Already has /api prefix

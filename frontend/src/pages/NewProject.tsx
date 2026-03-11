@@ -118,7 +118,7 @@ interface FormState {
   deploymentPlatform: string
   autoDeploy: boolean
   customInstructions: string
-  buildMode: 'full_auto' | 'step_approval' | 'preview_only'
+  buildMode: 'autonomous' | 'guided' | 'supervised'
 }
 
 const defaultFormState: FormState = {
@@ -156,7 +156,7 @@ const defaultFormState: FormState = {
   deploymentPlatform: '',
   autoDeploy: true,
   customInstructions: '',
-  buildMode: 'full_auto',
+  buildMode: 'autonomous',
 }
 
 // ============ Main Component ============
@@ -1439,36 +1439,46 @@ export default function NewProject() {
                 </div>
               </div>
 
-              {/* Build Mode */}
+              {/* Autonomy Tier (#26) */}
               <div>
                 <h4 className="flex items-center gap-2 mb-3 font-medium" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
                   <Rocket className="w-4 h-4" />
-                  Build Mode
+                  Autonomy Level
                 </h4>
                 <div className="flex gap-3">
                   {[
-                    { id: 'full_auto', label: 'Full Auto', desc: 'Run entire pipeline automatically' },
-                    { id: 'step_approval', label: 'Step Approval', desc: 'Pause after each step for review' },
-                    { id: 'preview_only', label: 'Preview Only', desc: 'Generate plan without execution' },
-                  ].map(mode => (
+                    { id: 'supervised', label: 'Supervised', desc: 'Pause after every agent for approval', icon: '🔍' },
+                    { id: 'guided', label: 'Guided', desc: 'Pause at 5 critical decision points', icon: '🎯' },
+                    { id: 'autonomous', label: 'Autonomous', desc: 'Run the entire pipeline hands-free', icon: '🚀' },
+                  ].map(tier => (
                     <button
-                      key={mode.id}
+                      key={tier.id}
                       type="button"
-                      onClick={() => setForm(prev => ({ ...prev, buildMode: mode.id as any }))}
+                      onClick={() => setForm(prev => ({ ...prev, buildMode: tier.id as any }))}
                       className={clsx(
                         'glass-card flex-1 p-3 text-left transition-all',
-                        form.buildMode === mode.id && 'glass-card-iridescent'
+                        form.buildMode === tier.id && 'glass-card-iridescent'
                       )}
                     >
-                      <span className="block font-medium text-sm" style={{ 
-                        color: form.buildMode === mode.id ? 'var(--accent-primary)' : 'var(--text-primary)' 
+                      <span className="block font-medium text-sm" style={{
+                        color: form.buildMode === tier.id ? 'var(--accent-primary)' : 'var(--text-primary)'
                       }}>
-                        {mode.label}
+                        {tier.icon} {tier.label}
                       </span>
-                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{mode.desc}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{tier.desc}</span>
                     </button>
                   ))}
                 </div>
+                {form.buildMode === 'guided' && (
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    Pauses at: Research, Architect, Code Generation, QA, and Deployment for your review. Auto-continues after 5 minutes if no action.
+                  </p>
+                )}
+                {form.buildMode === 'supervised' && (
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    Pauses after every agent. You must approve each step before the pipeline continues. No auto-continue timeout.
+                  </p>
+                )}
               </div>
 
               {/* Custom Instructions */}

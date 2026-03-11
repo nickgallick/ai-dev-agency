@@ -203,6 +203,11 @@ async def create_project(
         except ValueError:
             pass
 
+    # Phase 12: Resolve autonomy tier from build_mode in requirements
+    from config.autonomy import resolve_tier
+    build_mode = (project.requirements or {}).get("build_mode")
+    tier = resolve_tier(build_mode)
+
     db_project = Project(
         id=project_id,
         brief=project.brief,
@@ -219,6 +224,13 @@ async def create_project(
         project_metadata={
             "reference_urls": project.reference_urls or [],
             "tech_stack_override": project.tech_stack_override,
+        },
+        # Phase 12: Autonomy tier → checkpoint config
+        checkpoint_mode=tier.checkpoint_mode,
+        checkpoint_state={
+            "custom_checkpoints": tier.checkpoint_agents,
+            "autonomy_tier": tier.id,
+            "auto_continue_timeout": tier.auto_continue_timeout,
         },
     )
 

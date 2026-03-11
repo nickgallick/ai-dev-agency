@@ -31,6 +31,7 @@ An AI-powered development agency platform. You submit a project brief and a pipe
 | State Management | Zustand, React Query |
 | HTTP Client | Axios (frontend), httpx/aiohttp (backend) |
 | Icons | Lucide React |
+| Metrics | Prometheus + Grafana (ports 9090, 3000) |
 | Infrastructure | Docker Compose (dev), Railway/Render (prod) |
 
 ***
@@ -46,6 +47,8 @@ Watch backend logs: docker-compose logs -f api
 Restart backend: docker-compose restart api
 Run migrations: docker-compose exec api alembic upgrade head
 Access DB: docker-compose exec db psql -U postgres -d postgres
+Prometheus: http://localhost:9090
+Grafana: http://localhost:3000 (admin/admin)
 Frontend build check: cd frontend && npx vite build
 Backend syntax check: cd backend && python -c "import py_compile, glob; [py_compile.compile(f, doraise=True) for f in glob.glob('**/*.py', recursive=True)]"
 ```
@@ -92,6 +95,7 @@ backend/agents/base.py                   Base class all agents inherit — call_
 backend/config/settings.py               Env var loading (40+ settings)
 backend/config/model_routing.py          Per-agent model selection by complexity × cost profile
 backend/config/cost_profiles.py          Budget/balanced/premium cost profile presets
+backend/config/autonomy.py               Tiered autonomy: supervised/guided/autonomous tier definitions
 ```
 
 ### Backend Utilities
@@ -107,6 +111,7 @@ backend/utils/encryption.py              Fernet credential encryption
 backend/utils/crypto.py                  AES-256-CBC credential encryption (production)
 backend/utils/agent_analytics.py         Agent performance tracking and QA metrics
 backend/utils/deployment_helpers.py      GitHub repo setup, Vercel/Railway deployment
+backend/utils/metrics.py                 Prometheus custom metrics (pipeline, agent, LLM, queue, circuit breaker)
 backend/utils/monitoring_helpers.py      Sentry/UptimeRobot integration
 ```
 
@@ -171,13 +176,16 @@ frontend/src/contexts/ThemeContext.tsx            Light/dark/system theme
 
 ### Infrastructure
 ```
-docker-compose.yml                       3 services: api (8000), dashboard (5173), db (5432)
+docker-compose.yml                       5 services: api (8000), dashboard (5173), db (5432), prometheus (9090), grafana (3000)
 .env / .env.example                      50+ env vars
 Dockerfile                               Python 3.11-slim
 start.sh                                 Production startup (Railway)
 railway.toml                             Railway deployment config
 render.yaml                              Render deployment config
 alembic/                                 6 migration files
+monitoring/prometheus.yml                Prometheus scrape config (targets api:8000/metrics)
+monitoring/grafana/provisioning/         Grafana auto-provisioning (datasource + dashboard provider)
+monitoring/grafana/dashboards/           Grafana dashboard JSON (21 panels: pipeline, agent, LLM, HTTP, queue)
 ```
 
 ***
@@ -225,6 +233,12 @@ GET    /health/ready                    Readiness check (DB + API keys)
 GET    /health/circuit-breaker          Circuit breaker status per provider
 POST   /health/circuit-breaker/reset    Reset circuit breaker (optionally per provider)
 GET    /health/model-routing            Full model routing table (agent × cost profile)
+GET    /health/autonomy-tiers          Available autonomy tiers and their checkpoint config
+```
+
+### Metrics
+```
+GET    /metrics                         Prometheus metrics endpoint (auto-instrumented HTTP + custom)
 ```
 
 ### Activity
@@ -361,6 +375,24 @@ These features are complete and integrated. Do not re-implement them.
 - Resume from last checkpoint on failure
 - Structured audit trail for all pipeline events
 
+### Tiered Autonomy Configuration (#26)
+- **Where:** `backend/config/autonomy.py`, `backend/orchestration/checkpoints.py`, `frontend/src/pages/NewProject.tsx`
+- Three tiers: **Supervised** (pause every agent, no timeout), **Guided** (pause at 5 critical points, 5min auto-continue), **Autonomous** (no pauses)
+- Built on top of HITL checkpoint system from Phase 11C
+- `resolve_tier()` maps legacy `buildMode` values and tier names to checkpoint configuration
+- Project creation automatically sets `checkpoint_mode` and `checkpoint_state` based on selected tier
+- Frontend: "Autonomy Level" selector in NewProject advanced options replaces old "Build Mode"
+- ProjectView shows current tier in mode selector dropdown
+
+### Prometheus & Grafana Metrics Stack (#19)
+- **Where:** `backend/utils/metrics.py`, `backend/main.py`, `monitoring/`
+- `prometheus-fastapi-instrumentator` auto-instruments all HTTP requests → `/metrics` endpoint
+- Custom metrics: pipeline (starts/completions/failures/duration), agents (runs/duration/cost), LLM (requests/latency/tokens), queue (depth/wait), circuit breaker state, checkpoint pauses
+- All metrics gracefully no-op when `prometheus_client` not installed
+- Docker Compose adds `prometheus` (port 9090) and `grafana` (port 3000) services
+- Pre-provisioned Grafana dashboard with 21 panels across 4 sections: Pipeline Overview, Agent Performance, LLM API, HTTP & Infrastructure
+- Prometheus scrapes api:8000/metrics every 15s, retains 15 days
+
 ***
 
 ## Known Bugs (Updated)
@@ -421,6 +453,12 @@ These features are complete and integrated. Do not re-implement them.
 │  - Vercel v0 (code generation)                    │
 │  - GitHub API (repo delivery)                     │
 │  - MCP Servers (8 implementations)                │
+└──────────────────────┬───────────────────────────┘
+                       │ /metrics
+┌──────────────────────▼───────────────────────────┐
+│  Observability Stack                              │
+│  - Prometheus (port 9090) — scrapes /metrics      │
+│  - Grafana (port 3000) — 21-panel dashboard       │
 └───────────────────────────────────────────────────┘
 ```
 
@@ -435,3 +473,5 @@ These features are complete and integrated. Do not re-implement them.
 - Model routing architecture — centralized in config/model_routing.py
 - Error classification categories — they map to specific resolution strategies
 - Brief scoring dimensions and weights — tuned for project quality
+- Autonomy tier definitions — supervised/guided/autonomous are the three tiers
+- Prometheus metric names and labels — dashboards depend on them

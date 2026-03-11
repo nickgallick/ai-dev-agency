@@ -27,6 +27,15 @@ from .audit import (
 
 logger = logging.getLogger(__name__)
 
+# Prometheus metrics (graceful no-op if prometheus_client not installed)
+from utils.metrics import (
+    record_pipeline_start,
+    record_pipeline_complete,
+    record_pipeline_failure,
+    record_agent_run,
+    record_checkpoint_pause,
+)
+
 # ── LangSmith tracing setup ─────────────────────────────────────────────
 
 _langsmith_enabled = False
@@ -174,6 +183,7 @@ class PipelineExecutor:
 
         project_type = (requirements or {}).get("project_type", "unknown")
         audit_pipeline_start(self.db, project_id, cost_profile, project_type)
+        record_pipeline_start(cost_profile, project_type)
 
         # Update project status in database
         if self.db:
@@ -198,6 +208,7 @@ class PipelineExecutor:
 
             duration_ms = int((time.time() - pipeline_start) * 1000)
             audit_pipeline_complete(self.db, project_id, pipeline.total_cost, duration_ms)
+            record_pipeline_complete(cost_profile, project_type, duration_ms / 1000.0)
 
             # Emit completion
             self._emit_activity(
@@ -225,6 +236,7 @@ class PipelineExecutor:
 
             duration_ms = int((time.time() - pipeline_start) * 1000)
             audit_pipeline_failed(self.db, project_id, str(e), duration_ms)
+            record_pipeline_failure(cost_profile, project_type, duration_ms / 1000.0)
 
             # Emit failure
             self._emit_activity(
@@ -413,12 +425,14 @@ class PipelineExecutor:
             if result and result.success and self.db:
                 await self._capture_knowledge(project_id, agent_name, result, pipeline.context)
 
-            # Audit: agent complete or failed
+            # Audit + metrics: agent complete or failed
             if result and result.success:
                 audit_agent_complete(self.db, project_id, agent_name, duration_ms, cost)
+                record_agent_run(agent_name, "success", duration_ms / 1000.0, cost)
             else:
                 err = (result.errors[0] if result and result.errors else "unknown")
                 audit_agent_failed(self.db, project_id, agent_name, str(err), duration_ms)
+                record_agent_run(agent_name, "failure", duration_ms / 1000.0)
 
             # Emit completion
             status = "complete" if result and result.success else "failed"
@@ -463,6 +477,9 @@ class PipelineExecutor:
             )
 
             logger.info(f"HITL: Pausing at checkpoint after {agent_name}")
+            record_checkpoint_pause(
+                self._checkpoint_manager.get_autonomy_tier(), agent_name
+            )
 
             # Build pipeline state snapshot for checkpoint
             pipeline_state = {

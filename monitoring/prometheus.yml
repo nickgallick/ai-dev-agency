@@ -1,0 +1,18 @@
+# Prometheus configuration for AI Dev Agency
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # FastAPI backend metrics
+  - job_name: "ai-dev-agency-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+        labels:
+          service: "api"
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

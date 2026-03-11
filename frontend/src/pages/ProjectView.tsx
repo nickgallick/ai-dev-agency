@@ -258,16 +258,32 @@ export default function ProjectView() {
               )
             )}
 
-            {/* Mode Selector */}
+            {/* Autonomy Tier Selector (#26) */}
             <div className="flex items-center gap-2">
-              <span className="text-sm text-text-secondary">Mode:</span>
+              <span className="text-sm text-text-secondary">Autonomy:</span>
               <select
-                value={checkpointStatus?.mode || 'auto'}
-                onChange={(e) => setModeMutation.mutate(e.target.value)}
+                value={
+                  (checkpointStatus as any)?.custom_checkpoints?.length > 5
+                    ? 'supervised-tier'
+                    : (checkpointStatus as any)?.custom_checkpoints?.length > 0
+                    ? 'guided-tier'
+                    : checkpointStatus?.mode || 'auto'
+                }
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === 'supervised-tier') {
+                    setModeMutation.mutate('manual')
+                  } else if (val === 'guided-tier') {
+                    setModeMutation.mutate('manual')
+                  } else {
+                    setModeMutation.mutate(val)
+                  }
+                }}
                 className="bg-background-tertiary border border-border-subtle rounded px-2 py-1 text-sm text-text-primary"
               >
-                <option value="auto">Auto (no checkpoints)</option>
-                <option value="supervised">Supervised (pause at key points)</option>
+                <option value="auto">Autonomous (no checkpoints)</option>
+                <option value="guided-tier">Guided (5 critical checkpoints)</option>
+                <option value="supervised-tier">Supervised (every agent)</option>
                 <option value="manual">Manual (custom checkpoints)</option>
               </select>
             </div>
@@ -382,9 +398,13 @@ export default function ProjectView() {
           )}
 
           {/* Available Checkpoints Info */}
-          {checkpointStatus?.mode === 'supervised' && checkpointStatus?.state !== 'paused' && (
+          {checkpointStatus?.mode !== 'auto' && checkpointStatus?.state !== 'paused' && (
             <div className="mt-3 text-xs text-text-secondary">
-              <span className="font-medium">Checkpoint agents:</span> {checkpointStatus.available_checkpoints?.join(', ')}
+              <span className="font-medium">Checkpoint agents:</span>{' '}
+              {(checkpointStatus?.custom_checkpoints?.length
+                ? checkpointStatus.custom_checkpoints
+                : checkpointStatus?.available_checkpoints
+              )?.join(', ')}
             </div>
           )}
         </Card>
