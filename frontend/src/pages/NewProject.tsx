@@ -34,9 +34,9 @@ const PROJECT_TYPES = [
 ]
 
 const COST_PROFILES = [
-  { id: 'budget', label: 'Budget', icon: Zap, desc: 'Minimize cost', color: '#34D399' },
-  { id: 'balanced', label: 'Balanced', icon: Shield, desc: 'Quality & cost', color: '#20B8CD' },
-  { id: 'premium', label: 'Premium', icon: Crown, desc: 'Maximum quality', color: '#FBBF24' },
+  { id: 'budget', label: 'Budget', icon: Zap, desc: 'Minimize cost', color: 'var(--accent-success)' },
+  { id: 'balanced', label: 'Balanced', icon: Shield, desc: 'Quality & cost', color: 'var(--accent-primary)' },
+  { id: 'premium', label: 'Premium', icon: Crown, desc: 'Maximum quality', color: 'var(--accent-warning)' },
 ]
 
 const INDUSTRIES = [
