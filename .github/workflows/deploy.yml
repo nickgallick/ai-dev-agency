@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - 'claude/**'
 
 jobs:
   deploy:
@@ -17,7 +18,13 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ${{ secrets.SERVER_PATH }}
-            git stash
-            git pull origin master
+            git fetch origin
+            git checkout master
+            BRANCH="${{ github.ref_name }}"
+            if [ "$BRANCH" != "master" ]; then
+              git merge "origin/$BRANCH" --no-edit || { echo "Merge conflict — aborting"; git merge --abort; exit 1; }
+            else
+              git pull origin master --ff-only
+            fi
             docker-compose up --build -d
             docker image prune -f
