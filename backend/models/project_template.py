@@ -2,8 +2,8 @@
 
 SQLAlchemy model for storing reusable project templates.
 """
-from sqlalchemy import Column, String, Text, Float, Integer, DateTime, Boolean, ForeignKey, ARRAY
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Column, String, Text, Float, Integer, DateTime, Boolean, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB, UUID, ARRAY
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import uuid
