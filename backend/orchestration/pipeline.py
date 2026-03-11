@@ -45,6 +45,7 @@ from agents.qa_testing import QATestingAgent
 from agents.deployment import DeploymentAgent
 from agents.analytics_monitoring import AnalyticsMonitoringAgent
 from agents.coding_standards import CodingStandardsAgent
+from agents.integration_wiring import IntegrationWiringAgent
 from agents.revision_handler import RevisionHandlerAgent
 from agents.project_manager import ProjectManagerAgent, COMPLEX_PROJECT_TYPES
 from agents.code_review import CodeReviewAgent
@@ -322,14 +323,22 @@ class Pipeline:
             agent_class=CodeGenerationAgent,
             dependencies=["pm_checkpoint_1"],
         ))
-        
+
+        # Integration Wiring — wire all integrations after code gen
+        self.add_node(PipelineNode(
+            id="integration_wiring",
+            name="Integration Wiring",
+            agent_class=IntegrationWiringAgent,
+            dependencies=["code_generation"],
+        ))
+
         # ★ PM Checkpoint 2: Completeness validation
-        # Runs after Code Gen, before Quality Gate
+        # Runs after Code Gen + Integration Wiring, before Quality Gate
         self.add_node(PipelineNode(
             id="pm_checkpoint_2",
             name="PM Checkpoint 2 (Completeness)",
             agent_class=ProjectManagerAgent,
-            dependencies=["code_generation"],
+            dependencies=["integration_wiring"],
         ))
         
         # ★ Code Review Agent

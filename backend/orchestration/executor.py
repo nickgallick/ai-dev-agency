@@ -152,7 +152,8 @@ class PipelineExecutor:
             "asset_generation": (35, 42, "Generating visual assets..."),
             "content_generation": (42, 48, "Creating copy & content..."),
             "pm_checkpoint_1": (48, 52, "Validating design coherence..."),
-            "code_generation": (52, 72, "Generating application code..."),
+            "code_generation": (52, 68, "Generating application code..."),
+            "integration_wiring": (68, 72, "Wiring integrations and APIs..."),
             "pm_checkpoint_2": (72, 76, "Validating code completeness..."),
             "code_review": (76, 80, "Reviewing code quality..."),
             "security": (80, 84, "Scanning for security vulnerabilities..."),
@@ -173,7 +174,7 @@ class PipelineExecutor:
         qa_retry_count = 0
         MAX_QA_RETRIES = 3
         QA_RETRY_NODES = [
-            "code_generation", "pm_checkpoint_2", "code_review",
+            "code_generation", "integration_wiring", "pm_checkpoint_2", "code_review",
             "security", "seo", "accessibility", "qa"
         ]
 
@@ -319,6 +320,7 @@ class PipelineExecutor:
             "content_generation": "Writing headlines, descriptions, and CTAs...",
             "pm_checkpoint_1": "Checking design system coherence...",
             "code_generation": "Generating React components with Tailwind...",
+            "integration_wiring": "Wiring third-party integrations and generating .env.example...",
             "pm_checkpoint_2": "Verifying all pages and features implemented...",
             "code_review": "Analyzing code patterns and best practices...",
             "security": "Running Semgrep vulnerability scan...",
