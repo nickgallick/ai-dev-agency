@@ -342,14 +342,17 @@ class BaseAgent(ABC):
 
         api_key = self.settings.openrouter_api_key
         if not api_key:
-            self.logger.warning("OpenRouter API key not configured, returning mock response")
+            self.logger.error("OpenRouter API key not configured — cannot make LLM calls")
             return {
-                "content": f"Mock response for: {prompt[:100]}...",
+                "content": "",
                 "prompt_tokens": 0,
                 "completion_tokens": 0,
                 "total_tokens": 0,
                 "cost": 0.0,
                 "duration_ms": 0,
+                "error": "openrouter_api_key_missing",
+                "error_category": "auth",
+                "error_message": "OpenRouter API key is not configured. Add OPENROUTER_API_KEY in Settings → API Keys to enable AI generation.",
             }
 
         provider = model.split("/")[0] if "/" in model else "unknown"
