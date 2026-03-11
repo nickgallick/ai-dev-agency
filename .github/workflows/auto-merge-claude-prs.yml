@@ -1,0 +1,55 @@
+name: Auto-enable auto-merge for Claude PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  enable-auto-merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Ensure GitHub CLI is installed
+        run: |
+          if ! command -v gh &> /dev/null; then
+            type -p curl >/dev/null || (apt update && apt install curl -y)
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
+            apt update
+            apt install gh -y
+          fi
+
+      - name: Check if branch is from Claude
+        id: check
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          echo "Branch: $BRANCH"
+          if [[ "$BRANCH" == claude/* ]]; then
+            echo "is_claude=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_claude=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Enable auto-merge on PR
+        if: steps.check.outputs.is_claude == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NODE_ID="${{ github.event.pull_request.node_id }}"
+          gh api graphql -f query='
+            mutation($pr: ID!, $method: PullRequestMergeMethod!) {
+              enablePullRequestAutoMerge(input: {
+                pullRequestId: $pr,
+                mergeMethod: MERGE
+              }) {
+                pullRequest {
+                  number
+                  autoMergeRequest { enabledAt }
+                }
+              }
+            }
+          ' -f pr="$PR_NODE_ID" -f method=MERGE
