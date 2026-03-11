@@ -150,6 +150,7 @@ async def create_project(
         str(project_id),
         project.brief,
         project.cost_profile,
+        project.requirements or {},
     )
     
     return ProjectResponse(
@@ -270,13 +271,13 @@ async def delete_project(
     db.commit()
 
 
-async def run_pipeline(project_id: str, brief: str, cost_profile: str):
+async def run_pipeline(project_id: str, brief: str, cost_profile: str, requirements: dict = None):
     """Run the pipeline in background."""
     from models import SessionLocal
-    
+
     db = SessionLocal()
     try:
         executor = PipelineExecutor(db_session=db)
-        await executor.execute(project_id, brief, cost_profile)
+        await executor.execute(project_id, brief, cost_profile, requirements=requirements or {})
     finally:
         db.close()

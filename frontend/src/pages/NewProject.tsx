@@ -177,6 +177,7 @@ export default function NewProject() {
   // Phase 11B: Template Browser
   const [showTemplateBrowser, setShowTemplateBrowser] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   // Load presets
   const { data: presets = [] } = useQuery({
@@ -248,8 +249,16 @@ export default function NewProject() {
   const createProject = useMutation({
     mutationFn: api.createProject,
     onSuccess: (data) => {
+      setSubmitError(null)
       localStorage.removeItem(STORAGE_KEY)
       navigate(`/project/${data.id}`)
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        'Failed to create project. Is the backend running?'
+      setSubmitError(msg)
     },
   })
 
@@ -1462,6 +1471,26 @@ export default function NewProject() {
                     </span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Validation hint */}
+            {(!form.brief.trim() || !form.projectType) && (
+              <p className="text-sm text-center" style={{ color: 'var(--text-tertiary)' }}>
+                {!form.brief.trim()
+                  ? 'Enter a project description to continue'
+                  : 'Select a project type above to continue'}
+              </p>
+            )}
+
+            {/* Error message */}
+            {submitError && (
+              <div
+                className="flex items-start gap-2 rounded-lg p-3"
+                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}
+              >
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#ef4444' }} />
+                <p className="text-sm" style={{ color: '#ef4444' }}>{submitError}</p>
               </div>
             )}
 

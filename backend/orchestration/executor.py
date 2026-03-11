@@ -16,16 +16,16 @@ logger = logging.getLogger(__name__)
 
 class PipelineExecutor:
     """Executes the pipeline with real agent execution and activity streaming."""
-    
+
     def __init__(self, db_session=None):
         self.db = db_session
         self._progress_callback: Optional[Callable] = None
-    
+
     def set_progress_callback(self, callback: Callable):
         """Set callback for progress updates."""
         self._progress_callback = callback
-    
-    def _emit_activity(self, project_id: str, event_type: str, message: str, 
+
+    def _emit_activity(self, project_id: str, event_type: str, message: str,
                        agent_name: str = None, details: dict = None, progress: float = None):
         """Emit activity event for real-time streaming."""
         try:
@@ -40,112 +40,109 @@ class PipelineExecutor:
             )
         except Exception as e:
             logger.warning(f"Failed to emit activity: {e}")
-    
+
     async def execute(
         self,
         project_id: str,
         brief: str,
         cost_profile: str = "balanced",
+        requirements: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Execute the full pipeline for a project."""
-        
+
         logger.info(f"Starting pipeline execution for project {project_id}")
-        
+
         # Emit pipeline start
         self._emit_activity(
-            project_id, "pipeline_start", 
+            project_id, "pipeline_start",
             "🚀 Pipeline started - building your project!",
             progress=0
         )
-        
+
         # Create pipeline instance with config
         config = PipelineConfig(
             cost_profile=cost_profile,
             continue_on_failure=True,
         )
         pipeline = Pipeline(config=config, db=self.db)
-        
-        # Set up context for the pipeline
+
+        # Set up context for the pipeline — include structured requirements
         context = {
             "project_id": project_id,
             "brief": brief,
             "cost_profile": cost_profile,
+            "requirements": requirements or {},
         }
-        
+
         # Update project status in database
         if self.db:
-            await self._update_project_status(project_id, "INTAKE")
-        
+            await self._update_project_status(project_id, "intake")
+
         try:
             # Run the pipeline with activity emissions
             results = await self._run_pipeline_with_activity(
                 project_id, pipeline, context
             )
-            
-            # Get final state
-            final_status = "COMPLETED" if all(
-                r.success for r in results.values() if r is not None
-            ) else "COMPLETED"
-            
+
             # Update project with results
             if self.db:
                 await self._save_project_results(
-                    project_id, 
-                    results, 
-                    pipeline.total_cost, 
+                    project_id,
+                    results,
+                    pipeline.total_cost,
                     pipeline.cost_breakdown
                 )
-            
+
             # Emit completion
             self._emit_activity(
                 project_id, "pipeline_complete",
                 "✅ Project build completed successfully!",
                 progress=100
             )
-            
+
             # Get delivery info
             delivery_result = results.get("delivery")
             delivery_data = delivery_result.data if delivery_result and delivery_result.success else {}
-            
+
             return {
                 "success": True,
                 "project_id": project_id,
-                "status": final_status,
+                "status": "completed",
                 "total_cost": pipeline.total_cost,
                 "cost_breakdown": pipeline.cost_breakdown,
                 "delivery": delivery_data,
                 "github_repo": delivery_data.get("github_repo"),
             }
-            
+
         except Exception as e:
             logger.error(f"Pipeline failed: {e}\n{traceback.format_exc()}")
-            
+
             # Emit failure
             self._emit_activity(
                 project_id, "pipeline_error",
                 f"❌ Pipeline failed: {str(e)}",
                 details={"error": str(e), "traceback": traceback.format_exc()}
             )
-            
+
             # Handle pipeline failure
             if self.db:
-                await self._update_project_status(project_id, "FAILED")
-            
+                await self._update_project_status(project_id, "failed")
+
             return {
                 "success": False,
                 "project_id": project_id,
                 "status": "failed",
                 "error": str(e),
             }
-    
+
     async def _run_pipeline_with_activity(
-        self, 
-        project_id: str, 
+        self,
+        project_id: str,
         pipeline: Pipeline,
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Run pipeline with activity emissions for each step."""
-        
+
         # Define agent steps with their progress percentages
         agent_progress = {
             "intake": (5, 10, "Analyzing project requirements..."),
@@ -168,24 +165,24 @@ class PipelineExecutor:
             "coding_standards": (99, 100, "Generating documentation..."),
             "delivery": (100, 100, "Preparing delivery package..."),
         }
-        
+
         results = {}
         pipeline.context = context
-        
+
         # Run agents in proper order respecting dependencies
         while True:
             ready_nodes = pipeline.get_ready_nodes()
             if not ready_nodes:
                 # Check if we're done or stuck
-                pending = [n for n in pipeline.nodes.values() 
+                pending = [n for n in pipeline.nodes.values()
                           if n.status == NodeStatus.PENDING]
                 if pending:
                     logger.warning(f"Pipeline stuck with pending nodes: {[n.name for n in pending]}")
                 break
-            
+
             # Group by parallel execution
             groups = pipeline.get_parallel_groups(ready_nodes)
-            
+
             for group_name, group_nodes in groups.items():
                 if group_name is not None:
                     # Execute parallel group
@@ -198,9 +195,9 @@ class PipelineExecutor:
                         await self._execute_node_with_activity(
                             project_id, pipeline, node, agent_progress, results
                         )
-        
+
         return results
-    
+
     async def _execute_node_with_activity(
         self,
         project_id: str,
@@ -213,7 +210,7 @@ class PipelineExecutor:
         agent_name = node.id
         progress_info = agent_progress.get(agent_name, (50, 60, f"Running {agent_name}..."))
         start_progress, end_progress, message = progress_info
-        
+
         # Emit agent start
         self._emit_activity(
             project_id, "agent_start",
@@ -221,7 +218,7 @@ class PipelineExecutor:
             agent_name=agent_name,
             progress=start_progress
         )
-        
+
         # Emit thinking message
         await asyncio.sleep(0.1)
         self._emit_activity(
@@ -230,13 +227,13 @@ class PipelineExecutor:
             agent_name=agent_name,
             progress=(start_progress + end_progress) / 2
         )
-        
+
         try:
             # Actually execute the node
             logger.info(f"Executing agent: {agent_name}")
             result = await pipeline.execute_node(node)
             results[node.id] = result
-            
+
             # Emit completion
             status = "complete" if result and result.success else "failed"
             self._emit_activity(
@@ -246,7 +243,7 @@ class PipelineExecutor:
                 progress=end_progress,
                 details={"success": result.success if result else False}
             )
-            
+
         except Exception as e:
             logger.error(f"Agent {agent_name} failed: {e}")
             self._emit_activity(
@@ -257,7 +254,7 @@ class PipelineExecutor:
             )
             # Continue with next agents instead of raising
             results[node.id] = None
-    
+
     async def _execute_parallel_with_activity(
         self,
         project_id: str,
@@ -275,7 +272,7 @@ class PipelineExecutor:
                 )
             )
         await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     def _get_thinking_message(self, agent_name: str) -> str:
         """Get contextual thinking message for an agent."""
         messages = {
@@ -299,12 +296,12 @@ class PipelineExecutor:
             "coding_standards": "Generating README and API docs...",
         }
         return messages.get(agent_name, f"Processing {agent_name}...")
-    
+
     async def _update_project_status(self, project_id: str, status: str):
         """Update project status in database."""
         from models import Project
         from sqlalchemy import update
-        
+
         stmt = (
             update(Project)
             .where(Project.id == project_id)
@@ -312,10 +309,10 @@ class PipelineExecutor:
         )
         self.db.execute(stmt)
         self.db.commit()
-    
+
     async def _save_project_results(
-        self, 
-        project_id: str, 
+        self,
+        project_id: str,
         results: Dict[str, Any],
         total_cost: float,
         cost_breakdown: Dict[str, float]
@@ -324,7 +321,7 @@ class PipelineExecutor:
         from models import Project, CostTracking
         from sqlalchemy import update
         import uuid as uuid_module
-        
+
         # Extract agent outputs from results
         agent_outputs = {}
         for agent_name, result in results.items():
@@ -332,17 +329,17 @@ class PipelineExecutor:
                 agent_outputs[agent_name] = result.data
             elif result:
                 agent_outputs[agent_name] = {"success": result.success if hasattr(result, 'success') else False}
-        
+
         # Get delivery info
         delivery_result = results.get("delivery")
         delivery_data = delivery_result.data if delivery_result and hasattr(delivery_result, 'data') else {}
         github_repo = delivery_data.get("github_repo") if isinstance(delivery_data, dict) else None
-        
+
         stmt = (
             update(Project)
             .where(Project.id == project_id)
             .values(
-                status="COMPLETED",
+                status="completed",
                 agent_outputs=agent_outputs,
                 github_repo=github_repo,
                 updated_at=datetime.utcnow(),
@@ -350,7 +347,7 @@ class PipelineExecutor:
             )
         )
         self.db.execute(stmt)
-        
+
         # Create cost tracking record
         cost_record = CostTracking(
             id=uuid_module.uuid4(),
