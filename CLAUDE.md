@@ -135,6 +135,7 @@ backend/api/routes/templates.py          Project template management
 backend/api/routes/revisions.py          Project revision handling
 backend/api/routes/analytics.py          Analytics dashboards
 backend/api/routes/chat.py               Pre-build chat + mid-pipeline clarification endpoints
+backend/api/routes/project_memory.py     Project-scoped persistent memory CRUD
 ```
 
 ### Task Queue
@@ -172,6 +173,8 @@ frontend/src/components/VoiceInput.tsx            Voice-to-text via Web Speech A
 frontend/src/components/RevisionPanel.tsx         Revision request panel
 frontend/src/components/LiveCodePreview.tsx        Code-split Sandpack live preview for generated code
 frontend/src/components/MonacoDiffEditor.tsx      Code-split Monaco diff editor for agent output comparison
+frontend/src/components/ProjectTimeline.tsx       Checkpoint history timeline with branching and comparison
+frontend/src/components/ProjectMemory.tsx         Persistent project memory viewer/editor
 frontend/src/components/ScoreGauge.tsx            Animated SVG circular gauge
 frontend/src/lib/api.ts                          Axios API client — 60+ functions, all TypeScript types
 frontend/src/contexts/AuthContext.tsx             JWT auth with idle timeout
@@ -480,6 +483,40 @@ These features are complete and integrated. Do not re-implement them.
 - "Live Preview" tab added to ArtifactViewer TAB_DEFINITIONS (gated on code_generation files existing)
 - `LivePreviewTab` wrapper extracts files from `outputs.code_generation` and renders Suspense-wrapped LiveCodePreview
 - Dependency: `@codesandbox/sandpack-react ^2.20.0`
+
+### Project History Timeline with Checkpoint Branching (#6)
+- **Where:** `frontend/src/components/ProjectTimeline.tsx` (new), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Interactive timeline showing full pipeline checkpoint history and audit log events
+- Three view modes: Combined (all events), Checkpoints only, Audit Log only
+- Checkpoint nodes expand to show full pipeline state at that point (per-agent status badges)
+- **Fork from any checkpoint:** "Fork from here" button calls `restartFromAgent()` to restart the pipeline from that agent
+- **Compare checkpoints:** Select any two checkpoints and see a side-by-side diff of node states, cost delta, and step delta
+- Audit log events shown with type-specific icons and colors (pipeline start/complete/failed, agent events, checkpoint events, retries, cost alerts)
+- Event type filter dropdown for audit log view
+- Auto-refreshes during active builds (5s polling)
+- Expands cost breakdown per checkpoint
+- New API client functions: `getProjectCheckpoints()`, `getProjectAuditLog()`
+- Renders as a dedicated "Pipeline History & Branching" card section in ProjectView
+
+### Persistent Project Memory with Context Files (#12)
+- **Where:** `backend/api/routes/project_memory.py` (new), `frontend/src/components/ProjectMemory.tsx` (new), `backend/orchestration/executor.py` (modified), `backend/main.py` (modified), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Eliminates AI amnesia between pipeline runs — decisions, preferences, and context persist
+- Uses existing `knowledge_base` table with project_id scoping and `project_memory` tag
+- **5 memory categories:** Decision, Preference, Context, Lesson Learned, Constraint
+- Full CRUD UI: create, edit, delete memory entries with category-grouped view
+- Category filter and expandable/collapsible groups
+- Usage tracking: entries show how many times they've been used by pipeline runs
+- **Pipeline integration:** Executor loads all project memory entries into `context["project_memory"]` at pipeline start, grouped by category, so every agent has access
+- Usage count auto-incremented on each pipeline run
+- Memory summary endpoint for compact context injection
+- **Backend endpoints:**
+  - `GET /api/projects/{id}/memory` — List memory entries (filterable by category)
+  - `POST /api/projects/{id}/memory` — Create memory entry
+  - `PUT /api/projects/{id}/memory/{entry_id}` — Update entry
+  - `DELETE /api/projects/{id}/memory/{entry_id}` — Delete entry
+  - `GET /api/projects/{id}/memory/categories` — List available categories
+  - `GET /api/projects/{id}/memory/summary` — Get grouped summary for pipeline context
+- New API client functions: `getProjectMemory()`, `createMemoryEntry()`, `updateMemoryEntry()`, `deleteMemoryEntry()`, `getMemoryCategories()`, `getMemorySummary()`
 
 ***
 

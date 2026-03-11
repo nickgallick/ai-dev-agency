@@ -7,10 +7,12 @@ import { PipelineDAG } from '@/components/PipelineDAG'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { ActivityFeed } from '@/components/ActivityFeed'
 import { api } from '@/lib/api'
-import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock, ArrowLeftRight, MessageCircle, Send, HelpCircle } from 'lucide-react'
+import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock, ArrowLeftRight, MessageCircle, Send, HelpCircle, GitBranch, Brain } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { AgentOutputTimeline } from '@/components/AgentOutputTimeline'
+import { ProjectTimeline } from '@/components/ProjectTimeline'
+import { ProjectMemory } from '@/components/ProjectMemory'
 import { lazy, Suspense, useState, useCallback } from 'react'
 
 // Code-split Monaco diff editor — only loaded when user clicks "Compare Outputs"
@@ -1215,6 +1217,22 @@ export default function ProjectView() {
           projectStatus={project.status}
           agentOutputs={outputs?.agent_outputs || {}}
         />
+      </Card>
+
+      {/* Project History Timeline — checkpoint branching & audit log (#6) */}
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <GitBranch className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Pipeline History & Branching
+          </h3>
+        </div>
+        <ProjectTimeline projectId={id!} projectStatus={project.status} />
+      </Card>
+
+      {/* Persistent Project Memory (#12) */}
+      <Card>
+        <ProjectMemory projectId={id!} />
       </Card>
 
       {/* Monaco Diff Editor Modal — code-split, only loaded on demand */}

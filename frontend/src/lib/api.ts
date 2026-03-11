@@ -902,6 +902,53 @@ export const api = {
     const response = await apiClient.get(`/chat/interrupt/${projectId}/status`)
     return response.data
   },
+
+  // ── Project History Timeline (#6) ─────────────────────────────────
+
+  getProjectCheckpoints: async (projectId: string): Promise<{ project_id: string; checkpoints: CheckpointEntry[] }> => {
+    const response = await apiClient.get(`/projects/${projectId}/checkpoints`)
+    return response.data
+  },
+
+  getProjectAuditLog: async (projectId: string, eventType?: string, limit: number = 200): Promise<{ project_id: string; entries: AuditLogEntry[] }> => {
+    const response = await apiClient.get(`/projects/${projectId}/audit-log`, {
+      params: { event_type: eventType, limit },
+    })
+    return response.data
+  },
+
+  // ── Persistent Project Memory (#12) ────────────────────────────────
+
+  getProjectMemory: async (projectId: string, category?: string): Promise<MemoryEntry[]> => {
+    const response = await apiClient.get(`/projects/${projectId}/memory`, {
+      params: { category },
+    })
+    return response.data
+  },
+
+  createMemoryEntry: async (projectId: string, data: MemoryEntryCreate): Promise<MemoryEntry> => {
+    const response = await apiClient.post(`/projects/${projectId}/memory`, data)
+    return response.data
+  },
+
+  updateMemoryEntry: async (projectId: string, entryId: string, data: Partial<MemoryEntryCreate>): Promise<MemoryEntry> => {
+    const response = await apiClient.put(`/projects/${projectId}/memory/${entryId}`, data)
+    return response.data
+  },
+
+  deleteMemoryEntry: async (projectId: string, entryId: string): Promise<void> => {
+    await apiClient.delete(`/projects/${projectId}/memory/${entryId}`)
+  },
+
+  getMemoryCategories: async (): Promise<{ categories: MemoryCategory[] }> => {
+    const response = await apiClient.get('/projects/_/memory/categories')
+    return response.data
+  },
+
+  getMemorySummary: async (projectId: string): Promise<MemorySummary> => {
+    const response = await apiClient.get(`/projects/${projectId}/memory/summary`)
+    return response.data
+  },
 }
 
 // Phase 11C Types
@@ -1053,4 +1100,62 @@ export interface InterruptStatus {
   context?: string
   agent_name?: string
   asked_at?: string
+}
+
+// Project History Timeline (#6)
+export interface CheckpointEntry {
+  id: string
+  project_id: string
+  agent_name: string
+  agent_status: string
+  node_states: Record<string, any>
+  pipeline_context?: Record<string, any>
+  pipeline_config?: Record<string, any>
+  total_cost: number
+  cost_breakdown?: Record<string, number>
+  step_number: number
+  created_at: string
+}
+
+export interface AuditLogEntry {
+  id: string
+  event_type: string
+  agent_name: string | null
+  message: string
+  details: Record<string, any> | null
+  timestamp: string | null
+  duration_ms: string | null
+}
+
+// Persistent Project Memory (#12)
+export interface MemoryEntry {
+  id: string
+  category: string
+  title: string
+  content: string
+  agent_name: string | null
+  quality_score: number | null
+  usage_count: number
+  tags: string[] | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface MemoryEntryCreate {
+  category: string
+  title: string
+  content: string
+  tags?: string[]
+}
+
+export interface MemoryCategory {
+  value: string
+  label: string
+  description: string
+}
+
+export interface MemorySummary {
+  project_id: string
+  total_entries: number
+  by_category: Record<string, { title: string; content: string }[]>
 }

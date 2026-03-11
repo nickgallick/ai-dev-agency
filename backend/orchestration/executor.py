@@ -191,6 +191,12 @@ class PipelineExecutor:
         if self.db:
             self._checkpoint_manager = get_checkpoint_manager(self.db, project_id)
 
+        # ── Load persistent project memory (#12) ──────────────────
+        if self.db:
+            project_memory = self._load_project_memory(project_id)
+            if project_memory:
+                context["project_memory"] = project_memory
+
         project_type = (requirements or {}).get("project_type", "unknown")
         audit_pipeline_start(self.db, project_id, cost_profile, project_type)
         record_pipeline_start(cost_profile, project_type)
@@ -694,6 +700,62 @@ class PipelineExecutor:
             )
         except Exception as e:
             logger.warning(f"Knowledge capture failed for {agent_name}: {e}")
+
+    def _load_project_memory(self, project_id: str) -> dict:
+        """Load persistent project memory from knowledge base (#12).
+
+        Returns a dict of memory entries grouped by category for injection
+        into the pipeline context so every agent can access past decisions,
+        preferences, and lessons learned.
+        """
+        try:
+            from models.knowledge_base import KnowledgeBase
+
+            entries = (
+                self.db.query(KnowledgeBase)
+                .filter(
+                    KnowledgeBase.project_id == project_id,
+                    KnowledgeBase.tags.contains(["project_memory"]),
+                )
+                .order_by(KnowledgeBase.quality_score.desc().nullslast())
+                .all()
+            )
+
+            if not entries:
+                return {}
+
+            # Map entry_type back to readable category
+            _type_to_cat = {
+                "architecture_decision": "decision",
+                "user_preference": "preference",
+                "prompt_result": "context",
+                "qa_finding": "lesson",
+                "code_pattern": "constraint",
+            }
+
+            by_category: dict = {}
+            for entry in entries:
+                cat = _type_to_cat.get(entry.entry_type, "context")
+                by_category.setdefault(cat, []).append({
+                    "title": entry.title,
+                    "content": entry.content,
+                })
+
+                # Bump usage count
+                entry.usage_count = (entry.usage_count or 0) + 1
+                from datetime import datetime as dt
+                entry.last_used_at = dt.utcnow()
+
+            self.db.commit()
+
+            logger.info(
+                f"Loaded {len(entries)} project memory entries for {project_id}"
+            )
+            return by_category
+
+        except Exception as e:
+            logger.warning(f"Failed to load project memory: {e}")
+            return {}
 
     async def _wait_for_clarification(
         self,

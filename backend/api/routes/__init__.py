@@ -10,6 +10,7 @@ from .checkpoints import router as checkpoints_router  # Phase 11C
 from .queue import router as queue_router  # Phase 11C
 from .export import router as export_router  # Phase 11C
 from .api_keys import router as api_keys_router  # Platform API keys
+from .project_memory import router as project_memory_router  # Project Memory (#12)
 
 __all__ = [
     "mcp_router",
@@ -22,4 +23,5 @@ __all__ = [
     "queue_router",
     "export_router",
     "api_keys_router",
+    "project_memory_router",
 ]
