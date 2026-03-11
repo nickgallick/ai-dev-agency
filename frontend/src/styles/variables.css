@@ -59,6 +59,51 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
 }
 
+/* Light Theme */
+[data-theme="light"] {
+  /* Background Colors */
+  --background-primary: #ffffff;
+  --background-secondary: #f5f5f5;
+  --background-tertiary: #e8e8e8;
+  --background-elevated: #ffffff;
+
+  /* Text Colors */
+  --text-primary: #1a1a1a;
+  --text-secondary: #555555;
+  --text-tertiary: #888888;
+  --text-muted: #aaaaaa;
+
+  /* Accent Colors */
+  --accent-primary: #2563eb;
+  --accent-secondary: #3b82f6;
+  --accent-success: #16a34a;
+  --accent-warning: #d97706;
+  --accent-error: #dc2626;
+  --accent-info: #0891b2;
+
+  /* Border Colors */
+  --border-primary: #d4d4d4;
+  --border-subtle: #e5e5e5;
+  --border-hover: #b0b0b0;
+
+  /* Severity Colors */
+  --severity-critical: #dc2626;
+  --severity-high: #ea580c;
+  --severity-medium: #d97706;
+  --severity-low: #65a30d;
+
+  /* Score Colors */
+  --score-excellent: #16a34a;
+  --score-good: #65a30d;
+  --score-average: #d97706;
+  --score-poor: #dc2626;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+
 /* Base Styles */
 * {
   margin: 0;

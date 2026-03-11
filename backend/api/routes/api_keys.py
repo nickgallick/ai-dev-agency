@@ -5,8 +5,10 @@ in the database encrypted, with fallback to environment variables.
 Keys are read at runtime by agents — not hardcoded.
 """
 
+import json
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -63,12 +65,46 @@ PLATFORM_KEYS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# In-memory store (persists for process lifetime; also written to .env equivalent)
+# Persistent storage file
+_KEYS_FILE = Path(__file__).parent.parent.parent / "data" / "api_keys.json"
+
+# In-memory store (persists for process lifetime; also written to disk)
 _key_store: Dict[str, str] = {}
+_loaded_from_disk = False
+
+
+def _load_store() -> None:
+    """Load saved keys from JSON file on first access."""
+    global _loaded_from_disk
+    if _loaded_from_disk:
+        return
+    _loaded_from_disk = True
+    try:
+        if _KEYS_FILE.exists():
+            saved = json.loads(_KEYS_FILE.read_text())
+            for key_id, value in saved.items():
+                if key_id not in _key_store and value:
+                    _key_store[key_id] = value
+                    # Also inject into environment so agents pick it up
+                    meta = PLATFORM_KEYS.get(key_id)
+                    if meta:
+                        os.environ.setdefault(meta["env_var"], value)
+    except Exception as e:
+        logger.error(f"Failed to load API keys from disk: {e}")
+
+
+def _persist_store() -> None:
+    """Write current keys to JSON file."""
+    try:
+        _KEYS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _KEYS_FILE.write_text(json.dumps(_key_store, indent=2))
+    except Exception as e:
+        logger.error(f"Failed to persist API keys: {e}")
 
 
 def _load_from_env() -> None:
     """Populate store from environment on first access."""
+    _load_store()
     for key_id, meta in PLATFORM_KEYS.items():
         env_val = os.environ.get(meta["env_var"], "")
         if env_val and key_id not in _key_store:
@@ -145,6 +181,8 @@ async def save_api_key(key_id: str, body: SaveKeyRequest):
     # Set in process environment so agents pick it up immediately
     env_var = PLATFORM_KEYS[key_id]["env_var"]
     os.environ[env_var] = body.value.strip()
+    # Persist to disk
+    _persist_store()
     # Reset the cached Settings singleton so it re-reads env on next access
     try:
         import config.settings as _cfg
@@ -160,6 +198,7 @@ async def delete_api_key(key_id: str):
     if key_id not in PLATFORM_KEYS:
         raise HTTPException(status_code=404, detail=f"Unknown key: {key_id}")
     _key_store.pop(key_id, None)
+    _persist_store()
     return {"success": True, "key_id": key_id}
 
 
