@@ -9,6 +9,7 @@ import { api } from '@/lib/api'
 import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2 } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
+import { AgentOutputTimeline } from '@/components/AgentOutputTimeline'
 import { useState } from 'react'
 
 export default function ProjectView() {
@@ -27,6 +28,12 @@ export default function ProjectView() {
     queryKey: ['projectOutputs', id],
     queryFn: () => api.getProjectOutputs(id!),
     enabled: !!project,
+    refetchInterval: (query) => {
+      const status = query.state.data
+      // Poll every 4s while building so agent output cards fill in live
+      if (project?.status === 'completed' || project?.status === 'failed') return false
+      return 4000
+    },
   })
 
   // Phase 11C: Checkpoint status
@@ -838,26 +845,13 @@ export default function ProjectView() {
         </p>
       </Card>
 
-      {/* Agent Outputs */}
-      {outputs?.agent_outputs && Object.keys(outputs.agent_outputs).length > 0 && (
-        <Card>
-          <h3 className="font-medium text-text-primary mb-4">Agent Outputs</h3>
-          <div className="space-y-4">
-            {Object.entries(outputs.agent_outputs)
-              .filter(([agent]) => !['qa', 'deployment', 'analytics_monitoring', 'coding_standards'].includes(agent))
-              .map(([agent, output]) => (
-              <details key={agent} className="group">
-                <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
-                  {agent.charAt(0).toUpperCase() + agent.slice(1).replace('_', ' ')}
-                </summary>
-                <pre className="mt-2 p-3 bg-background-tertiary rounded-lg text-xs text-text-secondary overflow-x-auto">
-                  {JSON.stringify(output, null, 2)}
-                </pre>
-              </details>
-            ))}
-          </div>
-        </Card>
-      )}
+      {/* Agent Output Timeline — live per-agent artifact view */}
+      <Card>
+        <AgentOutputTimeline
+          projectStatus={project.status}
+          agentOutputs={outputs?.agent_outputs || {}}
+        />
+      </Card>
     </div>
   )
 }
