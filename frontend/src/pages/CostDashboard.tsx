@@ -1,16 +1,27 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Card } from '@/components/Card'
 import { api } from '@/lib/api'
-import { 
-  DollarSign, TrendingUp, Zap, Clock, Trophy, BarChart3, 
-  AlertTriangle, Target, CheckCircle2, XCircle, Timer
+import { format } from 'date-fns'
+import {
+  DollarSign, TrendingUp, Zap, Clock, Trophy, BarChart3,
+  AlertTriangle, Target, CheckCircle2, XCircle, Timer, Layers,
+  ChevronDown, ChevronUp, Calendar
 } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
-type TabType = 'overview' | 'agents' | 'models' | 'build-time' | 'issues' | 'accuracy'
+type TabType = 'overview' | 'agents' | 'models' | 'build-time' | 'issues' | 'accuracy' | 'projects'
+
+type DateRange = '1' | '7' | '30' | '90' | 'custom'
 
 export default function CostDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [dateRange, setDateRange] = useState<DateRange>('30')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [expandedProject, setExpandedProject] = useState<string | null>(null)
+
+  const days = dateRange === 'custom' ? 90 : parseInt(dateRange)
 
   // Existing cost queries
   const { data: summary } = useQuery({
@@ -29,29 +40,29 @@ export default function CostDashboard() {
   })
 
   const { data: trends } = useQuery({
-    queryKey: ['costTrends'],
-    queryFn: () => api.getCostTrends(30),
+    queryKey: ['costTrends', days],
+    queryFn: () => api.getCostTrends(days),
   })
 
   // Phase 9A: New analytics queries
   const { data: analyticsSummary } = useQuery({
-    queryKey: ['analyticsSummary'],
-    queryFn: () => api.getAnalyticsSummary(30),
+    queryKey: ['analyticsSummary', days],
+    queryFn: () => api.getAnalyticsSummary(days),
   })
 
   const { data: successRates } = useQuery({
-    queryKey: ['agentSuccessRates'],
-    queryFn: () => api.getAgentSuccessRates(30, 20),
+    queryKey: ['agentSuccessRates', days],
+    queryFn: () => api.getAgentSuccessRates(days, 20),
   })
 
   const { data: modelComparison } = useQuery({
-    queryKey: ['modelComparison'],
-    queryFn: () => api.getModelComparison(undefined, 30),
+    queryKey: ['modelComparison', days],
+    queryFn: () => api.getModelComparison(undefined, days),
   })
 
   const { data: buildTimeWaterfall } = useQuery({
-    queryKey: ['buildTimeWaterfall'],
-    queryFn: () => api.getBuildTimeWaterfall(undefined, 30),
+    queryKey: ['buildTimeWaterfall', days],
+    queryFn: () => api.getBuildTimeWaterfall(undefined, days),
   })
 
   const { data: failurePatterns } = useQuery({
@@ -60,12 +71,51 @@ export default function CostDashboard() {
   })
 
   const { data: costAccuracy } = useQuery({
-    queryKey: ['costAccuracy'],
-    queryFn: () => api.getCostAccuracyStats(undefined, undefined, 90),
+    queryKey: ['costAccuracy', days],
+    queryFn: () => api.getCostAccuracyStats(undefined, undefined, days),
   })
+
+  // Per-project costs — fetch all projects + their agent logs
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects({ limit: 100 }),
+    enabled: activeTab === 'projects',
+  })
+
+  const { data: allLogs } = useQuery({
+    queryKey: ['allAgentLogs'],
+    queryFn: () => api.getAgentLogs({ limit: 500 }),
+    enabled: activeTab === 'projects',
+  })
+
+  // Group logs by project
+  const costByProject = useMemo(() => {
+    if (!allLogs) return {} as Record<string, { total: number; agents: Record<string, number> }>
+    const result: Record<string, { total: number; agents: Record<string, number> }> = {}
+    allLogs.forEach((log) => {
+      if (!result[log.project_id]) result[log.project_id] = { total: 0, agents: {} }
+      result[log.project_id].total += log.cost ?? 0
+      result[log.project_id].agents[log.agent_name] =
+        (result[log.project_id].agents[log.agent_name] ?? 0) + (log.cost ?? 0)
+    })
+    return result
+  }, [allLogs])
+
+  // Trends chart data — date filtering for custom range
+  const chartData = useMemo(() => {
+    if (!trends) return []
+    if (dateRange !== 'custom' || !customFrom) return trends
+    const from = new Date(customFrom)
+    const to = customTo ? new Date(customTo + 'T23:59:59') : new Date()
+    return trends.filter((t) => {
+      const d = new Date(t.date)
+      return d >= from && d <= to
+    })
+  }, [trends, dateRange, customFrom, customTo])
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'projects', label: 'By Project', icon: Layers },
     { id: 'agents', label: 'Agent Performance', icon: Trophy },
     { id: 'models', label: 'Model Comparison', icon: Zap },
     { id: 'build-time', label: 'Build Time', icon: Timer },
@@ -75,18 +125,65 @@ export default function CostDashboard() {
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
-      <div>
-        <h2 className="text-2xl font-semibold text-text-primary">Cost & Analytics Dashboard</h2>
-        <p className="text-text-secondary mt-1">Track spending and agent performance</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-2xl font-semibold text-text-primary">Cost & Analytics Dashboard</h2>
+          <p className="text-text-secondary mt-1">Track spending and agent performance</p>
+        </div>
+
+        {/* Date Range Selector */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Calendar className="w-4 h-4 text-text-tertiary" />
+          {(['1', '7', '30', '90'] as DateRange[]).map((d) => (
+            <button
+              key={d}
+              onClick={() => setDateRange(d)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                dateRange === d
+                  ? 'bg-accent-primary text-white'
+                  : 'bg-bg-secondary text-text-secondary hover:bg-border-subtle'
+              }`}
+            >
+              {d === '1' ? 'Today' : `${d}d`}
+            </button>
+          ))}
+          <button
+            onClick={() => setDateRange('custom')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              dateRange === 'custom'
+                ? 'bg-accent-primary text-white'
+                : 'bg-bg-secondary text-text-secondary hover:bg-border-subtle'
+            }`}
+          >
+            Custom
+          </button>
+          {dateRange === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="glass-input text-sm px-2 py-1 rounded"
+              />
+              <span className="text-text-tertiary text-xs">–</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="glass-input text-sm px-2 py-1 rounded"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex flex-wrap gap-2 border-b border-border-default pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-border-default pb-2 overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === tab.id
                 ? 'bg-accent-primary text-white'
                 : 'text-text-secondary hover:bg-bg-secondary'
@@ -157,60 +254,188 @@ export default function CostDashboard() {
             </Card>
           </div>
 
-          {/* Cost by Agent */}
+          {/* Spend Trend Chart */}
+          {chartData.length > 0 && (
+            <Card>
+              <h3 className="font-medium text-text-primary mb-4">Daily Spend Trend</h3>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle, #334155)" opacity={0.5} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
+                    tickFormatter={(v) => {
+                      try { return format(new Date(v), 'MMM d') } catch { return v }
+                    }}
+                  />
+                  <YAxis tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)',
+                      fontSize: 12,
+                    }}
+                    formatter={(v: number) => [`$${v.toFixed(4)}`, 'Cost']}
+                    labelFormatter={(l) => {
+                      try { return format(new Date(l), 'MMM d, yyyy') } catch { return l }
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="daily_cost"
+                    stroke="var(--accent-primary)"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </Card>
+          )}
+
+          {/* Cost by Agent — with most expensive highlighted */}
           <Card>
             <h3 className="font-medium text-text-primary mb-4">Cost by Agent</h3>
-            <div className="space-y-3">
-              {byAgent?.map((agent) => (
-                <div key={agent.agent_name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-accent-primary" />
-                    <span className="text-sm text-text-primary capitalize">
-                      {agent.agent_name.replace('_', ' ')}
-                    </span>
+            <div className="space-y-2">
+              {byAgent?.map((agent, idx) => {
+                const maxCost = byAgent[0]?.total_cost || 1
+                const isTop = idx === 0
+                return (
+                  <div key={agent.agent_name} className={`flex items-center justify-between p-2 rounded-lg ${isTop ? 'bg-accent-warning/5 border border-accent-warning/20' : ''}`}>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isTop ? 'bg-accent-warning' : 'bg-accent-primary'}`} />
+                      <span className="text-sm text-text-primary capitalize truncate">
+                        {agent.agent_name.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm ml-2">
+                      <div className="hidden sm:block w-24 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${isTop ? 'bg-accent-warning' : 'bg-accent-primary'}`}
+                          style={{ width: `${(agent.total_cost / maxCost) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-text-tertiary">{agent.call_count} calls</span>
+                      <span className={`font-mono ${isTop ? 'text-accent-warning font-semibold' : 'text-text-primary'}`}>
+                        ${agent.total_cost.toFixed(4)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-text-tertiary">{agent.call_count} calls</span>
-                    <span className="text-text-primary font-mono">
-                      ${agent.total_cost.toFixed(4)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
               {(!byAgent || byAgent.length === 0) && (
                 <p className="text-sm text-text-secondary text-center py-4">No data yet</p>
               )}
             </div>
           </Card>
 
-          {/* Cost by Model */}
+          {/* Cost by Model — with most expensive highlighted */}
           <Card>
             <h3 className="font-medium text-text-primary mb-4">Cost by Model</h3>
-            <div className="space-y-3">
-              {byModel?.map((model) => (
-                <div key={model.model} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-accent-secondary" />
-                    <code className="text-sm text-text-primary">
-                      {model.model.split('/').pop()}
-                    </code>
+            <div className="space-y-2">
+              {byModel?.map((model, idx) => {
+                const maxCost = byModel[0]?.total_cost || 1
+                const isTop = idx === 0
+                return (
+                  <div key={model.model} className={`flex items-center justify-between p-2 rounded-lg ${isTop ? 'bg-accent-primary/5 border border-accent-primary/20' : ''}`}>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isTop ? 'bg-accent-primary' : 'bg-accent-secondary'}`} />
+                      <code className="text-sm text-text-primary truncate">
+                        {model.model.split('/').pop()}
+                      </code>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm ml-2">
+                      <div className="hidden sm:block w-24 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${isTop ? 'bg-accent-primary' : 'bg-accent-secondary'}`}
+                          style={{ width: `${(model.total_cost / maxCost) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-text-tertiary">
+                        {(model.prompt_tokens + model.completion_tokens).toLocaleString()} tok
+                      </span>
+                      <span className={`font-mono ${isTop ? 'text-accent-primary font-semibold' : 'text-text-primary'}`}>
+                        ${model.total_cost.toFixed(4)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-text-tertiary">
-                      {(model.prompt_tokens + model.completion_tokens).toLocaleString()} tokens
-                    </span>
-                    <span className="text-text-primary font-mono">
-                      ${model.total_cost.toFixed(4)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
               {(!byModel || byModel.length === 0) && (
                 <p className="text-sm text-text-secondary text-center py-4">No data yet</p>
               )}
             </div>
           </Card>
         </>
+      )}
+
+      {/* By Project Tab */}
+      {activeTab === 'projects' && (
+        <Card>
+          <h3 className="font-medium text-text-primary mb-4 flex items-center gap-2">
+            <Layers className="w-5 h-5 text-accent-primary" />
+            Cost by Project
+          </h3>
+          <div className="space-y-2">
+            {projects
+              ?.filter((p) => costByProject[p.id])
+              .sort((a, b) => (costByProject[b.id]?.total ?? 0) - (costByProject[a.id]?.total ?? 0))
+              .map((project) => {
+                const projectCost = costByProject[project.id]
+                const isExpanded = expandedProject === project.id
+                if (!projectCost) return null
+                return (
+                  <div key={project.id} className="border border-border-subtle rounded-lg overflow-hidden">
+                    <button
+                      className="w-full flex items-center justify-between p-4 hover:bg-bg-secondary transition-colors text-left"
+                      onClick={() => setExpandedProject(isExpanded ? null : project.id)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-text-primary">
+                          {project.name || 'Untitled Project'}
+                        </span>
+                        <span className="text-xs text-text-tertiary capitalize">
+                          {project.project_type?.replace(/_/g, ' ')}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded ${
+                          project.status === 'completed' ? 'bg-accent-success/20 text-accent-success' :
+                          project.status === 'failed' ? 'bg-accent-error/20 text-accent-error' :
+                          'bg-accent-primary/20 text-accent-primary'
+                        }`}>
+                          {project.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="font-mono text-sm font-semibold text-text-primary">
+                          ${projectCost.total.toFixed(4)}
+                        </span>
+                        {isExpanded ? <ChevronUp className="w-4 h-4 text-text-tertiary" /> : <ChevronDown className="w-4 h-4 text-text-tertiary" />}
+                      </div>
+                    </button>
+                    {isExpanded && (
+                      <div className="border-t border-border-subtle px-4 py-3 bg-bg-secondary">
+                        <div className="space-y-1.5">
+                          {Object.entries(projectCost.agents)
+                            .sort(([, a], [, b]) => b - a)
+                            .map(([agent, cost]) => (
+                              <div key={agent} className="flex items-center justify-between text-sm">
+                                <span className="capitalize text-text-secondary">{agent.replace(/_/g, ' ')}</span>
+                                <span className="font-mono text-text-primary">${cost.toFixed(4)}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            {(!projects || projects.length === 0 || Object.keys(costByProject).length === 0) && (
+              <p className="text-sm text-text-secondary text-center py-8">No project cost data yet.</p>
+            )}
+          </div>
+        </Card>
       )}
 
       {/* Agent Performance Tab */}

@@ -281,6 +281,7 @@ export default function ProjectView() {
           projectType={project.project_type}
           liveUrl={project.live_url}
           githubRepo={project.github_repo}
+          agentOutputs={outputs?.agent_outputs}
         />
       )}
 
