@@ -1,5 +1,6 @@
 #!/bin/bash
 # Quick deploy script — run on the server to pull latest and rebuild
+# Last tested: 2026-03-11
 # Usage: ./deploy.sh [branch]
 #   ./deploy.sh                          # deploys current branch
 #   ./deploy.sh claude/code-audit-fixes  # deploys specific branch
