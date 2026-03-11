@@ -7,12 +7,15 @@ import { PipelineDAG } from '@/components/PipelineDAG'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { ActivityFeed } from '@/components/ActivityFeed'
 import { api } from '@/lib/api'
-import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock, ArrowLeftRight, MessageCircle, Send, HelpCircle, GitBranch, Brain } from 'lucide-react'
+import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock, ArrowLeftRight, MessageCircle, Send, HelpCircle, GitBranch, Brain, Monitor, Share2 } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { AgentOutputTimeline } from '@/components/AgentOutputTimeline'
 import { ProjectTimeline } from '@/components/ProjectTimeline'
 import { ProjectMemory } from '@/components/ProjectMemory'
+import { BrowserTestPanel } from '@/components/BrowserTestPanel'
+import { ShareLinkPanel } from '@/components/ShareLinkPanel'
+import { DesignImportPanel } from '@/components/DesignImportPanel'
 import { lazy, Suspense, useState, useCallback } from 'react'
 
 // Code-split Monaco diff editor — only loaded when user clicks "Compare Outputs"
@@ -1233,6 +1236,21 @@ export default function ProjectView() {
       {/* Persistent Project Memory (#12) */}
       <Card>
         <ProjectMemory projectId={id!} />
+      </Card>
+
+      {/* Automated Browser Testing (#11) */}
+      <Card>
+        <BrowserTestPanel projectId={id!} liveUrl={project.live_url} />
+      </Card>
+
+      {/* Shareable Preview Links (#22) */}
+      <Card>
+        <ShareLinkPanel projectId={id!} />
+      </Card>
+
+      {/* Figma & Screenshot Import (#23) */}
+      <Card>
+        <DesignImportPanel projectId={id!} />
       </Card>
 
       {/* Monaco Diff Editor Modal — code-split, only loaded on demand */}

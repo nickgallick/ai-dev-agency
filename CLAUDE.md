@@ -136,6 +136,9 @@ backend/api/routes/revisions.py          Project revision handling
 backend/api/routes/analytics.py          Analytics dashboards
 backend/api/routes/chat.py               Pre-build chat + mid-pipeline clarification endpoints
 backend/api/routes/project_memory.py     Project-scoped persistent memory CRUD
+backend/api/routes/browser_tests.py     Playwright browser testing with video recording
+backend/api/routes/share.py             Shareable preview links with HMAC signing
+backend/api/routes/design_import.py     Figma & screenshot import for design tokens
 ```
 
 ### Task Queue
@@ -175,6 +178,9 @@ frontend/src/components/LiveCodePreview.tsx        Code-split Sandpack live prev
 frontend/src/components/MonacoDiffEditor.tsx      Code-split Monaco diff editor for agent output comparison
 frontend/src/components/ProjectTimeline.tsx       Checkpoint history timeline with branching and comparison
 frontend/src/components/ProjectMemory.tsx         Persistent project memory viewer/editor
+frontend/src/components/BrowserTestPanel.tsx      Playwright browser testing with video evidence
+frontend/src/components/ShareLinkPanel.tsx        Shareable preview link management
+frontend/src/components/DesignImportPanel.tsx     Figma & screenshot import for design context
 frontend/src/components/ScoreGauge.tsx            Animated SVG circular gauge
 frontend/src/lib/api.ts                          Axios API client — 60+ functions, all TypeScript types
 frontend/src/contexts/AuthContext.tsx             JWT auth with idle timeout
@@ -261,6 +267,28 @@ GET    /metrics                         Prometheus metrics endpoint (auto-instru
 ### Activity
 ```
 GET    /api/activity/{id}/stream        SSE event stream for real-time pipeline progress
+```
+
+### Browser Testing
+```
+POST   /api/projects/{id}/browser-tests                          Run Playwright browser test
+GET    /api/projects/{id}/browser-tests                          Get test run history
+GET    /api/projects/{id}/browser-tests/evidence/{test_id}/{fn}  Serve video/screenshot files
+```
+
+### Share Links
+```
+POST   /api/projects/{id}/share                  Create shareable preview link
+GET    /api/projects/{id}/share                  List active share links
+DELETE /api/projects/{id}/share/{share_id}       Revoke share link
+GET    /share/{project_id}?token=                Public view (no auth)
+```
+
+### Design Import
+```
+POST   /api/projects/{id}/design-import/figma       Import design tokens from Figma
+POST   /api/projects/{id}/design-import/screenshot   Upload and analyze screenshot
+GET    /api/projects/{id}/design-import/tokens        Get merged design tokens
 ```
 
 ***
@@ -517,6 +545,53 @@ These features are complete and integrated. Do not re-implement them.
   - `GET /api/projects/{id}/memory/categories` — List available categories
   - `GET /api/projects/{id}/memory/summary` — Get grouped summary for pipeline context
 - New API client functions: `getProjectMemory()`, `createMemoryEntry()`, `updateMemoryEntry()`, `deleteMemoryEntry()`, `getMemoryCategories()`, `getMemorySummary()`
+
+### Automated Browser Testing with Video Evidence (#11)
+- **Where:** `backend/api/routes/browser_tests.py` (new), `frontend/src/components/BrowserTestPanel.tsx` (new), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Playwright-based headless browser testing of generated applications with video recording
+- Configurable viewport sizes: Desktop (1280x720), Tablet (768x1024), Mobile (375x812)
+- 7 test steps: navigation, title check, content rendering, console errors, layout overflow, interactive elements, theme toggle
+- Captures screenshots at each step, records full video session, collects performance metrics (DOM ready, load time, FCP, memory)
+- Graceful fallback: generates simulated results when Playwright is not installed
+- Test history: stores last 10 runs per project in `agent_outputs["browser_tests"]` JSONB
+- Frontend panel: viewport selector, theme testing toggle, run button with loading state, expandable step results with pass/fail/warning badges, performance metrics display, test history viewer
+- **Backend endpoints:**
+  - `POST /api/projects/{id}/browser-tests` — Run browser test (params: url, viewport, test_theme)
+  - `GET /api/projects/{id}/browser-tests` — Get test run history
+  - `GET /api/projects/{id}/browser-tests/evidence/{test_id}/{filename}` — Serve video/screenshot files
+- New API client functions: `runBrowserTest()`, `getBrowserTestHistory()`
+
+### Shareable Preview Links for Stakeholder Review (#22)
+- **Where:** `backend/api/routes/share.py` (new), `frontend/src/components/ShareLinkPanel.tsx` (new), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Generate read-only signed URLs to share project outputs without requiring login
+- HMAC-SHA256 token signing using `SECRET_KEY` env var: `{share_id}.{hmac_signature}` format
+- Configurable expiry: 1–90 days (default 7)
+- Granular permissions: toggle visibility of outputs, code, and QA reports per link
+- View count tracking per link, links can be revoked
+- Share metadata stored in `project.project_metadata["share_links"]` JSONB array
+- Public endpoint serves filtered project data (no auth required): outputs, code files, QA report based on link permissions
+- Frontend panel: create form with expiry/label/permission toggles, active links list with copy-to-clipboard, open in new tab, revoke actions, view count and expiry display
+- **Backend endpoints:**
+  - `POST /api/projects/{id}/share` — Create share link (params: expires_in_days, label, permissions)
+  - `GET /api/projects/{id}/share` — List active share links
+  - `DELETE /api/projects/{id}/share/{share_id}` — Revoke share link
+  - `GET /share/{project_id}?token=` — Public endpoint to view shared project (no auth)
+- New API client functions: `createShareLink()`, `getShareLinks()`, `revokeShareLink()`
+
+### Figma & Screenshot Import for Design Context (#23)
+- **Where:** `backend/api/routes/design_import.py` (new), `frontend/src/components/DesignImportPanel.tsx` (new), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Import design context from Figma files or screenshot uploads for the Design System agent
+- **Figma import:** Parses Figma URLs, fetches file data via Figma REST API (`/v1/files/{key}`, `/v1/files/{key}/styles`), extracts design tokens (colors, typography, spacing, border radius, shadows, components)
+- **Screenshot import:** Upload PNG/JPG screenshots, analyzed by LLM vision (OpenRouter) to extract design tokens (colors, fonts, layout patterns, component styles)
+- Tokens stored in `project.requirements["figma_tokens"]` and `project.requirements["design_screenshots"]`
+- Merged tokens endpoint combines Figma + screenshot sources for unified design context
+- Figma access token resolved from env var `FIGMA_ACCESS_TOKEN` or integrations store
+- Frontend panel: Figma URL input with import button, screenshot upload with drag-and-drop, extracted tokens preview with color swatches, typography details, and component lists
+- **Backend endpoints:**
+  - `POST /api/projects/{id}/design-import/figma` — Import from Figma URL
+  - `POST /api/projects/{id}/design-import/screenshot` — Upload and analyze screenshot
+  - `GET /api/projects/{id}/design-import/tokens` — Get merged design tokens from all sources
+- New API client functions: `importFromFigma()`, `uploadDesignScreenshot()`, `getDesignTokens()`
 
 ***
 

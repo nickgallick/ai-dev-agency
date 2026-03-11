@@ -26,6 +26,9 @@ from api.routes.export import router as export_router  # Phase 11C
 from api.activity import router as activity_router  # Real-time activity streaming
 from api.routes.chat import router as chat_router  # Conversational Clarification System
 from api.routes.project_memory import router as project_memory_router  # Project Memory (#12)
+from api.routes.browser_tests import router as browser_tests_router  # Browser Testing (#11)
+from api.routes.share import router as share_router  # Shareable Preview Links (#22)
+from api.routes.design_import import router as design_import_router  # Figma & Screenshot Import (#23)
 from auth import auth_router
 from models import engine, Base
 
@@ -137,6 +140,9 @@ app.include_router(mcp_router, prefix="/api")  # MCP Server management
 app.include_router(api_keys_router, prefix="/api")  # Platform API key management
 app.include_router(chat_router, prefix="/api")  # Conversational Clarification System
 app.include_router(project_memory_router, prefix="/api")  # Project Memory (#12)
+app.include_router(browser_tests_router, prefix="/api")  # Browser Testing (#11)
+app.include_router(share_router)  # Shareable Preview Links (#22) — includes /share public route
+app.include_router(design_import_router, prefix="/api")  # Figma & Screenshot Import (#23)
 
 
 # Static file serving for production

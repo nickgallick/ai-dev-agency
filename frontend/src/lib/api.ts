@@ -949,6 +949,75 @@ export const api = {
     const response = await apiClient.get(`/projects/${projectId}/memory/summary`)
     return response.data
   },
+
+  // ── Automated Browser Testing (#11) ─────────────────────────────
+
+  runBrowserTest: async (projectId: string, options?: {
+    url?: string
+    viewport?: string
+    record_video?: boolean
+    take_screenshots?: boolean
+    test_interactions?: boolean
+    test_themes?: boolean
+    max_duration_seconds?: number
+  }): Promise<BrowserTestResult> => {
+    const response = await apiClient.post(`/projects/${projectId}/browser-tests`, options || {})
+    return response.data
+  },
+
+  getBrowserTestHistory: async (projectId: string, limit: number = 10): Promise<BrowserTestHistory> => {
+    const response = await apiClient.get(`/projects/${projectId}/browser-tests`, { params: { limit } })
+    return response.data
+  },
+
+  // ── Shareable Preview Links (#22) ───────────────────────────────
+
+  createShareLink: async (projectId: string, options?: {
+    expires_in_days?: number
+    include_outputs?: boolean
+    include_code?: boolean
+    include_qa?: boolean
+    label?: string
+  }): Promise<ShareLinkData> => {
+    const response = await apiClient.post(`/projects/${projectId}/share`, options || {})
+    return response.data
+  },
+
+  getShareLinks: async (projectId: string): Promise<{ project_id: string; links: ShareLinkData[] }> => {
+    const response = await apiClient.get(`/projects/${projectId}/share`)
+    return response.data
+  },
+
+  revokeShareLink: async (projectId: string, shareId: string): Promise<void> => {
+    await apiClient.delete(`/projects/${projectId}/share/${shareId}`)
+  },
+
+  // ── Figma & Screenshot Import (#23) ─────────────────────────────
+
+  importFromFigma: async (projectId: string, data: {
+    figma_url: string
+    extract_colors?: boolean
+    extract_typography?: boolean
+    extract_spacing?: boolean
+    extract_components?: boolean
+  }): Promise<FigmaImportResult> => {
+    const response = await apiClient.post(`/projects/${projectId}/design-import/figma`, data)
+    return response.data
+  },
+
+  uploadDesignScreenshot: async (projectId: string, file: File): Promise<ScreenshotAnalysisResult> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await apiClient.post(`/projects/${projectId}/design-import/screenshot`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+
+  getDesignTokens: async (projectId: string): Promise<DesignTokensData> => {
+    const response = await apiClient.get(`/projects/${projectId}/design-import/tokens`)
+    return response.data
+  },
 }
 
 // Phase 11C Types
@@ -1158,4 +1227,85 @@ export interface MemorySummary {
   project_id: string
   total_entries: number
   by_category: Record<string, { title: string; content: string }[]>
+}
+
+// Automated Browser Testing (#11)
+export interface BrowserTestStep {
+  step: number
+  action: string
+  selector?: string
+  description: string
+  status: string
+  screenshot_path?: string
+  error?: string
+  duration_ms: number
+}
+
+export interface BrowserTestResult {
+  id: string
+  project_id: string
+  url: string
+  viewport: string
+  status: string
+  started_at: string
+  completed_at: string
+  duration_ms: number
+  steps: BrowserTestStep[]
+  video_path?: string
+  screenshots: string[]
+  console_errors: string[]
+  network_errors: string[]
+  accessibility_issues: Record<string, any>[]
+  performance_metrics: Record<string, any>
+  summary: Record<string, any>
+}
+
+export interface BrowserTestHistory {
+  project_id: string
+  tests: Record<string, any>[]
+  total: number
+}
+
+// Shareable Preview Links (#22)
+export interface ShareLinkData {
+  id: string
+  project_id: string
+  share_url: string
+  token: string
+  label?: string
+  created_at: string
+  expires_at: string
+  include_outputs: boolean
+  include_code: boolean
+  include_qa: boolean
+  is_active: boolean
+  view_count: number
+}
+
+// Figma & Screenshot Import (#23)
+export interface FigmaImportResult {
+  status: string
+  figma_file_key?: string
+  figma_file_name?: string
+  tokens: DesignTokensData
+  pages_found: number
+  components_found: number
+  styles_found: number
+}
+
+export interface ScreenshotAnalysisResult {
+  status: string
+  filename: string
+  tokens: DesignTokensData
+  screenshot_path: string
+}
+
+export interface DesignTokensData {
+  source: string
+  colors: Record<string, any>
+  typography: Record<string, any>
+  spacing: Record<string, any>
+  components: Record<string, any>[]
+  layout_description: string
+  style_analysis: string
 }
