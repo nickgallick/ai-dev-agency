@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/Card'
 import { Badge } from '@/components/Badge'
@@ -25,6 +25,7 @@ const AgentOutputDiffModal = lazy(() =>
 
 export default function ProjectView() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showCheckpointModal, setShowCheckpointModal] = useState(false)
   const [editingOutput, setEditingOutput] = useState<string | null>(null)
@@ -676,6 +677,22 @@ export default function ProjectView() {
             </a>
           ))}
         </div>
+      )}
+
+      {/* Live Preview button — always visible when code gen has output */}
+      {outputs?.agent_outputs?.code_generation && (
+        <button
+          onClick={() => navigate(`/project/${id}/preview`)}
+          className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl text-white font-semibold text-base transition-all hover:scale-[1.01] active:scale-[0.99]"
+          style={{
+            background: 'var(--gradient-accent)',
+            boxShadow: 'var(--shadow-glow)',
+          }}
+        >
+          <Play className="w-5 h-5" />
+          View Live Preview
+          <span className="text-sm opacity-80 font-normal">— Split-screen code editor + rendered app</span>
+        </button>
       )}
 
       {/* Artifact Viewer — always visible, shows live preview + code + all report tabs */}

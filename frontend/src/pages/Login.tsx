@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { Loader2, Lock, Mail, User, AlertCircle, Sparkles, ArrowRight } from 'lucide-react'
+import { APP_VERSION } from '@/version'
 
 export default function Login() {
   const { login, setup, setupRequired, isLoading: authLoading } = useAuth()
@@ -265,10 +266,13 @@ export default function Login() {
         
         {/* Footer */}
         <p className="text-center mt-6" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
-          {setupRequired 
+          {setupRequired
             ? 'This is a single-user system. Create one admin account.'
             : 'Session expires after 30 minutes of inactivity.'
           }
+        </p>
+        <p className="text-center mt-2" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', opacity: 0.6 }}>
+          v{APP_VERSION}
         </p>
       </div>
     </div>

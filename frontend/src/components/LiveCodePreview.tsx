@@ -193,7 +193,8 @@ export default function LiveCodePreview({ files, projectType, fileContents }: Li
       style={{
         background: 'var(--background-primary)',
         borderColor: isFullscreen ? undefined : 'var(--border-subtle)',
-        height: isFullscreen ? '100vh' : '600px',
+        height: isFullscreen ? '100vh' : '100%',
+        minHeight: '400px',
       }}
     >
       {/* Toolbar */}

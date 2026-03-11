@@ -14,6 +14,7 @@ import CostDashboard from './pages/CostDashboard'
 import KnowledgeBase from './pages/KnowledgeBase'  // Phase 11B
 import Queue from './pages/Queue'  // Phase 11C
 import SystemBackup from './pages/SystemBackup'  // Phase 11C
+import LivePreview from './pages/LivePreview'
 
 function AppRoutes() {
   const { isAuthenticated, setupRequired, isLoading } = useAuth()
@@ -42,6 +43,7 @@ function AppRoutes() {
         <Route index element={<Home />} />
         <Route path="new" element={<NewProject />} />
         <Route path="project/:id" element={<ProjectView />} />
+        <Route path="project/:id/preview" element={<LivePreview />} />
         <Route path="projects" element={<ProjectHistory />} />
         <Route path="settings" element={<Settings />} />
         <Route path="logs" element={<AgentLogs />} />
