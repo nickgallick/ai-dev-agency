@@ -281,15 +281,20 @@ async def retry_agent_execution(
 
 
 def _is_transient_error_message(error: str) -> bool:
-    """Heuristic: does this error message look like a transient issue?"""
-    transient_keywords = [
-        "timeout", "timed out", "connection", "network",
-        "rate limit", "429", "502", "503", "504",
-        "server error", "unavailable", "overloaded",
-        "circuit_breaker", "retries_exhausted",
-    ]
-    error_lower = error.lower()
-    return any(kw in error_lower for kw in transient_keywords)
+    """Check if an error message represents a transient/retryable issue.
+
+    Delegates to the structured error classifier for accurate routing
+    instead of brittle keyword matching.
+    """
+    from utils.error_classifier import classify_error, ErrorCategory
+
+    classified = classify_error(error)
+    return classified.category in (
+        ErrorCategory.TRANSIENT,
+        ErrorCategory.RATE_LIMIT,
+        ErrorCategory.UPSTREAM,
+        ErrorCategory.MODEL,
+    ) and classified.should_retry
 
 
 # ── Layer 3: Circuit Breaker ─────────────────────────────────────────────

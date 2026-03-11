@@ -171,7 +171,7 @@ def _estimate_brief_tokens(brief: str) -> int:
         import tiktoken
         enc = tiktoken.get_encoding("cl100k_base")
         return len(enc.encode(brief))
-    except ImportError:
+    except Exception:
         # Heuristic: ~4 characters per token for English
         return max(1, len(brief) // 4)
 

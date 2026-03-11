@@ -342,6 +342,24 @@ export interface SearchQuery {
   limit?: number
 }
 
+// Brief wizard types
+export interface BriefScoreResult {
+  overall: number
+  dimensions: Record<string, number>
+  missing: string[]
+  suggestions: string[]
+  word_count: number
+  quality_label: string
+}
+
+export interface EnhancedBriefResult {
+  original: string
+  enhanced: string
+  additions: string[]
+  score_before: number
+  score_after: number
+}
+
 // Pre-execution estimation types
 export interface AgentEstimate {
   agent_id: string
@@ -381,6 +399,22 @@ export const api = {
     requirements?: Partial<ProjectRequirements>
   }): Promise<Project> => {
     const response = await apiClient.post('/projects/', data)
+    return response.data
+  },
+
+  // Brief wizard: scoring & enhancement
+  scoreBrief: async (brief: string, projectType: string): Promise<BriefScoreResult> => {
+    const response = await apiClient.post('/projects/score-brief', { brief, project_type: projectType })
+    return response.data
+  },
+
+  enhanceBrief: async (data: {
+    brief: string
+    project_type: string
+    detected_features?: string[]
+    detected_pages?: string[]
+  }): Promise<EnhancedBriefResult> => {
+    const response = await apiClient.post('/projects/enhance-brief', data)
     return response.data
   },
 

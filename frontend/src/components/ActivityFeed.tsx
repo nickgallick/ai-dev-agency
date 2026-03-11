@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Loader2, CheckCircle, AlertCircle, Zap, Bot } from 'lucide-react'
+import { Loader2, CheckCircle, AlertCircle, AlertTriangle, Zap, Bot, RefreshCw, ShieldAlert, KeyRound } from 'lucide-react'
 import './ActivityFeed.css'
 
 interface ActivityEvent {
@@ -89,8 +89,25 @@ export function ActivityFeed({ projectId, isActive }: ActivityFeedProps) {
     }
   }, [events])
 
-  const getEventIcon = (eventType: string) => {
-    switch (eventType) {
+  const getErrorIcon = (details?: Record<string, any>) => {
+    const category = details?._error_category || details?.error_category
+    switch (category) {
+      case 'auth':
+        return <KeyRound className="w-4 h-4 text-accent-error" />
+      case 'rate_limit':
+        return <RefreshCw className="w-4 h-4 text-yellow-400" />
+      case 'quota':
+        return <ShieldAlert className="w-4 h-4 text-accent-error" />
+      case 'transient':
+      case 'upstream':
+        return <AlertTriangle className="w-4 h-4 text-yellow-400" />
+      default:
+        return <AlertCircle className="w-4 h-4 text-accent-error" />
+    }
+  }
+
+  const getEventIcon = (event: ActivityEvent) => {
+    switch (event.event_type) {
       case 'agent_start':
       case 'agent_thinking':
         return <Loader2 className="w-4 h-4 animate-spin text-accent-primary" />
@@ -98,7 +115,7 @@ export function ActivityFeed({ projectId, isActive }: ActivityFeedProps) {
         return <CheckCircle className="w-4 h-4 text-accent-success" />
       case 'agent_error':
       case 'pipeline_error':
-        return <AlertCircle className="w-4 h-4 text-accent-error" />
+        return getErrorIcon(event.details)
       case 'pipeline_start':
         return <Zap className="w-4 h-4 text-accent-primary" />
       case 'pipeline_complete':
@@ -106,6 +123,12 @@ export function ActivityFeed({ projectId, isActive }: ActivityFeedProps) {
       default:
         return <Bot className="w-4 h-4 text-text-tertiary" />
     }
+  }
+
+  const getErrorDetail = (event: ActivityEvent): string | null => {
+    const userMsg = event.details?._error_user_message || event.details?.error_user_message
+    if (userMsg) return userMsg
+    return null
   }
 
   const formatTime = (timestamp: string) => {
@@ -149,23 +172,34 @@ export function ActivityFeed({ projectId, isActive }: ActivityFeedProps) {
             <p>Waiting for activity...</p>
           </div>
         ) : (
-          events.map((event) => (
-            <div 
-              key={event.id} 
-              className={`activity-event ${event.event_type}`}
-            >
-              <div className="event-icon">
-                {getEventIcon(event.event_type)}
+          events.map((event) => {
+            const errorDetail = getErrorDetail(event)
+            return (
+              <div
+                key={event.id}
+                className={`activity-event ${event.event_type}`}
+              >
+                <div className="event-icon">
+                  {getEventIcon(event)}
+                </div>
+                <div className="event-content">
+                  {event.agent_display_name && (
+                    <span className="event-agent">{event.agent_display_name}</span>
+                  )}
+                  <span className="event-message">{event.message}</span>
+                  {errorDetail && (
+                    <span className="event-error-detail" style={{
+                      display: 'block',
+                      fontSize: '0.75rem',
+                      opacity: 0.7,
+                      marginTop: '2px',
+                    }}>{errorDetail}</span>
+                  )}
+                </div>
+                <span className="event-time">{formatTime(event.timestamp)}</span>
               </div>
-              <div className="event-content">
-                {event.agent_display_name && (
-                  <span className="event-agent">{event.agent_display_name}</span>
-                )}
-                <span className="event-message">{event.message}</span>
-              </div>
-              <span className="event-time">{formatTime(event.timestamp)}</span>
-            </div>
-          ))
+            )
+          })
         )}
         
         {/* Current thinking indicator */}

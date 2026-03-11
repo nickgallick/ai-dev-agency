@@ -638,10 +638,17 @@ class Pipeline:
             node.status = NodeStatus.FAILED
             error_occurred = True
             error_message = "Execution timed out"
+            from utils.error_classifier import classify_error
+            classified = classify_error("Execution timed out")
             node.result = AgentResult(
                 success=False,
                 agent_name=node.name,
                 errors=["Execution timed out"],
+                data={
+                    "_error_category": classified.category.value,
+                    "_error_strategy": classified.strategy.value,
+                    "_error_user_message": classified.user_message,
+                },
             )
             return node.result
 
@@ -650,10 +657,20 @@ class Pipeline:
             node.status = NodeStatus.FAILED
             error_occurred = True
             error_message = str(e)
+            from utils.error_classifier import classify_error
+            classified = classify_error(
+                str(e), exception_type=type(e).__name__
+            )
             node.result = AgentResult(
                 success=False,
                 agent_name=node.name,
                 errors=[str(e)],
+                data={
+                    "_error_category": classified.category.value,
+                    "_error_strategy": classified.strategy.value,
+                    "_error_user_message": classified.user_message,
+                    "_error_should_retry": classified.should_retry,
+                },
             )
             return node.result
         

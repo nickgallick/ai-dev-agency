@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { api, BriefAnalysis, Preset, ProjectTemplate, PipelineEstimate } from '@/lib/api'
+import { api, BriefAnalysis, BriefScoreResult, Preset, ProjectTemplate, PipelineEstimate } from '@/lib/api'
 import VoiceInput from '@/components/VoiceInput'
 import TemplateBrowser from '@/components/TemplateBrowser'
 import { 
@@ -15,7 +15,7 @@ import {
   Figma, Info, AlertCircle, Check, Plus, X, Palette, Settings2,
   Rocket, FileCode, Layers, Database, Mail, CreditCard, Users,
   Bell, Search, Upload, MessageSquare, Moon, Sun, LayoutTemplate,
-  DollarSign, Clock, CheckCircle
+  DollarSign, Clock, CheckCircle, Wand2
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -180,6 +180,10 @@ export default function NewProject() {
   const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  // Brief wizard: completeness scoring
+  const [briefScore, setBriefScore] = useState<BriefScoreResult | null>(null)
+  const [isEnhancing, setIsEnhancing] = useState(false)
+
   // Pre-execution estimation & approval
   const [estimate, setEstimate] = useState<PipelineEstimate | null>(null)
   const [showEstimate, setShowEstimate] = useState(false)
@@ -211,21 +215,26 @@ export default function NewProject() {
     }
   }, [form])
 
-  // Debounced brief analysis
+  // Debounced brief analysis + completeness scoring
   const analyzeBrief = useCallback(async (brief: string) => {
     if (brief.length < 10) {
       setAnalysis(null)
+      setBriefScore(null)
       return
     }
-    
+
     setIsAnalyzing(true)
     try {
-      const result = await api.analyzeBrief(brief)
-      setAnalysis(result)
-      
+      const [analysisResult, scoreResult] = await Promise.all([
+        api.analyzeBrief(brief),
+        api.scoreBrief(brief, form.projectType || 'web_simple'),
+      ])
+      setAnalysis(analysisResult)
+      setBriefScore(scoreResult)
+
       // Auto-select detected type if user hasn't manually selected
-      if (result.detected_project_type && !form.projectType) {
-        setForm(prev => ({ ...prev, projectType: result.detected_project_type }))
+      if (analysisResult.detected_project_type && !form.projectType) {
+        setForm(prev => ({ ...prev, projectType: analysisResult.detected_project_type }))
       }
     } catch (e) {
       console.error('Brief analysis failed:', e)
@@ -233,6 +242,25 @@ export default function NewProject() {
       setIsAnalyzing(false)
     }
   }, [form.projectType])
+
+  // Enhance brief handler
+  const handleEnhanceBrief = async () => {
+    if (!form.brief.trim()) return
+    setIsEnhancing(true)
+    try {
+      const result = await api.enhanceBrief({
+        brief: form.brief,
+        project_type: form.projectType || 'web_simple',
+        detected_features: analysis?.suggested_features,
+        detected_pages: analysis?.suggested_pages,
+      })
+      setForm(prev => ({ ...prev, brief: result.enhanced }))
+    } catch (e) {
+      console.error('Brief enhancement failed:', e)
+    } finally {
+      setIsEnhancing(false)
+    }
+  }
 
   // Trigger analysis on brief change (debounced 1s)
   useEffect(() => {
@@ -648,6 +676,64 @@ export default function NewProject() {
                 </span>
               </div>
             </div>
+
+            {/* Brief Completeness Score */}
+            {briefScore && form.brief.length >= 10 && (
+              <div className="px-4 pb-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      Brief completeness
+                    </span>
+                    <span className="text-xs font-bold" style={{
+                      color: briefScore.overall >= 0.7 ? '#34D399' : briefScore.overall >= 0.4 ? '#FBBF24' : '#ef4444'
+                    }}>
+                      {Math.round(briefScore.overall * 100)}% — {briefScore.quality_label}
+                    </span>
+                  </div>
+                  {briefScore.overall < 0.7 && (
+                    <button
+                      type="button"
+                      onClick={handleEnhanceBrief}
+                      disabled={isEnhancing}
+                      className="btn-ghost flex items-center gap-1.5 py-1 px-2"
+                      style={{ fontSize: 'var(--text-xs)' }}
+                    >
+                      {isEnhancing ? (
+                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <Wand2 className="w-3 h-3" />
+                      )}
+                      Enhance
+                    </button>
+                  )}
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-1.5 rounded-full" style={{ background: 'var(--background-tertiary)' }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.round(briefScore.overall * 100)}%`,
+                      background: briefScore.overall >= 0.7 ? '#34D399' : briefScore.overall >= 0.4 ? '#FBBF24' : '#ef4444',
+                    }}
+                  />
+                </div>
+                {/* Suggestions */}
+                {briefScore.suggestions.length > 0 && briefScore.overall < 0.7 && (
+                  <div className="space-y-1">
+                    {briefScore.suggestions.slice(0, 3).map((s, i) => (
+                      <p key={i} className="text-xs flex items-start gap-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                        <Info className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#FBBF24' }} />
+                        {s}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

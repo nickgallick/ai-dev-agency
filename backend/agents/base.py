@@ -287,13 +287,21 @@ class BaseAgent(ABC):
                     duration_ms = int((time.time() - start_time) * 1000)
 
                     if response.status_code != 200:
+                        from utils.error_classifier import classify_error, ResolutionStrategy
+
+                        error_text = response.text
+                        classified = classify_error(
+                            error_text,
+                            status_code=response.status_code,
+                            model=model,
+                        )
                         last_error = f"API returned {response.status_code}"
 
-                        # Retry on transient status codes
-                        if is_retryable_status(response.status_code) and attempt < MAX_RETRIES:
-                            delay = _backoff_delay(attempt, BASE_DELAY, MAX_DELAY)
+                        # Route based on classified error strategy
+                        if classified.should_retry and attempt < MAX_RETRIES:
+                            delay = classified.retry_delay or _backoff_delay(attempt, BASE_DELAY, MAX_DELAY)
 
-                            # For 429 rate-limit, respect Retry-After header if present
+                            # For rate limits, respect Retry-After header
                             retry_after = response.headers.get("retry-after")
                             if retry_after and response.status_code == 429:
                                 try:
@@ -301,25 +309,41 @@ class BaseAgent(ABC):
                                 except ValueError:
                                     pass
 
+                            # Model fallback: swap to alternate model on next attempt
+                            if classified.strategy == ResolutionStrategy.FALLBACK_MODEL and classified.fallback_model:
+                                model = classified.fallback_model
+                                provider = model.split("/")[0]
+                                self.logger.warning(
+                                    f"Falling back to {model} after {classified.category.value} error"
+                                )
+                                # Update the request payload for next attempt
+                                messages  # messages already set, model var is updated
+
                             self.logger.warning(
-                                f"LLM API {response.status_code}, retrying in {delay:.1f}s "
+                                f"LLM API {response.status_code} [{classified.category.value}], "
+                                f"retrying in {delay:.1f}s "
                                 f"(attempt {attempt + 1}/{MAX_RETRIES + 1}, model={model})"
                             )
                             llm_circuit_breaker.record_failure(provider)
                             await asyncio.sleep(delay)
                             continue
 
-                        # Non-retryable error or retries exhausted
-                        self.logger.error(f"LLM API error: {response.status_code} - {response.text}")
+                        # Non-retryable or retries exhausted
+                        self.logger.error(
+                            f"LLM API error [{classified.category.value}]: "
+                            f"{response.status_code} - {error_text[:200]}"
+                        )
                         llm_circuit_breaker.record_failure(provider)
                         return {
-                            "content": f"Error: API returned {response.status_code}",
+                            "content": f"Error: {classified.user_message}",
                             "prompt_tokens": 0,
                             "completion_tokens": 0,
                             "total_tokens": 0,
                             "cost": 0.0,
                             "duration_ms": duration_ms,
-                            "error": response.text,
+                            "error": error_text,
+                            "error_category": classified.category.value,
+                            "error_strategy": classified.strategy.value,
                         }
 
                     data = response.json()

@@ -105,6 +105,54 @@ async def analyze_brief(request: BriefAnalysisRequest):
         )
 
 
+# ============ Brief Wizard: Completeness & Enhancement (#2) ============
+
+
+class BriefScoreRequest(BaseModel):
+    """Request for brief completeness scoring."""
+    brief: str = Field(..., min_length=1)
+    project_type: str = Field("web_simple")
+
+
+class BriefEnhanceRequest(BaseModel):
+    """Request for brief prompt enhancement."""
+    brief: str = Field(..., min_length=1)
+    project_type: str = Field("web_simple")
+    detected_features: Optional[List[str]] = None
+    detected_pages: Optional[List[str]] = None
+
+
+@router.post("/score-brief")
+async def score_brief_endpoint(request: BriefScoreRequest):
+    """Score a project brief on completeness.
+
+    Returns per-dimension scores, missing elements, and suggestions.
+    Instant response — no LLM calls.
+    """
+    from utils.brief_enhancer import score_brief
+
+    score = score_brief(request.brief, request.project_type)
+    return score.to_dict()
+
+
+@router.post("/enhance-brief")
+async def enhance_brief_endpoint(request: BriefEnhanceRequest):
+    """Enhance a project brief by filling in detected gaps.
+
+    Returns the original brief plus sensible additions for missing
+    dimensions. Does NOT rewrite the user's text.
+    """
+    from utils.brief_enhancer import enhance_brief
+
+    enhanced = enhance_brief(
+        request.brief,
+        project_type=request.project_type,
+        detected_features=request.detected_features,
+        detected_pages=request.detected_pages,
+    )
+    return enhanced.to_dict()
+
+
 # ============ Pre-Execution Estimation (#8) ============
 
 @router.post("/estimate")
