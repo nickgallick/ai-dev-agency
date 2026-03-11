@@ -226,8 +226,8 @@ function renderIntake(data: any) {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {projectType && <Chip color="bg-violet-500/20 text-violet-300">{projectType}</Chip>}
-        {industry && <Chip color="bg-blue-500/20 text-blue-300">{industry}</Chip>}
-        {complexity && <Chip color="bg-gray-500/20 text-gray-300">{complexity}</Chip>}
+        {industry && <Chip color="bg-accent-secondary/20 text-accent-secondary">{industry}</Chip>}
+        {complexity && <Chip color="bg-bg-secondary text-text-tertiary">{complexity}</Chip>}
       </div>
       {features.length > 0 && (
         <Section title={`Features (${features.length})`}>
@@ -273,7 +273,7 @@ function renderResearch(data: any) {
       {trends.length > 0 && (
         <Section title="Design Trends Found">
           <div className="flex flex-wrap gap-1.5">
-            {trends.slice(0, 6).map((t: string, i: number) => <Chip key={i} color="bg-blue-500/10 text-blue-300">{t}</Chip>)}
+            {trends.slice(0, 6).map((t: string, i: number) => <Chip key={i} color="bg-accent-secondary/10 text-accent-secondary">{t}</Chip>)}
           </div>
         </Section>
       )}
@@ -282,7 +282,7 @@ function renderResearch(data: any) {
           <ul className="space-y-1">
             {insights.slice(0, 4).map((ins: string, i: number) => (
               <li key={i} className="text-xs text-text-secondary flex gap-1.5">
-                <span className="text-blue-400 flex-shrink-0">•</span>{ins}
+                <span className="text-accent-secondary flex-shrink-0">•</span>{ins}
               </li>
             ))}
           </ul>
@@ -407,7 +407,7 @@ function renderAssets(data: any) {
         <Section title={`Generated Assets (${assets.length})`}>
           <div className="flex flex-wrap gap-1.5">
             {assets.slice(0, 8).map((a: any, i: number) => (
-              <Chip key={i} color="bg-orange-500/10 text-orange-300">
+              <Chip key={i} color="bg-accent-warning/10 text-accent-warning">
                 {typeof a === 'string' ? a.split('/').pop() : (a.name || a.type || JSON.stringify(a))}
               </Chip>
             ))}
@@ -453,7 +453,7 @@ function renderContent(data: any) {
         <Section title="CTAs">
           <div className="flex flex-wrap gap-1.5">
             {ctas.slice(0, 5).map((c: string, i: number) => (
-              <Chip key={i} color="bg-yellow-500/10 text-yellow-300">{c}</Chip>
+              <Chip key={i} color="bg-accent-secondary/10 text-accent-secondary">{c}</Chip>
             ))}
           </div>
         </Section>
@@ -472,11 +472,11 @@ function renderCheckpoint(data: any, label: string) {
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         {passed ? (
-          <CheckCircle2 className="w-4 h-4 text-green-400" />
+          <CheckCircle2 className="w-4 h-4 text-accent-success" />
         ) : (
-          <XCircle className="w-4 h-4 text-red-400" />
+          <XCircle className="w-4 h-4 text-accent-error" />
         )}
-        <span className="text-sm font-medium" style={{ color: passed ? '#4ade80' : '#f87171' }}>
+        <span className={`text-sm font-medium ${passed ? 'text-accent-success' : 'text-accent-error'}`}>
           {passed ? 'Passed' : 'Issues Found'}
         </span>
         {score !== undefined && (
@@ -497,9 +497,9 @@ function renderCheckpoint(data: any, label: string) {
           <div className="space-y-1">
             {issues.slice(0, 4).map((issue: any, i: number) => (
               <div key={i} className={`flex items-start gap-1.5 text-xs p-1.5 rounded ${
-                issue.severity === 'critical' ? 'bg-red-500/10 text-red-300' :
-                issue.severity === 'warning' ? 'bg-yellow-500/10 text-yellow-300' :
-                'bg-blue-500/10 text-blue-300'
+                issue.severity === 'critical' ? 'bg-accent-error/10 text-accent-error' :
+                issue.severity === 'warning' ? 'bg-accent-warning/10 text-accent-warning' :
+                'bg-accent-secondary/10 text-accent-secondary'
               }`}>
                 <span className="flex-shrink-0 font-medium">{issue.severity || 'info'}</span>
                 <span>{issue.message || JSON.stringify(issue)}</span>
@@ -521,8 +521,8 @@ function renderCodeGen(data: any) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        {fileCount > 0 && <Chip color="bg-green-500/20 text-green-300">{fileCount} files generated</Chip>}
-        {linesOfCode > 0 && <Chip color="bg-green-500/10 text-green-400">{linesOfCode.toLocaleString()} lines</Chip>}
+        {fileCount > 0 && <Chip color="bg-accent-success/20 text-accent-success">{fileCount} files generated</Chip>}
+        {linesOfCode > 0 && <Chip color="bg-accent-success/10 text-accent-success">{linesOfCode.toLocaleString()} lines</Chip>}
         {components.length > 0 && <Chip>{components.length} components</Chip>}
       </div>
       {files.length > 0 && (
@@ -552,13 +552,13 @@ function renderCodeReview(data: any) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        <Chip color={passed ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
+        <Chip color={passed ? 'bg-accent-success/20 text-accent-success' : 'bg-accent-error/20 text-accent-error'}>
           {passed ? 'Passed' : 'Needs Attention'}
         </Chip>
         {total > 0 && <Chip>{total} issues</Chip>}
-        {critical > 0 && <Chip color="bg-red-500/20 text-red-300">{critical} critical</Chip>}
-        {high > 0 && <Chip color="bg-orange-500/20 text-orange-300">{high} high</Chip>}
-        {autoFixed > 0 && <Chip color="bg-green-500/20 text-green-300">{autoFixed} auto-fixed</Chip>}
+        {critical > 0 && <Chip color="bg-accent-error/20 text-accent-error">{critical} critical</Chip>}
+        {high > 0 && <Chip color="bg-accent-warning/20 text-accent-warning">{high} high</Chip>}
+        {autoFixed > 0 && <Chip color="bg-accent-success/20 text-accent-success">{autoFixed} auto-fixed</Chip>}
       </div>
       {report?.summary && (
         <p className="text-xs text-text-secondary">{report.summary}</p>
@@ -578,13 +578,13 @@ function renderSecurity(data: any) {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {findings.length === 0 ? (
-          <Chip color="bg-green-500/20 text-green-300">No vulnerabilities found</Chip>
+          <Chip color="bg-accent-success/20 text-accent-success">No vulnerabilities found</Chip>
         ) : (
           <>
-            <Chip color="bg-red-500/20 text-red-300">{findings.length} findings</Chip>
-            {critical > 0 && <Chip color="bg-red-600/20 text-red-200">{critical} critical</Chip>}
-            {high > 0 && <Chip color="bg-orange-500/20 text-orange-300">{high} high</Chip>}
-            {autoFixed > 0 && <Chip color="bg-green-500/20 text-green-300">{autoFixed} auto-fixed</Chip>}
+            <Chip color="bg-accent-error/20 text-accent-error">{findings.length} findings</Chip>
+            {critical > 0 && <Chip color="bg-accent-error/20 text-accent-error">{critical} critical</Chip>}
+            {high > 0 && <Chip color="bg-accent-warning/20 text-accent-warning">{high} high</Chip>}
+            {autoFixed > 0 && <Chip color="bg-accent-success/20 text-accent-success">{autoFixed} auto-fixed</Chip>}
           </>
         )}
       </div>
@@ -593,7 +593,7 @@ function renderSecurity(data: any) {
           <div className="space-y-1">
             {findings.slice(0, 4).map((f: any, i: number) => (
               <div key={i} className="text-xs flex gap-2 p-1.5 bg-background-tertiary rounded">
-                <Chip color={f.severity === 'critical' ? 'bg-red-500/30 text-red-300' : 'bg-orange-500/20 text-orange-300'}>
+                <Chip color={f.severity === 'critical' ? 'bg-accent-error/30 text-accent-error' : 'bg-accent-warning/20 text-accent-warning'}>
                   {f.severity}
                 </Chip>
                 <span className="text-text-secondary truncate">{f.message || f.rule_id}</span>
@@ -616,7 +616,7 @@ function renderSEO(data: any) {
     <div className="space-y-3">
       {score !== undefined && (
         <div className="flex items-center gap-2">
-          <div className={`text-2xl font-bold ${score >= 80 ? 'text-green-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
+          <div className={`text-2xl font-bold ${score >= 80 ? 'text-accent-success' : score >= 60 ? 'text-accent-warning' : 'text-accent-error'}`}>
             {score}
           </div>
           <span className="text-xs text-text-secondary">/ 100 SEO Score</span>
@@ -638,7 +638,7 @@ function renderSEO(data: any) {
         <Section title="Issues">
           <div className="flex flex-wrap gap-1.5">
             {issues.slice(0, 4).map((iss: string, i: number) => (
-              <Chip key={i} color="bg-yellow-500/10 text-yellow-300">{iss}</Chip>
+              <Chip key={i} color="bg-accent-warning/10 text-accent-warning">{iss}</Chip>
             ))}
           </div>
         </Section>
@@ -658,13 +658,13 @@ function renderAccessibility(data: any) {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 items-center">
         {score !== undefined && (
-          <div className={`text-2xl font-bold ${score >= 80 ? 'text-green-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
+          <div className={`text-2xl font-bold ${score >= 80 ? 'text-accent-success' : score >= 60 ? 'text-accent-warning' : 'text-accent-error'}`}>
             {score}
           </div>
         )}
         {wcagLevel && <Chip color="bg-sky-500/20 text-sky-300">{wcagLevel}</Chip>}
-        {passes > 0 && <Chip color="bg-green-500/20 text-green-300">{passes} passed</Chip>}
-        {violations.length > 0 && <Chip color="bg-red-500/20 text-red-300">{violations.length} violations</Chip>}
+        {passes > 0 && <Chip color="bg-accent-success/20 text-accent-success">{passes} passed</Chip>}
+        {violations.length > 0 && <Chip color="bg-accent-error/20 text-accent-error">{violations.length} violations</Chip>}
       </div>
       {violations.length > 0 && (
         <Section title="Violations">
@@ -693,7 +693,7 @@ function renderQA(data: any) {
       <div className="grid grid-cols-4 gap-2">
         {score !== undefined && (
           <div className="bg-background-tertiary rounded p-2 text-center">
-            <div className={`text-lg font-bold ${score >= 80 ? 'text-green-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
+            <div className={`text-lg font-bold ${score >= 80 ? 'text-accent-success' : score >= 60 ? 'text-accent-warning' : 'text-accent-error'}`}>
               {score}
             </div>
             <div className="text-xs text-text-tertiary">Score</div>
@@ -703,12 +703,12 @@ function renderQA(data: any) {
           <div className="text-lg font-bold text-text-primary">{total}</div>
           <div className="text-xs text-text-tertiary">Tests</div>
         </div>
-        <div className="bg-green-500/10 rounded p-2 text-center">
-          <div className="text-lg font-bold text-green-400">{passed}</div>
+        <div className="bg-accent-success/10 rounded p-2 text-center">
+          <div className="text-lg font-bold text-accent-success">{passed}</div>
           <div className="text-xs text-text-tertiary">Passed</div>
         </div>
-        <div className={`${failed > 0 ? 'bg-red-500/10' : 'bg-background-tertiary'} rounded p-2 text-center`}>
-          <div className={`text-lg font-bold ${failed > 0 ? 'text-red-400' : 'text-text-primary'}`}>{failed}</div>
+        <div className={`${failed > 0 ? 'bg-accent-error/10' : 'bg-background-tertiary'} rounded p-2 text-center`}>
+          <div className={`text-lg font-bold ${failed > 0 ? 'text-accent-error' : 'text-text-primary'}`}>{failed}</div>
           <div className="text-xs text-text-tertiary">Failed</div>
         </div>
       </div>
@@ -718,8 +718,8 @@ function renderQA(data: any) {
             {report.test_results.slice(0, 8).map((t: any, i: number) => (
               <div key={i} className="flex items-center gap-2 text-xs">
                 {t.status === 'passed'
-                  ? <CheckCircle2 className="w-3 h-3 text-green-400 flex-shrink-0" />
-                  : <XCircle className="w-3 h-3 text-red-400 flex-shrink-0" />
+                  ? <CheckCircle2 className="w-3 h-3 text-accent-success flex-shrink-0" />
+                  : <XCircle className="w-3 h-3 text-accent-error flex-shrink-0" />
                 }
                 <span className="text-text-secondary truncate">{t.name}</span>
               </div>
@@ -743,7 +743,7 @@ function renderDeployment(data: any) {
       {deployments.map((dep: any, i: number) => (
         <div key={i} className="flex items-center justify-between p-2 bg-background-tertiary rounded">
           <div className="flex items-center gap-2">
-            <Chip color={dep.status === 'deployed' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}>
+            <Chip color={dep.status === 'deployed' ? 'bg-accent-success/20 text-accent-success' : 'bg-accent-warning/20 text-accent-warning'}>
               {dep.platform}
             </Chip>
             <span className="text-xs text-text-tertiary">{dep.status}</span>
@@ -774,15 +774,15 @@ function renderMonitoring(data: any) {
       {services.length > 0 && (
         <>
           <div className="flex items-center gap-2">
-            <Chip color="bg-purple-500/20 text-purple-300">{configured} / {services.length} configured</Chip>
+            <Chip color="bg-accent-purple/20 text-accent-purple">{configured} / {services.length} configured</Chip>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {services.map((svc: any, i: number) => (
               <div key={i} className={`flex items-center gap-2 p-2 rounded text-xs ${
-                svc.configured ? 'bg-green-500/10' : 'bg-background-tertiary'
+                svc.configured ? 'bg-accent-success/10' : 'bg-background-tertiary'
               }`}>
                 {svc.configured
-                  ? <CheckCircle2 className="w-3 h-3 text-green-400 flex-shrink-0" />
+                  ? <CheckCircle2 className="w-3 h-3 text-accent-success flex-shrink-0" />
                   : <Circle className="w-3 h-3 text-text-tertiary flex-shrink-0" />
                 }
                 <span className="text-text-secondary">{svc.name}</span>
@@ -833,7 +833,7 @@ function renderDelivery(data: any) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        <Chip color="bg-green-500/20 text-green-300">Build Complete</Chip>
+        <Chip color="bg-accent-success/20 text-accent-success">Build Complete</Chip>
         {files.length > 0 && <Chip>{files.length} deliverables</Chip>}
       </div>
       {(liveUrl || githubRepo) && (
@@ -866,12 +866,12 @@ function renderVerification(data: any) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 items-center">
-        <Chip color={overall === 'passed' ? 'bg-green-500/20 text-green-300' : overall === 'partial' ? 'bg-yellow-500/20 text-yellow-300' : 'bg-red-500/20 text-red-300'}>
+        <Chip color={overall === 'passed' ? 'bg-accent-success/20 text-accent-success' : overall === 'partial' ? 'bg-accent-warning/20 text-accent-warning' : 'bg-accent-error/20 text-accent-error'}>
           {overall}
         </Chip>
-        {passed > 0 && <Chip color="bg-green-500/10 text-green-400">{passed} passed</Chip>}
-        {failed > 0 && <Chip color="bg-red-500/10 text-red-400">{failed} failed</Chip>}
-        {ssl !== undefined && <Chip color={ssl ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}>{ssl ? '🔒 SSL OK' : '🔓 SSL Issue'}</Chip>}
+        {passed > 0 && <Chip color="bg-accent-success/10 text-accent-success">{passed} passed</Chip>}
+        {failed > 0 && <Chip color="bg-accent-error/10 text-accent-error">{failed} failed</Chip>}
+        {ssl !== undefined && <Chip color={ssl ? 'bg-accent-success/10 text-accent-success' : 'bg-accent-error/10 text-accent-error'}>{ssl ? '🔒 SSL OK' : '🔓 SSL Issue'}</Chip>}
       </div>
     </div>
   )

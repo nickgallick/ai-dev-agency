@@ -156,8 +156,8 @@ export default function VoiceInput({
       style={{
         padding: 'var(--space-2)',
         borderRadius: '50%',
-        background: isListening ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
-        border: isListening ? '2px solid rgba(239, 68, 68, 0.5)' : '2px solid transparent',
+        background: isListening ? 'var(--accent-error-bg, rgba(239,68,68,0.1))' : 'transparent',
+        border: isListening ? '2px solid var(--accent-error-border, rgba(239,68,68,0.5))' : '2px solid transparent',
       }}
       title={isListening ? 'Stop listening' : 'Start voice input'}
       aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
@@ -168,14 +168,14 @@ export default function VoiceInput({
           <span
             className="absolute inset-0 rounded-full animate-ping"
             style={{
-              background: 'rgba(239, 68, 68, 0.3)',
+              background: 'var(--accent-error-bg, rgba(239,68,68,0.3))',
               animationDuration: '1.5s',
             }}
           />
           <span
             className="absolute inset-0 rounded-full animate-pulse"
             style={{
-              background: 'rgba(239, 68, 68, 0.2)',
+              background: 'var(--accent-error-bg, rgba(239,68,68,0.2))',
             }}
           />
         </>
@@ -184,7 +184,7 @@ export default function VoiceInput({
       {isListening ? (
         <MicOff 
           className="w-5 h-5 relative z-10" 
-          style={{ color: '#ef4444' }} 
+          style={{ color: 'var(--accent-error)' }}
         />
       ) : (
         <Mic 
