@@ -6,15 +6,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { api, BriefAnalysis, Preset, ProjectTemplate } from '@/lib/api'
+import { api, BriefAnalysis, Preset, ProjectTemplate, PipelineEstimate } from '@/lib/api'
 import VoiceInput from '@/components/VoiceInput'
 import TemplateBrowser from '@/components/TemplateBrowser'
 import { 
-  Globe, Smartphone, Monitor, Chrome, Terminal, Server, Sparkles, 
+  Globe, Smartphone, Monitor, Chrome, Terminal, Server, Sparkles,
   ArrowRight, Zap, Shield, Crown, ChevronDown, ChevronUp, Save,
   Figma, Info, AlertCircle, Check, Plus, X, Palette, Settings2,
   Rocket, FileCode, Layers, Database, Mail, CreditCard, Users,
-  Bell, Search, Upload, MessageSquare, Moon, Sun, LayoutTemplate
+  Bell, Search, Upload, MessageSquare, Moon, Sun, LayoutTemplate,
+  DollarSign, Clock, CheckCircle
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -179,6 +180,11 @@ export default function NewProject() {
   const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  // Pre-execution estimation & approval
+  const [estimate, setEstimate] = useState<PipelineEstimate | null>(null)
+  const [showEstimate, setShowEstimate] = useState(false)
+  const [isEstimating, setIsEstimating] = useState(false)
+
   // Load presets
   const { data: presets = [] } = useQuery({
     queryKey: ['presets'],
@@ -330,12 +336,9 @@ export default function NewProject() {
     }))
   }
 
-  // Handle form submit
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.brief.trim() || !form.projectType) return
-
-    const requirements = {
+  // Build the requirements object (shared by estimate + submit)
+  const buildRequirements = () => {
+    const requirements: Record<string, any> = {
       brief: form.brief,
       project_type: form.projectType,
       name: form.name || undefined,
@@ -367,55 +370,81 @@ export default function NewProject() {
     }
 
     // Add type-specific options
-    if (['web_complex', 'python_saas'].includes(form.projectType)) {
-      Object.assign(requirements, {
-        web_complex_options: {
-          key_features: form.selectedFeatures,
-          pages: form.pages,
-          include_auth: form.selectedFeatures.includes('authentication'),
-          include_dashboard: form.selectedFeatures.includes('dashboard'),
-          include_billing: form.selectedFeatures.includes('payments'),
-          include_email: form.selectedFeatures.includes('email'),
-        }
-      })
+    if (['web_complex', 'python_saas'].includes(form.projectType!)) {
+      requirements.web_complex_options = {
+        key_features: form.selectedFeatures,
+        pages: form.pages,
+        include_auth: form.selectedFeatures.includes('authentication'),
+        include_dashboard: form.selectedFeatures.includes('dashboard'),
+        include_billing: form.selectedFeatures.includes('payments'),
+        include_email: form.selectedFeatures.includes('email'),
+      }
     } else if (form.projectType === 'web_simple') {
-      Object.assign(requirements, {
-        web_simple_options: {
-          num_pages: form.numPages,
-          sections: form.sections,
-          include_contact_form: form.includeContactForm,
-          include_blog: form.includeBlog,
-        }
-      })
-    } else if (['mobile_native_ios', 'mobile_cross_platform', 'mobile_pwa'].includes(form.projectType)) {
-      Object.assign(requirements, {
-        mobile_options: {
-          platforms: form.mobilePlatforms,
-          framework: form.mobileFramework,
-          submit_to_stores: form.submitToStores,
-        }
-      })
+      requirements.web_simple_options = {
+        num_pages: form.numPages,
+        sections: form.sections,
+        include_contact_form: form.includeContactForm,
+        include_blog: form.includeBlog,
+      }
+    } else if (['mobile_native_ios', 'mobile_cross_platform', 'mobile_pwa'].includes(form.projectType!)) {
+      requirements.mobile_options = {
+        platforms: form.mobilePlatforms,
+        framework: form.mobileFramework,
+        submit_to_stores: form.submitToStores,
+      }
     } else if (form.projectType === 'cli_tool') {
-      Object.assign(requirements, {
-        cli_options: {
-          language: form.cliLanguage,
-          publish_to_registry: form.publishToRegistry,
-        }
-      })
+      requirements.cli_options = {
+        language: form.cliLanguage,
+        publish_to_registry: form.publishToRegistry,
+      }
     } else if (form.projectType === 'desktop_app') {
-      Object.assign(requirements, {
-        desktop_options: {
-          target_platforms: form.desktopPlatforms,
-          framework: form.desktopFramework,
-        }
-      })
+      requirements.desktop_options = {
+        target_platforms: form.desktopPlatforms,
+        framework: form.desktopFramework,
+      }
     }
+
+    return requirements
+  }
+
+  // Handle form submit — first fetch estimate, then show approval
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.brief.trim() || !form.projectType) return
+    setSubmitError(null)
+
+    // Fetch estimate before starting
+    setIsEstimating(true)
+    api.estimateProject({
+      brief: form.brief,
+      project_type: form.projectType,
+      cost_profile: form.costProfile,
+      num_features: form.selectedFeatures.length,
+      num_pages: form.pages.length || form.numPages || 0,
+    })
+      .then((est) => {
+        setEstimate(est)
+        setShowEstimate(true)
+      })
+      .catch((err) => {
+        // If estimation fails, allow direct submission
+        setSubmitError(`Estimation failed: ${err.message}. You can still proceed.`)
+        setShowEstimate(true)
+        setEstimate(null)
+      })
+      .finally(() => setIsEstimating(false))
+  }
+
+  // Approve estimate and start the build
+  const handleApproveAndBuild = () => {
+    setShowEstimate(false)
+    const requirements = buildRequirements()
 
     createProject.mutate({
       brief: form.brief,
       name: form.name || undefined,
       cost_profile: form.costProfile,
-      project_type: form.projectType,
+      project_type: form.projectType!,
       figma_url: form.figmaUrl || undefined,
       requirements,
     })
@@ -1442,7 +1471,7 @@ export default function NewProject() {
           <button
             type="submit"
             className="btn-iridescent w-full"
-            disabled={!form.brief.trim() || !form.projectType || createProject.isPending}
+            disabled={!form.brief.trim() || !form.projectType || createProject.isPending || isEstimating}
           >
             {createProject.isPending ? (
               <span className="flex items-center justify-center gap-2">
@@ -1452,10 +1481,18 @@ export default function NewProject() {
                 </svg>
                 Starting Build...
               </span>
+            ) : isEstimating ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Estimating Cost...
+              </span>
             ) : (
               <span className="flex items-center justify-center gap-2">
-                <Rocket className="w-5 h-5" />
-                Start Building
+                <DollarSign className="w-5 h-5" />
+                Estimate &amp; Build
                 <ArrowRight className="w-5 h-5" />
               </span>
             )}
@@ -1568,6 +1605,122 @@ export default function NewProject() {
           </div>
         </div>
       </form>
+
+      {/* Cost Estimate Approval Modal */}
+      {showEstimate && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+             style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="glass-card w-full max-w-lg p-6 space-y-5"
+               style={{ background: 'var(--background-primary)', border: '1px solid var(--glass-border)' }}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                Cost Estimate
+              </h2>
+              <button type="button" onClick={() => setShowEstimate(false)}
+                      className="p-1 rounded hover:bg-white/10">
+                <X className="w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
+              </button>
+            </div>
+
+            {estimate ? (
+              <>
+                {/* Main cost display */}
+                <div className="text-center py-4">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <DollarSign className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
+                    <span className="text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                      ${estimate.total_cost.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                    Range: ${estimate.min_cost.toFixed(2)} &ndash; ${estimate.max_cost.toFixed(2)}
+                    <span className="ml-2">({Math.round(estimate.confidence * 100)}% confidence)</span>
+                  </p>
+                </div>
+
+                {/* Time + tokens summary */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center p-3 rounded-lg" style={{ background: 'var(--background-secondary)' }}>
+                    <Clock className="w-4 h-4 mx-auto mb-1" style={{ color: 'var(--text-tertiary)' }} />
+                    <span className="block font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                      {estimate.total_time_display}
+                    </span>
+                    <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Est. time</span>
+                  </div>
+                  <div className="text-center p-3 rounded-lg" style={{ background: 'var(--background-secondary)' }}>
+                    <Zap className="w-4 h-4 mx-auto mb-1" style={{ color: 'var(--text-tertiary)' }} />
+                    <span className="block font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                      {(estimate.total_tokens / 1000).toFixed(0)}K
+                    </span>
+                    <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Tokens</span>
+                  </div>
+                  <div className="text-center p-3 rounded-lg" style={{ background: 'var(--background-secondary)' }}>
+                    <Layers className="w-4 h-4 mx-auto mb-1" style={{ color: 'var(--text-tertiary)' }} />
+                    <span className="block font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                      {estimate.agents.length}
+                    </span>
+                    <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Agents</span>
+                  </div>
+                </div>
+
+                {/* Top 5 agents by cost */}
+                <div>
+                  <h3 className="text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    Top agents by cost
+                  </h3>
+                  <div className="space-y-1">
+                    {[...estimate.agents]
+                      .sort((a, b) => b.cost - a.cost)
+                      .slice(0, 5)
+                      .map((agent) => (
+                        <div key={agent.agent_id} className="flex items-center justify-between text-sm py-1">
+                          <span style={{ color: 'var(--text-primary)' }}>
+                            {agent.agent_id.replace(/_/g, ' ')}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                              {agent.model.split('/')[1]}
+                            </span>
+                            <span className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>
+                              ${agent.cost.toFixed(3)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <AlertCircle className="w-8 h-8 mx-auto mb-2" style={{ color: '#FBBF24' }} />
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  {submitError || 'Could not generate estimate. You can still proceed.'}
+                </p>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEstimate(false)}
+                className="btn-ghost flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveAndBuild}
+                className="btn-iridescent flex-1 flex items-center justify-center gap-2"
+                disabled={createProject.isPending}
+              >
+                <CheckCircle className="w-4 h-4" />
+                {estimate ? `Approve $${estimate.total_cost.toFixed(2)} & Build` : 'Proceed Anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Phase 11B: Template Browser Modal */}
       <TemplateBrowser

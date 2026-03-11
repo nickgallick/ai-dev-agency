@@ -342,6 +342,32 @@ export interface SearchQuery {
   limit?: number
 }
 
+// Pre-execution estimation types
+export interface AgentEstimate {
+  agent_id: string
+  model: string
+  input_tokens: number
+  output_tokens: number
+  cost: number
+  time_seconds: number
+}
+
+export interface PipelineEstimate {
+  total_cost: number
+  min_cost: number
+  max_cost: number
+  total_time_seconds: number
+  total_time_display: string
+  total_input_tokens: number
+  total_output_tokens: number
+  total_tokens: number
+  confidence: number
+  cost_profile: string
+  project_type: string
+  brief_tokens: number
+  agents: AgentEstimate[]
+}
+
 export const api = {
   // Projects
   createProject: async (data: {
@@ -361,6 +387,18 @@ export const api = {
   // Phase 11A: Brief Analysis
   analyzeBrief: async (brief: string): Promise<BriefAnalysis> => {
     const response = await apiClient.post('/projects/analyze-brief', { brief })
+    return response.data
+  },
+
+  // Pre-execution cost & time estimation
+  estimateProject: async (data: {
+    brief: string
+    project_type: string
+    cost_profile: string
+    num_features?: number
+    num_pages?: number
+  }): Promise<PipelineEstimate> => {
+    const response = await apiClient.post('/projects/estimate', data)
     return response.data
   },
 

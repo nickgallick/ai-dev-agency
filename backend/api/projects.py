@@ -36,6 +36,15 @@ class BriefAnalysisResponse(BaseModel):
     warnings: List[str] = []
 
 
+class EstimateRequest(BaseModel):
+    """Request model for pre-execution cost/time estimation."""
+    brief: str = Field(..., min_length=1)
+    project_type: str = Field("web_simple")
+    cost_profile: str = Field("balanced")
+    num_features: int = Field(0, ge=0)
+    num_pages: int = Field(0, ge=0)
+
+
 class ProjectCreate(BaseModel):
     """Request model for creating a project."""
     brief: str = Field(..., min_length=10, description="Project description")
@@ -94,6 +103,32 @@ async def analyze_brief(request: BriefAnalysisRequest):
         return BriefAnalysisResponse(
             warnings=[f"Analysis failed: {str(e)}"]
         )
+
+
+# ============ Pre-Execution Estimation (#8) ============
+
+@router.post("/estimate")
+async def estimate_project_cost(request: EstimateRequest):
+    """Estimate cost and time for a pipeline run before starting it.
+
+    Returns per-agent token estimates, dollar costs, and wall-clock time.
+    The user reviews this estimate and approves spend before the pipeline starts.
+
+    No LLM calls are made — this is a fast, local calculation.
+    """
+    from utils.estimation import estimate_pipeline_cost
+
+    try:
+        estimate = estimate_pipeline_cost(
+            brief=request.brief,
+            project_type=request.project_type,
+            cost_profile=request.cost_profile,
+            num_features=request.num_features,
+            num_pages=request.num_pages,
+        )
+        return estimate.to_dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Estimation failed: {str(e)}")
 
 
 # ============ Project CRUD Endpoints ============
