@@ -5,7 +5,7 @@ Phase 11A: Enhanced with Smart Adaptive Intake System.
 import uuid
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -101,13 +101,12 @@ async def analyze_brief(request: BriefAnalysisRequest):
 @router.post("/", response_model=ProjectResponse, status_code=201)
 async def create_project(
     project: ProjectCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """Create a new project and start the pipeline."""
+    """Create a new project and start the pipeline via the queue."""
     # Create project record
     project_id = uuid.uuid4()
-    
+
     # Determine project type from requirements or explicit field
     project_type = None
     if project.project_type:
@@ -120,7 +119,7 @@ async def create_project(
             project_type = ProjectType(project.requirements["project_type"])
         except ValueError:
             pass
-    
+
     db_project = Project(
         id=project_id,
         brief=project.brief,
@@ -139,20 +138,23 @@ async def create_project(
             "tech_stack_override": project.tech_stack_override,
         },
     )
-    
+
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
-    
-    # Start pipeline in background
-    background_tasks.add_task(
-        run_pipeline,
-        str(project_id),
-        project.brief,
-        project.cost_profile,
-        project.requirements or {},
+
+    # Enqueue project for processing by the queue worker
+    from task_queue.manager import get_queue_manager
+    queue_manager = get_queue_manager()
+    queue_manager.enqueue_project(
+        project_id=str(project_id),
+        metadata={
+            "name": project.name,
+            "brief": project.brief[:200],
+            "cost_profile": project.cost_profile,
+        },
     )
-    
+
     return ProjectResponse(
         id=str(db_project.id),
         brief=db_project.brief,
@@ -272,7 +274,12 @@ async def delete_project(
 
 
 async def run_pipeline(project_id: str, brief: str, cost_profile: str, requirements: dict = None):
-    """Run the pipeline in background."""
+    """Run the pipeline directly (used by queue worker).
+
+    This is an async function that must be called from an active event loop,
+    e.g. via the QueueWorker.  Do NOT pass it to BackgroundTasks.add_task()
+    because that may not properly schedule the coroutine.
+    """
     from models import SessionLocal
 
     db = SessionLocal()

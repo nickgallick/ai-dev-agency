@@ -1,12 +1,14 @@
 """Integration API routes.
 
 Stores integration API keys (Stripe, Resend, Supabase, etc.)
-in memory with fallback to environment variables.
+in a persistent JSON file with fallback to environment variables.
 Keys are read at runtime by agents — not hardcoded.
 """
 
+import json
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -16,6 +18,9 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
+
+# Persistent storage file for integration keys
+_KEYS_FILE = Path(__file__).parent.parent.parent / "data" / "integration_keys.json"
 
 # All supported integrations with metadata
 INTEGRATIONS: Dict[str, Dict[str, Any]] = {
@@ -163,12 +168,26 @@ INTEGRATIONS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# In-memory key store (same pattern as api_keys.py)
+# Key store — loaded from persistent JSON file + environment variables
 _int_store: Dict[str, str] = {}
+_store_loaded: bool = False
 
 
-def _load_from_env() -> None:
-    """Load integration keys from environment on first access."""
+def _load_store() -> None:
+    """Load integration keys from the persistent JSON file and environment."""
+    global _store_loaded
+    if _store_loaded:
+        return
+
+    # 1. Load from persistent file
+    if _KEYS_FILE.exists():
+        try:
+            data = json.loads(_KEYS_FILE.read_text())
+            _int_store.update(data)
+        except Exception as e:
+            logger.warning(f"Failed to load integration keys file: {e}")
+
+    # 2. Merge environment variables (don't overwrite UI-saved keys)
     for int_id, meta in INTEGRATIONS.items():
         for field in meta["fields"]:
             env_key = field["key"]
@@ -176,10 +195,25 @@ def _load_from_env() -> None:
             if env_val and env_key not in _int_store:
                 _int_store[env_key] = env_val
 
+    _store_loaded = True
+
+
+def _persist_store() -> None:
+    """Write the current key store to disk."""
+    try:
+        _KEYS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _KEYS_FILE.write_text(json.dumps(_int_store, indent=2))
+    except Exception as e:
+        logger.error(f"Failed to persist integration keys: {e}")
+
+
+# Keep the old name as an alias so existing call-sites keep working
+_load_from_env = _load_store
+
 
 def get_integration_value(env_key: str) -> Optional[str]:
     """Get an integration key value for use by agents at runtime."""
-    _load_from_env()
+    _load_store()
     return _int_store.get(env_key) or os.environ.get(env_key) or None
 
 
@@ -276,9 +310,11 @@ async def save_integration_key(int_id: str, body: SaveFieldRequest):
     if body.env_key not in valid_keys:
         raise HTTPException(status_code=400, detail=f"Unknown field {body.env_key} for {int_id}")
 
+    _load_store()
     value = body.value.strip()
     _int_store[body.env_key] = value
     os.environ[body.env_key] = value
+    _persist_store()
 
     # Reset settings singleton so agents pick up new values
     try:
@@ -296,6 +332,7 @@ async def delete_integration_key(int_id: str, env_key: str):
     if int_id not in INTEGRATIONS:
         raise HTTPException(status_code=404, detail=f"Unknown integration: {int_id}")
     _int_store.pop(env_key, None)
+    _persist_store()
     return {"success": True, "int_id": int_id, "env_key": env_key}
 
 

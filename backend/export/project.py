@@ -142,11 +142,14 @@ def export_project_zip(
     
     # Determine project path
     if project_path is None:
-        # Try to find project files
+        from config.settings import get_settings
+        settings = get_settings()
+        base_dir = settings.project_temp_dir
+
         possible_paths = [
-            f"/home/ubuntu/projects/{project_id}",
-            f"/home/ubuntu/ai-dev-agency/generated/{project_id}",
-            project.project_metadata.get("output_path") if project.project_metadata else None
+            project.project_metadata.get("output_path") if project.project_metadata else None,
+            f"{base_dir}/projects/{project_id}",
+            f"{base_dir}/generated/{project_id}",
         ]
         for path in possible_paths:
             if path and os.path.exists(path):
@@ -368,7 +371,9 @@ def import_project_zip(
         # Copy code files to project directory
         code_dir = extract_dir / "code"
         if code_dir.exists():
-            output_path = f"/home/ubuntu/projects/{project_id}"
+            from config.settings import get_settings
+            settings = get_settings()
+            output_path = f"{settings.project_temp_dir}/projects/{project_id}"
             os.makedirs(output_path, exist_ok=True)
             
             for item in code_dir.iterdir():

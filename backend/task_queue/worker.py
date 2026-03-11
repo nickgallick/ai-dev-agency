@@ -148,10 +148,15 @@ class QueueWorker:
             if self._pipeline_executor:
                 await self._pipeline_executor(project_id, db)
             else:
-                # Default: Import and run the pipeline
-                from orchestration.pipeline import Pipeline
-                pipeline = Pipeline(project_id=project_id, db=db)
-                await pipeline.run()
+                # Default: use PipelineExecutor
+                from orchestration.executor import PipelineExecutor
+                executor = PipelineExecutor(db_session=db)
+                await executor.execute(
+                    project_id=project_id,
+                    brief=project.brief or "",
+                    cost_profile=project.cost_profile.value if project.cost_profile else "balanced",
+                    requirements=project.requirements or {},
+                )
             
             self._stats["projects_processed"] += 1
             print(f"[QueueWorker] Completed project: {project_id}")

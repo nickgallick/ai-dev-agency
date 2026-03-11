@@ -45,8 +45,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent.parent
 BACKUP_DIRS = [
     str(_PROJECT_ROOT / "generated_assets"),
     str(_PROJECT_ROOT / "templates"),
-    "/home/ubuntu/ai-dev-agency/generated_assets",  # legacy path
-    "/home/ubuntu/ai-dev-agency/templates",          # legacy path
+    str(_PROJECT_ROOT / "backend" / "data"),
 ]
 
 # Local backup destination
@@ -110,12 +109,12 @@ def backup_system(
         if include_projects:
             projects_dir = backup_dir / "projects"
             projects_dir.mkdir()
-            
+
             source_dirs = [
-                "/home/ubuntu/projects",
-                "/home/ubuntu/ai-dev-agency/generated"
+                str(Path(settings.project_temp_dir) / "projects"),
+                str(Path(settings.project_temp_dir) / "generated"),
             ]
-            
+
             for source_dir in source_dirs:
                 if os.path.exists(source_dir):
                     for project_folder in os.listdir(source_dir):
@@ -314,7 +313,7 @@ def restore_system(
                 import shutil
                 for item in files_dir.iterdir():
                     if item.is_dir():
-                        dest = Path("/home/ubuntu/ai-dev-agency") / item.name
+                        dest = _PROJECT_ROOT / item.name
                         if dest.exists():
                             shutil.rmtree(dest)
                         shutil.copytree(item, dest)

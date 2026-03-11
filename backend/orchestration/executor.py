@@ -270,6 +270,10 @@ class PipelineExecutor:
             result = await pipeline.execute_node(node)
             results[node.id] = result
 
+            # Capture knowledge from successful agent outputs
+            if result and result.success and self.db:
+                await self._capture_knowledge(project_id, agent_name, result, pipeline.context)
+
             # Emit completion
             status = "complete" if result and result.success else "failed"
             self._emit_activity(
@@ -333,6 +337,33 @@ class PipelineExecutor:
             "coding_standards": "Generating README and API docs...",
         }
         return messages.get(agent_name, f"Processing {agent_name}...")
+
+    async def _capture_knowledge(
+        self, project_id: str, agent_name: str, result, context: Dict[str, Any]
+    ):
+        """Capture knowledge from a completed agent into the knowledge base."""
+        try:
+            from knowledge.capture import capture_agent_knowledge
+
+            output_data = result.data if hasattr(result, "data") else {}
+            if not isinstance(output_data, dict):
+                return
+
+            project_type = context.get("requirements", {}).get("project_type")
+            industry = context.get("requirements", {}).get("industry")
+            tech_stack = context.get("requirements", {}).get("tech_stack")
+
+            await capture_agent_knowledge(
+                db=self.db,
+                agent_name=agent_name,
+                agent_output=output_data,
+                project_id=project_id,
+                project_type=project_type,
+                industry=industry,
+                tech_stack=tech_stack if isinstance(tech_stack, list) else None,
+            )
+        except Exception as e:
+            logger.warning(f"Knowledge capture failed for {agent_name}: {e}")
 
     async def _update_project_status(self, project_id: str, status: str):
         """Update project status in database."""
