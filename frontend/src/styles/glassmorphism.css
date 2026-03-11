@@ -1212,6 +1212,37 @@ body::before {
   z-index: 1;
 }
 
+/* ─── Accent convenience aliases (for inline-style usage) ───────────────── */
+:root,
+[data-theme="dark"] {
+  --accent-success-bg:     rgba(52, 211, 153, 0.1);
+  --accent-success-border: rgba(52, 211, 153, 0.3);
+  --accent-error-bg:       rgba(248, 113, 113, 0.1);
+  --accent-error-border:   rgba(248, 113, 113, 0.3);
+  --accent-warning-bg:     rgba(251, 191, 36, 0.1);
+  --accent-warning-border: rgba(251, 191, 36, 0.3);
+}
+
+[data-theme="light"] {
+  --accent-success-bg:     rgba(16, 185, 129, 0.1);
+  --accent-success-border: rgba(16, 185, 129, 0.3);
+  --accent-error-bg:       rgba(239, 68, 68, 0.1);
+  --accent-error-border:   rgba(239, 68, 68, 0.3);
+  --accent-warning-bg:     rgba(245, 158, 11, 0.1);
+  --accent-warning-border: rgba(245, 158, 11, 0.3);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --accent-success-bg:     rgba(16, 185, 129, 0.1);
+    --accent-success-border: rgba(16, 185, 129, 0.3);
+    --accent-error-bg:       rgba(239, 68, 68, 0.1);
+    --accent-error-border:   rgba(239, 68, 68, 0.3);
+    --accent-warning-bg:     rgba(245, 158, 11, 0.1);
+    --accent-warning-border: rgba(245, 158, 11, 0.3);
+  }
+}
+
 /* ─── Select / Option light-mode fix ─────────────────────────────────────── */
 /* Native <select> dropdowns inherit the OS/browser chrome.  In light mode    */
 /* the dark glass-input background makes option text unreadable.  We override */

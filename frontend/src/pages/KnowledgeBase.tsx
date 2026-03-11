@@ -277,9 +277,9 @@ function KnowledgeBase() {
           {uploadResult && (
             <div className={`upload-result ${uploadResult.success ? 'success' : 'error'}`}
                  style={{ marginBottom: '1.5rem', padding: '0.75rem 1rem', borderRadius: '0.5rem',
-                   background: uploadResult.success ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                   border: `1px solid ${uploadResult.success ? '#22c55e40' : '#ef444440'}`,
-                   color: uploadResult.success ? '#22c55e' : '#ef4444' }}>
+                   background: uploadResult.success ? 'var(--accent-success-bg, rgba(52,211,153,0.1))' : 'var(--accent-error-bg, rgba(248,113,113,0.1))',
+                   border: `1px solid ${uploadResult.success ? 'var(--accent-success-border, rgba(52,211,153,0.3))' : 'var(--accent-error-border, rgba(248,113,113,0.3))'}`,
+                   color: uploadResult.success ? 'var(--accent-success)' : 'var(--accent-error)' }}>
               {uploadResult.message}
             </div>
           )}

@@ -464,9 +464,9 @@ export default function CostDashboard() {
                   <tr key={agent.agent_name} className="border-b border-border-default/50">
                     <td className="py-3">
                       <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
-                        index === 0 ? 'bg-yellow-500/20 text-yellow-500' :
-                        index === 1 ? 'bg-gray-400/20 text-gray-400' :
-                        index === 2 ? 'bg-amber-600/20 text-amber-600' :
+                        index === 0 ? 'bg-accent-warning/20 text-accent-warning' :
+                        index === 1 ? 'bg-border-default/30 text-text-tertiary' :
+                        index === 2 ? 'bg-accent-warning/10 text-accent-warning' :
                         'bg-bg-secondary text-text-tertiary'
                       }`}>
                         {index + 1}
@@ -643,10 +643,10 @@ export default function CostDashboard() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`px-2 py-0.5 text-xs rounded font-medium ${
-                        pattern.pattern_type === 'security' ? 'bg-red-500/20 text-red-400' :
-                        pattern.pattern_type === 'accessibility' ? 'bg-purple-500/20 text-purple-400' :
-                        pattern.pattern_type === 'seo' ? 'bg-blue-500/20 text-blue-400' :
-                        'bg-gray-500/20 text-gray-400'
+                        pattern.pattern_type === 'security' ? 'bg-accent-error/20 text-accent-error' :
+                        pattern.pattern_type === 'accessibility' ? 'bg-accent-purple/20 text-accent-purple' :
+                        pattern.pattern_type === 'seo' ? 'bg-accent-secondary/20 text-accent-secondary' :
+                        'bg-bg-secondary text-text-tertiary'
                       }`}>
                         {pattern.pattern_type}
                       </span>
