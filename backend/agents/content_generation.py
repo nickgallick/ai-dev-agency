@@ -194,7 +194,7 @@ class ContentGenerationAgent(BaseAgent):
                 status=AgentStatus.FAILED,
                 started_at=started_at,
                 completed_at=datetime.utcnow(),
-                error=str(e)
+                error_message=str(e)
             )
     
     def _get_pages_config(self, project_type: ProjectType) -> Dict[str, str]:

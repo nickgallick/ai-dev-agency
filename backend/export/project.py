@@ -142,11 +142,14 @@ def export_project_zip(
     
     # Determine project path
     if project_path is None:
-        # Try to find project files
+        from config.settings import get_settings
+        settings = get_settings()
+        base_dir = settings.project_temp_dir
+
         possible_paths = [
-            f"/home/ubuntu/projects/{project_id}",
-            f"/home/ubuntu/ai-dev-agency/generated/{project_id}",
-            project.project_metadata.get("output_path") if project.project_metadata else None
+            project.project_metadata.get("output_path") if project.project_metadata else None,
+            f"{base_dir}/projects/{project_id}",
+            f"{base_dir}/generated/{project_id}",
         ]
         for path in possible_paths:
             if path and os.path.exists(path):
@@ -192,11 +195,15 @@ def export_project_zip(
                     "agent_name": log.agent_name,
                     "model_used": log.model_used,
                     "timestamp": log.timestamp.isoformat() if log.timestamp else None,
-                    "token_usage": log.token_usage,
+                    "prompt_tokens": log.prompt_tokens,
+                    "completion_tokens": log.completion_tokens,
+                    "total_tokens": log.total_tokens,
                     "cost": log.cost,
+                    "duration_ms": log.duration_ms,
                     "status": log.status,
+                    "error_message": log.error_message,
                     "input_data": log.input_data,
-                    "output_data": log.output_data
+                    "output_data": log.output_data,
                 }
                 for log in logs
             ]
@@ -212,12 +219,9 @@ def export_project_zip(
             costs_data = [
                 {
                     "id": str(cost.id),
-                    "agent_name": cost.agent_name,
-                    "model_used": cost.model_used,
-                    "token_count": cost.token_count,
-                    "cost": cost.cost,
+                    "total_cost": cost.total_cost,
+                    "breakdown": cost.breakdown,
                     "timestamp": cost.timestamp.isoformat() if cost.timestamp else None,
-                    "details": cost.details
                 }
                 for cost in costs
             ]
@@ -335,14 +339,18 @@ def import_project_zip(
                 log = AgentLog(
                     id=str(uuid.uuid4()),
                     project_id=project_id,
-                    agent_name=log_data.get("agent_name"),
-                    model_used=log_data.get("model_used"),
+                    agent_name=log_data.get("agent_name", "unknown"),
+                    model_used=log_data.get("model_used", "unknown"),
                     timestamp=datetime.fromisoformat(log_data["timestamp"]) if log_data.get("timestamp") else None,
-                    token_usage=log_data.get("token_usage"),
-                    cost=log_data.get("cost"),
-                    status=log_data.get("status"),
+                    prompt_tokens=log_data.get("prompt_tokens", 0),
+                    completion_tokens=log_data.get("completion_tokens", 0),
+                    total_tokens=log_data.get("total_tokens", 0),
+                    cost=log_data.get("cost", 0.0),
+                    duration_ms=log_data.get("duration_ms", 0),
+                    status=log_data.get("status", "completed"),
+                    error_message=log_data.get("error_message"),
                     input_data=log_data.get("input_data"),
-                    output_data=log_data.get("output_data")
+                    output_data=log_data.get("output_data"),
                 )
                 db.add(log)
         
@@ -356,19 +364,18 @@ def import_project_zip(
                 cost = CostTracking(
                     id=str(uuid.uuid4()),
                     project_id=project_id,
-                    agent_name=cost_data.get("agent_name"),
-                    model_used=cost_data.get("model_used"),
-                    token_count=cost_data.get("token_count"),
-                    cost=cost_data.get("cost"),
+                    total_cost=cost_data.get("total_cost", 0.0),
+                    breakdown=cost_data.get("breakdown", {}),
                     timestamp=datetime.fromisoformat(cost_data["timestamp"]) if cost_data.get("timestamp") else None,
-                    details=cost_data.get("details")
                 )
                 db.add(cost)
         
         # Copy code files to project directory
         code_dir = extract_dir / "code"
         if code_dir.exists():
-            output_path = f"/home/ubuntu/projects/{project_id}"
+            from config.settings import get_settings
+            settings = get_settings()
+            output_path = f"{settings.project_temp_dir}/projects/{project_id}"
             os.makedirs(output_path, exist_ok=True)
             
             for item in code_dir.iterdir():

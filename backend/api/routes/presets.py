@@ -238,7 +238,7 @@ async def create_preset(
         config=preset.config.model_dump() if preset.config else {},
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
-        use_count="0"
+        use_count=0
     )
     
     db.add(db_preset)

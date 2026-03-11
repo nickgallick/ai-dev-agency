@@ -8,6 +8,7 @@ env_path = Path(__file__).parent.parent / ".env"
 if env_path.exists():
     load_dotenv(env_path)
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from api import projects_router, agents_router, costs_router, health_router
-from api.routes import revisions_router, analytics_router, integrations_router
+from api.routes import revisions_router, analytics_router, integrations_router, mcp_router, api_keys_router
 from api.routes.presets import router as presets_router  # Phase 11A
 from api.routes.templates import router as templates_router  # Phase 11B
 from api.routes.knowledge import router as knowledge_router  # Phase 11B
@@ -23,8 +24,29 @@ from api.routes.checkpoints import router as checkpoints_router  # Phase 11C
 from api.routes.queue import router as queue_router  # Phase 11C
 from api.routes.export import router as export_router  # Phase 11C
 from api.activity import router as activity_router  # Real-time activity streaming
+from api.routes.chat import router as chat_router  # Conversational Clarification System
+from api.routes.project_memory import router as project_memory_router  # Project Memory (#12)
+from api.routes.browser_tests import router as browser_tests_router  # Browser Testing (#11)
+from api.routes.share import router as share_router  # Shareable Preview Links (#22)
+from api.routes.design_import import router as design_import_router  # Figma & Screenshot Import (#23)
 from auth import auth_router
 from models import engine, Base
+
+
+async def _run_pipeline_from_queue(project_id: str, db):
+    """Execute pipeline for a project dequeued by the queue worker."""
+    from orchestration.executor import PipelineExecutor
+    from models.project import Project
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return
+    executor = PipelineExecutor(db_session=db)
+    await executor.execute(
+        project_id=str(project.id),
+        brief=project.brief or "",
+        cost_profile=project.cost_profile.value if project.cost_profile else "balanced",
+        requirements=project.requirements or {},
+    )
 
 
 @asynccontextmanager
@@ -32,8 +54,26 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup: Create tables if they don't exist
     Base.metadata.create_all(bind=engine)
+
+    # Start the queue worker background task
+    queue_worker_task = None
+    try:
+        from task_queue.worker import QueueWorker
+        worker = QueueWorker(pipeline_executor=_run_pipeline_from_queue)
+        queue_worker_task = asyncio.create_task(worker.start())
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Queue worker failed to start: {e}")
+
     yield
-    # Shutdown: cleanup if needed
+
+    # Shutdown: stop the queue worker
+    if queue_worker_task and not queue_worker_task.done():
+        queue_worker_task.cancel()
+        try:
+            await queue_worker_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
@@ -69,6 +109,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Prometheus metrics middleware — exposes /metrics endpoint
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    Instrumentator(
+        should_group_status_codes=True,
+        should_ignore_untemplated=True,
+        excluded_handlers=["/metrics", "/health", "/health/ready"],
+    ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=True)
+except ImportError:
+    pass  # prometheus_fastapi_instrumentator not installed — skip
+
 # Include routers
 app.include_router(health_router)
 app.include_router(auth_router)  # Phase 9B: Authentication - Already has /api prefix
@@ -85,6 +136,13 @@ app.include_router(checkpoints_router, prefix="/api")  # Phase 11C: Checkpoints
 app.include_router(queue_router, prefix="/api")  # Phase 11C: Queue
 app.include_router(export_router, prefix="/api")  # Phase 11C: Export
 app.include_router(activity_router, prefix="/api")  # Real-time activity streaming
+app.include_router(mcp_router, prefix="/api")  # MCP Server management
+app.include_router(api_keys_router, prefix="/api")  # Platform API key management
+app.include_router(chat_router, prefix="/api")  # Conversational Clarification System
+app.include_router(project_memory_router, prefix="/api")  # Project Memory (#12)
+app.include_router(browser_tests_router, prefix="/api")  # Browser Testing (#11)
+app.include_router(share_router)  # Shareable Preview Links (#22) — includes /share public route
+app.include_router(design_import_router, prefix="/api")  # Figma & Screenshot Import (#23)
 
 
 # Static file serving for production

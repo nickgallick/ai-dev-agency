@@ -347,6 +347,48 @@ class QueueManager:
         
         return False
     
+    def move_in_queue(self, project_id: str, direction: str) -> bool:
+        """Move a project up or down one position in the queue.
+
+        Args:
+            project_id: UUID of the project.
+            direction: ``"up"`` (toward front) or ``"down"`` (toward back).
+
+        Returns:
+            ``True`` if the item was moved.
+        """
+        if self._connected and self._redis:
+            try:
+                items = self._redis.zrange(QUEUE_KEY, 0, -1, withscores=True)
+                ids = [pid for pid, _ in items]
+                if project_id not in ids:
+                    return False
+                idx = ids.index(project_id)
+                target = idx - 1 if direction == "up" else idx + 1
+                if target < 0 or target >= len(items):
+                    return False
+                # Swap scores
+                score_a = items[idx][1]
+                score_b = items[target][1]
+                self._redis.zadd(QUEUE_KEY, {project_id: score_b, ids[target]: score_a})
+                return True
+            except redis.RedisError as e:
+                print(f"Redis move error: {e}")
+                return False
+
+        # Local fallback
+        for i, item in enumerate(self._local_queue):
+            if item.project_id == project_id:
+                target = i - 1 if direction == "up" else i + 1
+                if target < 0 or target >= len(self._local_queue):
+                    return False
+                self._local_queue[i], self._local_queue[target] = (
+                    self._local_queue[target],
+                    self._local_queue[i],
+                )
+                return True
+        return False
+
     def remove_from_queue(self, project_id: str) -> bool:
         """
         Remove a project from the queue.

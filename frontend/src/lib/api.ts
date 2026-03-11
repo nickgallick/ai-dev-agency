@@ -342,7 +342,105 @@ export interface SearchQuery {
   limit?: number
 }
 
+// Brief wizard types
+export interface BriefScoreResult {
+  overall: number
+  dimensions: Record<string, number>
+  missing: string[]
+  suggestions: string[]
+  word_count: number
+  quality_label: string
+}
+
+export interface EnhancedBriefResult {
+  original: string
+  enhanced: string
+  additions: string[]
+  score_before: number
+  score_after: number
+}
+
+// Pre-execution estimation types
+export interface AgentEstimate {
+  agent_id: string
+  model: string
+  input_tokens: number
+  output_tokens: number
+  cost: number
+  time_seconds: number
+}
+
+export interface PipelineEstimate {
+  total_cost: number
+  min_cost: number
+  max_cost: number
+  total_time_seconds: number
+  total_time_display: string
+  total_input_tokens: number
+  total_output_tokens: number
+  total_tokens: number
+  confidence: number
+  cost_profile: string
+  project_type: string
+  brief_tokens: number
+  agents: AgentEstimate[]
+}
+
+export interface AutonomyTier {
+  id: string
+  label: string
+  description: string
+  checkpoint_agents: string[]
+  auto_continue_timeout: number
+  allow_output_editing: boolean
+}
+
+// Pipeline Plan types (#13)
+export interface PlanAgent {
+  agent_id: string
+  description: string
+  dependencies: string[]
+  parallel_group: string | null
+  skipped: boolean
+  required: boolean
+  is_checkpoint: boolean
+  model: string
+  estimated_cost: number
+  estimated_time_seconds: number
+  estimated_input_tokens: number
+  estimated_output_tokens: number
+}
+
+export interface PlanSummary {
+  total_agents: number
+  active_agents: number
+  skipped_agents: number
+  checkpoint_count: number
+  total_cost: number
+  active_cost: number
+  min_cost: number
+  max_cost: number
+  total_time_display: string
+  total_time_seconds: number
+  total_tokens: number
+  confidence: number
+}
+
+export interface PipelinePlan {
+  project_type: string
+  cost_profile: string
+  autonomy_tier: string
+  agents: PlanAgent[]
+  summary: PlanSummary
+}
+
 export const api = {
+  // Autonomy tiers (#26)
+  getAutonomyTiers: async (): Promise<AutonomyTier[]> => {
+    const response = await apiClient.get('/health/autonomy-tiers')
+    return response.data.tiers
+  },
+
   // Projects
   createProject: async (data: {
     brief: string
@@ -353,14 +451,56 @@ export const api = {
     figma_url?: string
     integration_config?: Record<string, any>
     requirements?: Partial<ProjectRequirements>
+    pipeline_plan?: { skipped_agents: string[] }
   }): Promise<Project> => {
     const response = await apiClient.post('/projects/', data)
+    return response.data
+  },
+
+  // Brief wizard: scoring & enhancement
+  scoreBrief: async (brief: string, projectType: string): Promise<BriefScoreResult> => {
+    const response = await apiClient.post('/projects/score-brief', { brief, project_type: projectType })
+    return response.data
+  },
+
+  enhanceBrief: async (data: {
+    brief: string
+    project_type: string
+    detected_features?: string[]
+    detected_pages?: string[]
+  }): Promise<EnhancedBriefResult> => {
+    const response = await apiClient.post('/projects/enhance-brief', data)
     return response.data
   },
 
   // Phase 11A: Brief Analysis
   analyzeBrief: async (brief: string): Promise<BriefAnalysis> => {
     const response = await apiClient.post('/projects/analyze-brief', { brief })
+    return response.data
+  },
+
+  // Pre-execution cost & time estimation
+  estimateProject: async (data: {
+    brief: string
+    project_type: string
+    cost_profile: string
+    num_features?: number
+    num_pages?: number
+  }): Promise<PipelineEstimate> => {
+    const response = await apiClient.post('/projects/estimate', data)
+    return response.data
+  },
+
+  // Pipeline plan generation (#13)
+  generatePlan: async (data: {
+    brief: string
+    project_type: string
+    cost_profile: string
+    num_features?: number
+    num_pages?: number
+    build_mode?: string
+  }): Promise<PipelinePlan> => {
+    const response = await apiClient.post('/projects/generate-plan', data)
     return response.data
   },
 
@@ -658,12 +798,21 @@ export const api = {
     await apiClient.post(`/queue/${projectId}/reprioritize`, { priority })
   },
 
+  moveProjectInQueue: async (projectId: string, direction: 'up' | 'down'): Promise<void> => {
+    await apiClient.post(`/queue/${projectId}/move`, { direction })
+  },
+
   getQueueStats: async (): Promise<QueueStats> => {
     const response = await apiClient.get('/queue/stats')
     return response.data
   },
 
   // Export APIs
+  getProjectArtifacts: async (projectId: string): Promise<ProjectArtifacts> => {
+    const response = await apiClient.get(`/export/projects/${projectId}/artifacts`)
+    return response.data
+  },
+
   getExportableFiles: async (projectId: string): Promise<ExportableFiles> => {
     const response = await apiClient.get(`/export/projects/${projectId}/files`)
     return response.data
@@ -724,6 +873,149 @@ export const api = {
       headers: { 'Content-Type': 'multipart/form-data' },
       params: { merge }
     })
+    return response.data
+  },
+
+  // ── Conversational Clarification System ─────────────────────────────
+
+  sendChatMessage: async (message: string, conversationId?: string): Promise<ChatMessageResponse> => {
+    const response = await apiClient.post('/chat/', { message, conversation_id: conversationId })
+    return response.data
+  },
+
+  getChatHistory: async (conversationId: string): Promise<ChatMessage[]> => {
+    const response = await apiClient.get(`/chat/${conversationId}`)
+    return response.data
+  },
+
+  startBuildFromChat: async (params: { conversation_id: string; project_type?: string; cost_profile?: string; name?: string }): Promise<StartBuildResponse> => {
+    const response = await apiClient.post('/chat/start-build', params)
+    return response.data
+  },
+
+  answerInterrupt: async (projectId: string, answer: string): Promise<{ status: string }> => {
+    const response = await apiClient.post(`/chat/interrupt/${projectId}/answer`, { answer })
+    return response.data
+  },
+
+  getInterruptStatus: async (projectId: string): Promise<InterruptStatus> => {
+    const response = await apiClient.get(`/chat/interrupt/${projectId}/status`)
+    return response.data
+  },
+
+  // ── Project History Timeline (#6) ─────────────────────────────────
+
+  getProjectCheckpoints: async (projectId: string): Promise<{ project_id: string; checkpoints: CheckpointEntry[] }> => {
+    const response = await apiClient.get(`/projects/${projectId}/checkpoints`)
+    return response.data
+  },
+
+  getProjectAuditLog: async (projectId: string, eventType?: string, limit: number = 200): Promise<{ project_id: string; entries: AuditLogEntry[] }> => {
+    const response = await apiClient.get(`/projects/${projectId}/audit-log`, {
+      params: { event_type: eventType, limit },
+    })
+    return response.data
+  },
+
+  // ── Persistent Project Memory (#12) ────────────────────────────────
+
+  getProjectMemory: async (projectId: string, category?: string): Promise<MemoryEntry[]> => {
+    const response = await apiClient.get(`/projects/${projectId}/memory`, {
+      params: { category },
+    })
+    return response.data
+  },
+
+  createMemoryEntry: async (projectId: string, data: MemoryEntryCreate): Promise<MemoryEntry> => {
+    const response = await apiClient.post(`/projects/${projectId}/memory`, data)
+    return response.data
+  },
+
+  updateMemoryEntry: async (projectId: string, entryId: string, data: Partial<MemoryEntryCreate>): Promise<MemoryEntry> => {
+    const response = await apiClient.put(`/projects/${projectId}/memory/${entryId}`, data)
+    return response.data
+  },
+
+  deleteMemoryEntry: async (projectId: string, entryId: string): Promise<void> => {
+    await apiClient.delete(`/projects/${projectId}/memory/${entryId}`)
+  },
+
+  getMemoryCategories: async (): Promise<{ categories: MemoryCategory[] }> => {
+    const response = await apiClient.get('/projects/_/memory/categories')
+    return response.data
+  },
+
+  getMemorySummary: async (projectId: string): Promise<MemorySummary> => {
+    const response = await apiClient.get(`/projects/${projectId}/memory/summary`)
+    return response.data
+  },
+
+  // ── Automated Browser Testing (#11) ─────────────────────────────
+
+  runBrowserTest: async (projectId: string, options?: {
+    url?: string
+    viewport?: string
+    record_video?: boolean
+    take_screenshots?: boolean
+    test_interactions?: boolean
+    test_themes?: boolean
+    max_duration_seconds?: number
+  }): Promise<BrowserTestResult> => {
+    const response = await apiClient.post(`/projects/${projectId}/browser-tests`, options || {})
+    return response.data
+  },
+
+  getBrowserTestHistory: async (projectId: string, limit: number = 10): Promise<BrowserTestHistory> => {
+    const response = await apiClient.get(`/projects/${projectId}/browser-tests`, { params: { limit } })
+    return response.data
+  },
+
+  // ── Shareable Preview Links (#22) ───────────────────────────────
+
+  createShareLink: async (projectId: string, options?: {
+    expires_in_days?: number
+    include_outputs?: boolean
+    include_code?: boolean
+    include_qa?: boolean
+    label?: string
+  }): Promise<ShareLinkData> => {
+    const response = await apiClient.post(`/projects/${projectId}/share`, options || {})
+    return response.data
+  },
+
+  getShareLinks: async (projectId: string): Promise<{ project_id: string; links: ShareLinkData[] }> => {
+    const response = await apiClient.get(`/projects/${projectId}/share`)
+    return response.data
+  },
+
+  revokeShareLink: async (projectId: string, shareId: string): Promise<void> => {
+    await apiClient.delete(`/projects/${projectId}/share/${shareId}`)
+  },
+
+  // ── Figma & Screenshot Import (#23) ─────────────────────────────
+
+  importFromFigma: async (projectId: string, data: {
+    figma_url: string
+    extract_colors?: boolean
+    extract_typography?: boolean
+    extract_spacing?: boolean
+    extract_components?: boolean
+  }): Promise<FigmaImportResult> => {
+    const response = await apiClient.post(`/projects/${projectId}/design-import/figma`, data)
+    return response.data
+  },
+
+  uploadDesignScreenshot: async (projectId: string, file: File): Promise<ScreenshotAnalysisResult> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await apiClient.post(`/projects/${projectId}/design-import/screenshot`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+
+  getDesignTokens: async (projectId: string): Promise<DesignTokensData> => {
+    const response = await apiClient.get(`/projects/${projectId}/design-import/tokens`)
     return response.data
   },
 }
@@ -787,6 +1079,19 @@ export interface QueueStats {
   average_wait_seconds: number
 }
 
+export interface ProjectArtifacts {
+  project_id: string
+  project_type: string | null
+  project_name: string | null
+  status: string | null
+  live_url: string | null
+  github_repo: string | null
+  deployment_urls: { platform: string; url: string; status: string }[]
+  readme_content: string | null
+  file_structure: string[]
+  has_local_files: boolean
+}
+
 export interface ExportableFiles {
   project_id: string
   files: { path: string; size: number; type: string }[]
@@ -834,4 +1139,173 @@ export interface KnowledgeImportResult {
   imported: number
   skipped: number
   errors: string[]
+}
+
+// Conversational Clarification System Types
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  message: string
+  timestamp?: string
+  ready_to_build?: boolean
+}
+
+export interface ChatMessageResponse {
+  conversation_id: string
+  role: string
+  message: string
+  ready_to_build: boolean
+  suggestions: string[]
+}
+
+export interface StartBuildResponse {
+  project_id: string
+  brief: string
+  name?: string
+}
+
+export interface InterruptStatus {
+  has_question: boolean
+  question?: string
+  context?: string
+  agent_name?: string
+  asked_at?: string
+}
+
+// Project History Timeline (#6)
+export interface CheckpointEntry {
+  id: string
+  project_id: string
+  agent_name: string
+  agent_status: string
+  node_states: Record<string, any>
+  pipeline_context?: Record<string, any>
+  pipeline_config?: Record<string, any>
+  total_cost: number
+  cost_breakdown?: Record<string, number>
+  step_number: number
+  created_at: string
+}
+
+export interface AuditLogEntry {
+  id: string
+  event_type: string
+  agent_name: string | null
+  message: string
+  details: Record<string, any> | null
+  timestamp: string | null
+  duration_ms: string | null
+}
+
+// Persistent Project Memory (#12)
+export interface MemoryEntry {
+  id: string
+  category: string
+  title: string
+  content: string
+  agent_name: string | null
+  quality_score: number | null
+  usage_count: number
+  tags: string[] | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface MemoryEntryCreate {
+  category: string
+  title: string
+  content: string
+  tags?: string[]
+}
+
+export interface MemoryCategory {
+  value: string
+  label: string
+  description: string
+}
+
+export interface MemorySummary {
+  project_id: string
+  total_entries: number
+  by_category: Record<string, { title: string; content: string }[]>
+}
+
+// Automated Browser Testing (#11)
+export interface BrowserTestStep {
+  step: number
+  action: string
+  selector?: string
+  description: string
+  status: string
+  screenshot_path?: string
+  error?: string
+  duration_ms: number
+}
+
+export interface BrowserTestResult {
+  id: string
+  project_id: string
+  url: string
+  viewport: string
+  status: string
+  started_at: string
+  completed_at: string
+  duration_ms: number
+  steps: BrowserTestStep[]
+  video_path?: string
+  screenshots: string[]
+  console_errors: string[]
+  network_errors: string[]
+  accessibility_issues: Record<string, any>[]
+  performance_metrics: Record<string, any>
+  summary: Record<string, any>
+}
+
+export interface BrowserTestHistory {
+  project_id: string
+  tests: Record<string, any>[]
+  total: number
+}
+
+// Shareable Preview Links (#22)
+export interface ShareLinkData {
+  id: string
+  project_id: string
+  share_url: string
+  token: string
+  label?: string
+  created_at: string
+  expires_at: string
+  include_outputs: boolean
+  include_code: boolean
+  include_qa: boolean
+  is_active: boolean
+  view_count: number
+}
+
+// Figma & Screenshot Import (#23)
+export interface FigmaImportResult {
+  status: string
+  figma_file_key?: string
+  figma_file_name?: string
+  tokens: DesignTokensData
+  pages_found: number
+  components_found: number
+  styles_found: number
+}
+
+export interface ScreenshotAnalysisResult {
+  status: string
+  filename: string
+  tokens: DesignTokensData
+  screenshot_path: string
+}
+
+export interface DesignTokensData {
+  source: string
+  colors: Record<string, any>
+  typography: Record<string, any>
+  spacing: Record<string, any>
+  components: Record<string, any>[]
+  layout_description: string
+  style_analysis: string
 }

@@ -38,11 +38,18 @@ BACKUP_TABLES = [
     "users",
 ]
 
-# Directories to include in backup
+# Project root (two levels up from this file: backend/export/ -> backend/ -> project/)
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+# Directories to include in backup (absolute, skip if they don't exist)
 BACKUP_DIRS = [
-    "/home/ubuntu/ai-dev-agency/generated_assets",
-    "/home/ubuntu/ai-dev-agency/templates",
+    str(_PROJECT_ROOT / "generated_assets"),
+    str(_PROJECT_ROOT / "templates"),
+    str(_PROJECT_ROOT / "backend" / "data"),
 ]
+
+# Local backup destination
+_LOCAL_BACKUP_DIR = _PROJECT_ROOT / "backups"
 
 
 def backup_system(
@@ -75,12 +82,13 @@ def backup_system(
         db_backup_dir = backup_dir / "database"
         db_backup_dir.mkdir()
         
+        from sqlalchemy import text as _sql_text
         for table_name in BACKUP_TABLES:
             try:
                 # Export table to JSON using raw SQL
-                result = db.execute(f"SELECT row_to_json(t) FROM {table_name} t")
+                result = db.execute(_sql_text(f"SELECT row_to_json(t) FROM {table_name} t"))
                 rows = [row[0] for row in result]
-                
+
                 with open(db_backup_dir / f"{table_name}.json", "w") as f:
                     json.dump(rows, f, indent=2, default=str)
             except Exception as e:
@@ -101,12 +109,12 @@ def backup_system(
         if include_projects:
             projects_dir = backup_dir / "projects"
             projects_dir.mkdir()
-            
+
             source_dirs = [
-                "/home/ubuntu/projects",
-                "/home/ubuntu/ai-dev-agency/generated"
+                str(Path(settings.project_temp_dir) / "projects"),
+                str(Path(settings.project_temp_dir) / "generated"),
             ]
-            
+
             for source_dir in source_dirs:
                 if os.path.exists(source_dir):
                     for project_folder in os.listdir(source_dir):
@@ -138,10 +146,14 @@ def backup_system(
         
         # 6. Upload to destination
         if destination == "local":
-            # Save locally
-            local_backup_dir = Path("/home/ubuntu/ai-dev-agency/backups")
-            local_backup_dir.mkdir(exist_ok=True)
-            
+            # Save locally — use project-root/backups, fall back to /tmp
+            local_backup_dir = _LOCAL_BACKUP_DIR
+            try:
+                local_backup_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                local_backup_dir = Path(tempfile.gettempdir()) / "ai_dev_agency_backups"
+                local_backup_dir.mkdir(parents=True, exist_ok=True)
+
             final_path = local_backup_dir / f"{backup_name}.zip"
             import shutil
             shutil.copy2(zip_path, final_path)
@@ -301,7 +313,7 @@ def restore_system(
                 import shutil
                 for item in files_dir.iterdir():
                     if item.is_dir():
-                        dest = Path("/home/ubuntu/ai-dev-agency") / item.name
+                        dest = _PROJECT_ROOT / item.name
                         if dest.exists():
                             shutil.rmtree(dest)
                         shutil.copytree(item, dest)
@@ -341,13 +353,13 @@ def export_knowledge_base(
     for entry in entries:
         entry_data = {
             "id": str(entry.id),
-            "knowledge_type": entry.knowledge_type,
+            "entry_type": entry.entry_type,
             "project_type": entry.project_type,
-            "source_project_id": str(entry.source_project_id) if entry.source_project_id else None,
-            "source_agent": entry.source_agent,
+            "project_id": str(entry.project_id) if entry.project_id else None,
+            "agent_name": entry.agent_name,
             "title": entry.title,
             "content": entry.content,
-            "metadata": entry.metadata,
+            "entry_metadata": entry.entry_metadata,
             "quality_score": entry.quality_score,
             "usage_count": entry.usage_count,
             "created_at": entry.created_at.isoformat() if entry.created_at else None,
@@ -396,22 +408,22 @@ def import_knowledge_base(
             # Check if entry already exists (by title and type)
             existing = db.query(KnowledgeBase).filter(
                 KnowledgeBase.title == entry_data.get("title"),
-                KnowledgeBase.knowledge_type == entry_data.get("knowledge_type")
+                KnowledgeBase.entry_type == entry_data.get("entry_type")
             ).first()
-            
+
             if existing and merge:
                 skipped += 1
                 continue
-            
+
             entry = KnowledgeBase(
                 id=uuid.uuid4(),
-                knowledge_type=entry_data.get("knowledge_type"),
+                entry_type=entry_data.get("entry_type"),
                 project_type=entry_data.get("project_type"),
-                source_project_id=entry_data.get("source_project_id"),
-                source_agent=entry_data.get("source_agent"),
+                project_id=entry_data.get("project_id"),
+                agent_name=entry_data.get("agent_name"),
                 title=entry_data.get("title"),
                 content=entry_data.get("content"),
-                metadata=entry_data.get("metadata", {}),
+                entry_metadata=entry_data.get("entry_metadata", {}),
                 quality_score=entry_data.get("quality_score", 0.8),
                 usage_count=entry_data.get("usage_count", 0)
             )

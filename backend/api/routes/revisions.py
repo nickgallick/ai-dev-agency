@@ -338,17 +338,73 @@ async def process_revision(
 ):
     """
     Background task to process a revision.
-    
-    This activates the necessary agents and applies changes.
+
+    Activates the necessary agents and applies changes based on scope.
     """
-    # This would be implemented to:
-    # 1. Pull latest code from GitHub
-    # 2. Run the necessary agents based on scope
-    # 3. Apply changes
-    # 4. Run regression tests
-    # 5. Commit and push changes
-    # 6. Update revision status in database
-    
-    # For now, this is a placeholder
-    # The actual implementation would use the Pipeline with revision mode
-    pass
+    from models import SessionLocal, Project, ProjectStatus
+
+    db = SessionLocal()
+    try:
+        # Update revision status to in_progress
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            return
+
+        revision_history = project.revision_history or []
+        for rev in revision_history:
+            if rev.get("id") == revision_id:
+                rev["status"] = "in_progress"
+                break
+        project.revision_history = revision_history
+        project.status = ProjectStatus.PAUSED
+        project.updated_at = datetime.utcnow()
+        db.commit()
+
+        # Run the revision handler agent
+        handler = RevisionHandlerAgent(project_id=project_id, db_session=db)
+        result = await handler.execute({
+            "revision_brief": revision_brief,
+            "project_path": project.project_metadata.get("project_path", "") if project.project_metadata else "",
+            "project_type": project.project_type.value if project.project_type else "web_simple",
+            "cost_profile": project.cost_profile.value if project.cost_profile else "balanced",
+            "scope": scope,
+        })
+
+        # Update revision status to completed
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if project:
+            revision_history = project.revision_history or []
+            for rev in revision_history:
+                if rev.get("id") == revision_id:
+                    success = result.get("success", False) if isinstance(result, dict) else False
+                    rev["status"] = "completed" if success else "failed"
+                    rev["completed_at"] = datetime.utcnow().isoformat()
+                    if isinstance(result, dict):
+                        rev["files_modified"] = result.get("files_modified", [])
+                        rev["files_created"] = result.get("files_created", [])
+                        rev["git_commit_sha"] = result.get("git_commit_sha")
+                    break
+            project.revision_history = revision_history
+            project.status = ProjectStatus.COMPLETED
+            project.updated_at = datetime.utcnow()
+            db.commit()
+
+    except Exception as e:
+        try:
+            project = db.query(Project).filter(Project.id == project_id).first()
+            if project:
+                revision_history = project.revision_history or []
+                for rev in revision_history:
+                    if rev.get("id") == revision_id:
+                        rev["status"] = "failed"
+                        rev["completed_at"] = datetime.utcnow().isoformat()
+                        rev["errors"] = [str(e)]
+                        break
+                project.revision_history = revision_history
+                project.status = ProjectStatus.COMPLETED
+                project.updated_at = datetime.utcnow()
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()

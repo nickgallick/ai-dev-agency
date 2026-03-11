@@ -9,7 +9,7 @@
 
 An AI-powered development agency platform. You submit a project brief and a pipeline of 20 AI agents automatically builds an entire application — research, architecture, design, code generation, testing, and deployment. Think personal Devin/Factory-style tool.
 
-**Current state:** Built by Abacus AI Deep Agent. Multiple bugs exist. When a user starts a project, the pipeline gets stuck and nothing happens.
+**Current state:** Originally built by Abacus AI Deep Agent. Most critical bugs have been fixed. The pipeline runs end-to-end, the queue works, and the UI is functional in both light and dark themes. Several enhancement features have been added (see Implemented Features below).
 
 ***
 
@@ -17,16 +17,22 @@ An AI-powered development agency platform. You submit a project brief and a pipe
 
 | Layer | Technology |
 |---|---|
-| Backend | Python, FastAPI (port 8000) |
-| Frontend | React, TypeScript, Vite, Tailwind CSS (port 5173) |
-| Database | PostgreSQL — Supabase in production |
-| ORM/Migrations | SQLAlchemy + Alembic |
+| Backend | Python 3.11, FastAPI (port 8000) |
+| Frontend | React 18.2, TypeScript 5.3, Vite 5.1, Tailwind CSS 3.4 (port 5173) |
+| Database | PostgreSQL 16 — Supabase in production |
+| ORM/Migrations | SQLAlchemy 2.0 + Alembic |
 | Pipeline | LangGraph |
-| LLM API | OpenRouter |
+| LLM API | OpenRouter (all LLM calls routed through this) |
 | Code Gen (Web) | Vercel v0 Platform API |
 | Code Gen (Other) | OpenHands API |
 | Repo Delivery | GitHub API |
-| Infrastructure | Docker Compose |
+| Graph Visualization | @xyflow/react (React Flow) |
+| Charts | Recharts |
+| State Management | Zustand, React Query |
+| HTTP Client | Axios (frontend), httpx/aiohttp (backend) |
+| Icons | Lucide React |
+| Metrics | Prometheus + Grafana (ports 9090, 3000) |
+| Infrastructure | Docker Compose (dev), Railway/Render (prod) |
 
 ***
 
@@ -41,6 +47,10 @@ Watch backend logs: docker-compose logs -f api
 Restart backend: docker-compose restart api
 Run migrations: docker-compose exec api alembic upgrade head
 Access DB: docker-compose exec db psql -U postgres -d postgres
+Prometheus: http://localhost:9090
+Grafana: http://localhost:3000 (admin/admin)
+Frontend build check: cd frontend && npx vite build
+Backend syntax check: cd backend && python -c "import py_compile, glob; [py_compile.compile(f, doraise=True) for f in glob.glob('**/*.py', recursive=True)]"
 ```
 
 ***
@@ -73,15 +83,212 @@ Access DB: docker-compose exec db psql -U postgres -d postgres
 
 ## Key Files
 
+### Backend Core
 ```
-backend/orchestration/pipeline.py   START HERE — LangGraph pipeline, root cause of most bugs
-backend/main.py                     FastAPI entry point
-backend/agents/base.py              Base class all agents inherit from
-backend/config/settings.py          Env var loading
-frontend/src/pages/NewProject.tsx   Start button bug lives here
-frontend/src/pages/ProjectView.tsx  Pipeline progress visualization
-docker-compose.yml
-.env
+backend/main.py                          FastAPI entry point — 17 routers registered, lifespan starts queue worker
+backend/orchestration/pipeline.py        LangGraph pipeline — DAG-based agent coordination, error handling, refinement loops
+backend/orchestration/executor.py        Pipeline execution runtime — async agent runner with checkpointing
+backend/orchestration/checkpointing.py   Checkpoint save/load for crash recovery
+backend/orchestration/refinement.py      Agent output quality scoring and refinement feedback loops
+backend/orchestration/audit.py           Pipeline audit logging
+backend/agents/base.py                   Base class all agents inherit — call_llm() with retry, circuit breaker, model routing
+backend/config/settings.py               Env var loading (40+ settings)
+backend/config/model_routing.py          Per-agent model selection by complexity × cost profile
+backend/config/cost_profiles.py          Budget/balanced/premium cost profile presets
+backend/config/autonomy.py               Tiered autonomy: supervised/guided/autonomous tier definitions
+```
+
+### Backend Utilities
+```
+backend/utils/retry.py                   3-layer retry: LLM call retry, agent-level retry, circuit breaker (per-provider)
+backend/utils/error_classifier.py        Structured error classification — 10 categories, resolution strategies, model fallback chains
+backend/utils/brief_enhancer.py          Brief completeness scoring (8 dimensions) and template-based enhancement
+backend/utils/estimation.py              Pre-execution pipeline cost/time estimation with per-agent token profiles
+backend/utils/cost_calculator.py         Per-token cost calculation for 7 model families
+backend/utils/cost_optimizer.py          Cost optimization and project cost analysis
+backend/utils/llm_client.py              OpenRouter, StabilityAI, Vercel V0 API clients
+backend/utils/encryption.py              Fernet credential encryption
+backend/utils/crypto.py                  AES-256-CBC credential encryption (production)
+backend/utils/agent_analytics.py         Agent performance tracking and QA metrics
+backend/utils/deployment_helpers.py      GitHub repo setup, Vercel/Railway deployment
+backend/utils/metrics.py                 Prometheus custom metrics (pipeline, agent, LLM, queue, circuit breaker)
+backend/utils/monitoring_helpers.py      Sentry/UptimeRobot integration
+```
+
+### Backend API Routes
+```
+backend/api/projects.py                  Project CRUD, analyze-brief, score-brief, enhance-brief, estimate
+backend/api/health.py                    Health checks, circuit breaker status, model routing summary
+backend/api/activity.py                  SSE streaming for real-time pipeline events
+backend/api/agents.py                    Agent status and logs
+backend/api/costs.py                     Cost tracking and analytics
+backend/api/database.py                  Database utilities
+backend/api/routes/checkpoints.py        Checkpoint pause/resume/replay
+backend/api/routes/queue.py              Project queue management
+backend/api/routes/export.py             Project and system export (JSON/ZIP)
+backend/api/routes/integrations.py       3rd-party integration config (Figma, BrowserStack, etc.)
+backend/api/routes/api_keys.py           Encrypted API key storage
+backend/api/routes/knowledge.py          Knowledge base CRUD and search
+backend/api/routes/mcp.py               MCP server management
+backend/api/routes/presets.py            Project preset templates
+backend/api/routes/templates.py          Project template management
+backend/api/routes/revisions.py          Project revision handling
+backend/api/routes/analytics.py          Analytics dashboards
+backend/api/routes/chat.py               Pre-build chat + mid-pipeline clarification endpoints
+backend/api/routes/project_memory.py     Project-scoped persistent memory CRUD
+backend/api/routes/browser_tests.py     Playwright browser testing with video recording
+backend/api/routes/share.py             Shareable preview links with HMAC signing
+backend/api/routes/design_import.py     Figma & screenshot import for design tokens
+```
+
+### Task Queue
+```
+backend/task_queue/manager.py            Redis-based FIFO project queue with priority levels
+backend/task_queue/worker.py             Background async queue worker — dequeues and executes projects
+```
+
+### Frontend Pages
+```
+frontend/src/pages/NewProject.tsx        Multi-step project wizard — brief scoring, enhancement, cost estimate approval
+frontend/src/pages/ProjectView.tsx       Pipeline monitor — DAG viz, activity feed, agent outputs, checkpoints
+frontend/src/pages/Home.tsx              Dashboard — stats, recent projects, API key status banner
+frontend/src/pages/ProjectHistory.tsx    Project list with search, filtering, export
+frontend/src/pages/Settings.tsx          API keys, MCP servers, integrations, theme toggle
+frontend/src/pages/AgentLogs.tsx         Agent execution log viewer with filtering
+frontend/src/pages/CostDashboard.tsx     Cost analytics — trends, per-agent, model comparisons
+frontend/src/pages/KnowledgeBase.tsx     Knowledge base viewer — search, upload, manual entry
+frontend/src/pages/Queue.tsx             Queue management — priority, reorder, status
+frontend/src/pages/SystemBackup.tsx      Backup/restore — local, S3, per-project export
+frontend/src/pages/Login.tsx             Auth — admin setup + login
+```
+
+### Frontend Components
+```
+frontend/src/components/Layout.tsx               Glassmorphic sidebar, mobile header, nav
+frontend/src/components/PipelineDAG.tsx           React Flow interactive DAG with SSE live status
+frontend/src/components/PipelinePlanReview.tsx    Interactive pre-build pipeline plan review with agent toggle
+frontend/src/components/PipelineVisualization.tsx Linear pipeline progress bar
+frontend/src/components/ActivityFeed.tsx          SSE-powered live event stream with error-category icons
+frontend/src/components/ArtifactViewer.tsx        Project output display — preview, files, GitHub link
+frontend/src/components/AgentOutputTimeline.tsx   Vertical timeline of all 21 agent outputs
+frontend/src/components/TemplateBrowser.tsx       Template gallery modal with search and filtering
+frontend/src/components/VoiceInput.tsx            Voice-to-text via Web Speech API
+frontend/src/components/RevisionPanel.tsx         Revision request panel
+frontend/src/components/LiveCodePreview.tsx        Code-split Sandpack live preview for generated code
+frontend/src/components/MonacoDiffEditor.tsx      Code-split Monaco diff editor for agent output comparison
+frontend/src/components/ProjectTimeline.tsx       Checkpoint history timeline with branching and comparison
+frontend/src/components/ProjectMemory.tsx         Persistent project memory viewer/editor
+frontend/src/components/BrowserTestPanel.tsx      Playwright browser testing with video evidence
+frontend/src/components/ShareLinkPanel.tsx        Shareable preview link management
+frontend/src/components/DesignImportPanel.tsx     Figma & screenshot import for design context
+frontend/src/components/ScoreGauge.tsx            Animated SVG circular gauge
+frontend/src/lib/api.ts                          Axios API client — 60+ functions, all TypeScript types
+frontend/src/contexts/AuthContext.tsx             JWT auth with idle timeout
+frontend/src/contexts/ThemeContext.tsx            Light/dark/system theme
+```
+
+### Infrastructure
+```
+docker-compose.yml                       5 services: api (8000), dashboard (5173), db (5432), prometheus (9090), grafana (3000)
+.env / .env.example                      50+ env vars
+Dockerfile                               Python 3.11-slim
+start.sh                                 Production startup (Railway)
+railway.toml                             Railway deployment config
+render.yaml                              Render deployment config
+alembic/                                 6 migration files
+monitoring/prometheus.yml                Prometheus scrape config (targets api:8000/metrics)
+monitoring/grafana/provisioning/         Grafana auto-provisioning (datasource + dashboard provider)
+monitoring/grafana/dashboards/           Grafana dashboard JSON (21 panels: pipeline, agent, LLM, HTTP, queue)
+```
+
+***
+
+## Frontend Routes
+
+| Route | Page | Purpose |
+|---|---|---|
+| `/` | Home | Dashboard with stats and recent projects |
+| `/new` | NewProject | Multi-step project creation wizard |
+| `/project/:id` | ProjectView | Pipeline monitor with DAG, activity, outputs |
+| `/projects` | ProjectHistory | Browseable project list |
+| `/settings` | Settings | API keys, integrations, MCP, theme |
+| `/logs` | AgentLogs | Agent execution logs |
+| `/costs` | CostDashboard | Cost analytics and trends |
+| `/knowledge` | KnowledgeBase | Knowledge base management |
+| `/queue` | Queue | Project queue management |
+| `/backup` | SystemBackup | Backup and export |
+| `/login` | Login | Authentication |
+
+***
+
+## API Endpoints
+
+### Projects
+```
+POST   /api/projects/                    Create project and enqueue for processing
+GET    /api/projects/                    List projects (filter by status, type)
+GET    /api/projects/{id}               Get project by ID
+DELETE /api/projects/{id}               Delete project
+POST   /api/projects/analyze-brief      Real-time brief analysis (keyword-based, no LLM)
+POST   /api/projects/score-brief        Brief completeness scoring (8 dimensions)
+POST   /api/projects/enhance-brief      Brief enhancement with template-based gap filling
+POST   /api/projects/estimate           Pre-execution cost/time estimate (per-agent breakdown)
+POST   /api/projects/generate-plan      Generate pipeline execution plan for user review
+GET    /api/projects/{id}/outputs       Get agent outputs
+POST   /api/projects/{id}/resume        Resume failed/paused project from checkpoint
+GET    /api/projects/{id}/checkpoints   Get checkpoint history
+GET    /api/projects/{id}/audit-log     Get structured audit log
+```
+
+### Chat & Clarification
+```
+POST   /api/chat/                              Send message in pre-build conversation
+GET    /api/chat/{conversation_id}             Get conversation history
+POST   /api/chat/start-build                   Convert conversation to brief and start pipeline
+POST   /api/chat/interrupt/{project_id}/answer Answer mid-pipeline clarification
+GET    /api/chat/interrupt/{project_id}/status  Check for pending clarification
+```
+
+### Health & Monitoring
+```
+GET    /health                          Basic health check
+GET    /health/ready                    Readiness check (DB + API keys)
+GET    /health/circuit-breaker          Circuit breaker status per provider
+POST   /health/circuit-breaker/reset    Reset circuit breaker (optionally per provider)
+GET    /health/model-routing            Full model routing table (agent × cost profile)
+GET    /health/autonomy-tiers          Available autonomy tiers and their checkpoint config
+```
+
+### Metrics
+```
+GET    /metrics                         Prometheus metrics endpoint (auto-instrumented HTTP + custom)
+```
+
+### Activity
+```
+GET    /api/activity/{id}/stream        SSE event stream for real-time pipeline progress
+```
+
+### Browser Testing
+```
+POST   /api/projects/{id}/browser-tests                          Run Playwright browser test
+GET    /api/projects/{id}/browser-tests                          Get test run history
+GET    /api/projects/{id}/browser-tests/evidence/{test_id}/{fn}  Serve video/screenshot files
+```
+
+### Share Links
+```
+POST   /api/projects/{id}/share                  Create shareable preview link
+GET    /api/projects/{id}/share                  List active share links
+DELETE /api/projects/{id}/share/{share_id}       Revoke share link
+GET    /share/{project_id}?token=                Public view (no auth)
+```
+
+### Design Import
+```
+POST   /api/projects/{id}/design-import/figma       Import design tokens from Figma
+POST   /api/projects/{id}/design-import/screenshot   Upload and analyze screenshot
+GET    /api/projects/{id}/design-import/tokens        Get merged design tokens
 ```
 
 ***
@@ -89,10 +296,23 @@ docker-compose.yml
 ## Database Tables
 
 ```
-projects           — status, outputs JSONB (per-agent outputs written here)
-agent_logs         — one row per agent per project
-cost_tracking      — token usage and cost per agent
-deployment_records — deployment status per project
+projects              — id, brief, name, status, cost_profile, project_type, agent_outputs JSONB,
+                        requirements JSONB, figma_url, integration_config, project_metadata
+agent_logs            — per-agent execution (model, tokens, cost, duration, status)
+cost_tracking         — token usage and cost per agent per project
+deployment_records    — deployment status, URLs, logs
+agent_performance     — success rates, QA metrics
+qa_failure_patterns   — QA failure pattern tracking
+cost_accuracy_tracking — estimated vs actual cost accuracy
+pipeline_checkpoints  — checkpoint state for crash recovery
+audit_logs            — pipeline event audit trail
+knowledge_base        — vector embeddings, knowledge chunks
+mcp_credentials       — encrypted MCP server credentials
+presets               — project preset templates
+project_templates     — reusable project templates
+users                 — single-user JWT auth
+refresh_tokens        — JWT refresh token storage
+pre_build_conversations — pre-build chat messages (conversation_id, role, message, metadata, ready_to_build)
 ```
 
 ***
@@ -100,33 +320,347 @@ deployment_records — deployment status per project
 ## Environment Variables Required
 
 ```
-OPENROUTER_API_KEY      — All LLM calls
-VERCEL_V0_API_KEY       — Code Gen v0 agent
-GITHUB_TOKEN            — Delivery agent
-DATABASE_URL            — Supabase PostgreSQL connection string
+# Required — pipeline won't work without these
+OPENROUTER_API_KEY      — All LLM calls (routed via OpenRouter)
+VERCEL_V0_API_KEY       — Code Gen v0 agent (web projects)
+GITHUB_TOKEN            — Delivery agent (repo creation)
+DATABASE_URL            — PostgreSQL connection string
+SECRET_KEY              — JWT authentication secret
+
+# Required for specific agents
 OPENAI_API_KEY          — Asset Generation (DALL-E)
-OPENHANDS_API_URL       — Code Gen OpenHands agent
-SLACK_WEBHOOK_URL       — Optional
-NOTION_TOKEN            — Optional
-SENTRY_DSN              — Monitoring
-UPTIMEROBOT_API_KEY     — Monitoring
+OPENHANDS_API_URL       — Code Gen OpenHands agent (non-web projects)
+TAVILY_API_KEY          — Research agent queries
+
+# Deployment
+VERCEL_TOKEN            — Vercel deployment
+RAILWAY_TOKEN           — Railway deployment
+
+# Optional integrations
+FIGMA_ACCESS_TOKEN      — Figma design extraction
+BROWSERSTACK_USERNAME   — Cross-browser QA
+BROWSERSTACK_ACCESS_KEY — Cross-browser QA
+RESEND_API_KEY          — Email for SaaS projects
+R2_ENDPOINT / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET — Cloudflare R2 storage
+INNGEST_EVENT_KEY       — Background job queue
+SLACK_WEBHOOK_URL       — Slack notifications
+NOTION_TOKEN            — Notion integration
+
+# Monitoring (optional)
+SENTRY_DSN              — Error tracking
+PLAUSIBLE_API_KEY       — Privacy-focused analytics
+GA4_MEASUREMENT_ID      — Google Analytics 4
+UPTIMEROBOT_API_KEY     — Uptime monitoring
+LIGHTHOUSE_CI_TOKEN     — Performance CI
+
+# Redis (optional but recommended for queue/cache)
+REDIS_URL               — Full Redis connection URL
 ```
 
 ***
 
-## Known Bugs
+## Implemented Features
 
-1. Start button does nothing — NewProject.tsx click handler not calling POST /api/projects
-2. Pipeline never progresses — LangGraph pipeline not running async
-3. MCP Servers page freezes and logs user out — redirect/auth bug
-4. Integrations page — no API key inputs, keys not saved or used by agents
-5. Settings page — no section to add platform API keys
-6. Knowledge base — no upload or text input, agents not querying or writing to it
-7. Project artifact viewer missing — no way to view completed project outputs
-8. Pipeline progress view is sloppy — needs full rework
-9. Queue not working — multiple projects can't be queued
-10. Backup/export not working
-11. Light/dark mode broken — many elements invisible in one or both themes
+These features are complete and integrated. Do not re-implement them.
+
+### Multi-Layer Retry with Circuit Breakers (#15)
+- **Where:** `backend/utils/retry.py`, `backend/agents/base.py`
+- 3 layers: LLM call retry (exponential backoff), agent-level retry, per-provider circuit breaker
+- Circuit breaker: CLOSED → OPEN (5 failures in 120s) → HALF_OPEN (60s cooldown)
+- Health endpoint: `GET /health/circuit-breaker`
+
+### Multi-Model Routing (#7)
+- **Where:** `backend/config/model_routing.py`, `backend/agents/base.py`
+- All 20 agents classified by complexity (low/medium/high)
+- Routes to appropriate model per cost profile (budget/balanced/premium)
+- Budget: DeepSeek for cheap agents, Sonnet for critical ones
+- Agent overrides: architect, code_generation, code_review always get strong models
+- Health endpoint: `GET /health/model-routing`
+
+### Iterative Refinement Loops (#9)
+- **Where:** `backend/orchestration/refinement.py`, `backend/orchestration/pipeline.py`
+- Quality scoring: completeness, content quality, error-free checks
+- Re-runs agent with feedback if score < 0.7 (max 2 iterations)
+- Skip list for agents that don't benefit from refinement
+
+### Pre-Execution Cost Estimation (#8)
+- **Where:** `backend/utils/estimation.py`, `frontend/src/pages/NewProject.tsx`
+- Per-agent token profiles for all 20 agents
+- Accounts for project type multiplier, feature/page count, parallel groups
+- Shows approval modal with cost breakdown before pipeline starts
+- Tiktoken when available, ~4 chars/token fallback
+
+### Self-Healing Error Classification (#27)
+- **Where:** `backend/utils/error_classifier.py`
+- 10 error categories: transient, rate_limit, auth, quota, validation, model, content, upstream, logic, unknown
+- Resolution strategies: retry_backoff, wait_and_retry, fallback_model, rewrite_prompt, fail_fast, notify_user
+- Model fallback chains: opus → sonnet → deepseek, gpt-4o → gpt-4o-mini → deepseek
+- Integrated into retry system, pipeline error handling, and ActivityFeed UI (category-aware icons)
+
+### Brief Wizard with Prompt Enhancement (#2)
+- **Where:** `backend/utils/brief_enhancer.py`, `frontend/src/pages/NewProject.tsx`
+- 8-dimension scoring: purpose, audience, features, design, tech_stack, data, pages, scale
+- Weighted scoring with project-type-specific boosts
+- Template-based enhancement fills missing dimensions without rewriting user text
+- Frontend: completeness meter, quality label, suggestions, "Enhance" button
+- Endpoints: `POST /projects/score-brief`, `POST /projects/enhance-brief`
+
+### Pipeline DAG Visualization
+- **Where:** `frontend/src/components/PipelineDAG.tsx`
+- React Flow interactive DAG with live SSE status updates
+- Color-coded nodes for queued/running/complete/failed/parallel states
+
+### HITL Approval Gates & Cost Dashboard
+- **Where:** `frontend/src/pages/CostDashboard.tsx`
+- Per-agent cost tracking, model comparison, build time waterfall
+- QA failure pattern analytics
+
+### Checkpointing & Audit Logging
+- **Where:** `backend/orchestration/checkpointing.py`, `backend/models/audit_log.py`
+- Save/restore pipeline state at checkpoints
+- Resume from last checkpoint on failure
+- Structured audit trail for all pipeline events
+
+### Tiered Autonomy Configuration (#26)
+- **Where:** `backend/config/autonomy.py`, `backend/orchestration/checkpoints.py`, `frontend/src/pages/NewProject.tsx`
+- Three tiers: **Supervised** (pause every agent, no timeout), **Guided** (pause at 5 critical points, 5min auto-continue), **Autonomous** (no pauses)
+- Built on top of HITL checkpoint system from Phase 11C
+- `resolve_tier()` maps legacy `buildMode` values and tier names to checkpoint configuration
+- Project creation automatically sets `checkpoint_mode` and `checkpoint_state` based on selected tier
+- Frontend: "Autonomy Level" selector in NewProject advanced options replaces old "Build Mode"
+- ProjectView shows current tier in mode selector dropdown
+
+### Prometheus & Grafana Metrics Stack (#19)
+- **Where:** `backend/utils/metrics.py`, `backend/main.py`, `monitoring/`
+- `prometheus-fastapi-instrumentator` auto-instruments all HTTP requests → `/metrics` endpoint
+- Custom metrics: pipeline (starts/completions/failures/duration), agents (runs/duration/cost), LLM (requests/latency/tokens), queue (depth/wait), circuit breaker state, checkpoint pauses
+- All metrics gracefully no-op when `prometheus_client` not installed
+- Docker Compose adds `prometheus` (port 9090) and `grafana` (port 3000) services
+- Pre-provisioned Grafana dashboard with 21 panels across 4 sections: Pipeline Overview, Agent Performance, LLM API, HTTP & Infrastructure
+- Prometheus scrapes api:8000/metrics every 15s, retains 15 days
+
+### Agent Reasoning Transparency (#25)
+- **Where:** `backend/agents/base.py`, `backend/orchestration/executor.py`, `frontend/src/components/PipelineDAG.tsx`, `frontend/src/components/AgentOutputTimeline.tsx`
+- `AgentReasoning` dataclass captures: goal, approach, key_decisions, alternatives_considered, confidence, constraints
+- Added to `AgentResult` as optional `reasoning` field, auto-inferred from output data when agents don't provide explicit reasoning
+- `BaseAgent.build_reasoning()` helper lets agents explicitly set reasoning
+- SSE `agent_complete` events include reasoning in `details.reasoning`
+- Reasoning persisted to `agent_outputs` JSONB under `_reasoning` key
+- PipelineDAG: purple brain icon on completed nodes opens a floating reasoning panel (goal, approach, decisions, confidence bar, constraints)
+- AgentOutputTimeline: collapsible "Agent Reasoning" section at bottom of each expanded agent card
+- CSS: `dag-reasoning-*` classes in PipelineDAG.css for reasoning panel styling
+
+### Monaco Diff Editor for Agent Output Comparison (#4)
+- **Where:** `frontend/src/components/MonacoDiffEditor.tsx`, `frontend/src/pages/ProjectView.tsx`
+- Code-split via `React.lazy()` — Monaco loads only when user clicks "Compare Outputs"
+- `MonacoDiffEditor` component: side-by-side diff view with copy buttons, configurable labels, vs-dark theme
+- `AgentOutputDiffModal` component: full-screen modal with agent selector dropdowns for comparing any two completed agent outputs
+- Strips `_reasoning` from diff view to show clean output comparison
+- Build output: separate `MonacoDiffEditor-*.js` chunk (~5KB, Monaco loads from CDN on demand)
+- "Compare Outputs" button appears in ProjectView when 2+ agents have completed
+- Dependency: `@monaco-editor/react` (CDN-loaded Monaco, no local bundle)
+
+### Granular Pipeline Plan Review Before Execution (#13)
+- **Where:** `backend/api/projects.py`, `backend/orchestration/executor.py`, `frontend/src/components/PipelinePlanReview.tsx`, `frontend/src/pages/NewProject.tsx`, `frontend/src/lib/api.ts`
+- Full interactive DAG-based plan review before any tokens are spent
+- After filling project details, user clicks "Review Plan & Build" to see the full pipeline plan
+- Interactive React Flow DAG showing all 20 agents with dependencies, parallel groups
+- Per-agent estimated cost, time, model, and description
+- Agents color-coded: active (blue), required (red), checkpoint (purple), skipped (gray)
+- Sidebar agent list with toggle checkboxes to skip/enable optional agents
+- Required agents cannot be skipped; project-type skips pre-applied (e.g., SEO skipped for CLI tools)
+- Checkpoint agents highlighted based on selected autonomy tier
+- Summary bar shows active agent count, total cost, estimated time, token count, checkpoint count
+- User approves plan to start build; skipped agent list stored in project requirements
+- Executor honors user-customized skip list from `pipeline_plan.skipped_agents` in requirements
+- Falls back to legacy estimate modal if plan generation fails
+- Endpoint: `POST /api/projects/generate-plan`
+
+### Conversational Clarification System (#10)
+- **Where:** `backend/api/routes/chat.py`, `backend/models/conversation.py`, `backend/agents/base.py`, `backend/orchestration/executor.py`, `frontend/src/pages/NewProject.tsx`, `frontend/src/pages/ProjectView.tsx`, `frontend/src/lib/api.ts`
+- **Mode 1 — Pre-Build Chat:** Chat interface on NewProject page where AI asks clarifying questions before pipeline starts
+  - Toggle between "Chat with AI" and "Form Builder" modes
+  - LLM calls via OpenRouter (Claude Haiku) with JSON-structured responses
+  - Detects project type, features, pages, industry from conversation
+  - "Start Build" converts conversation into structured brief and creates project
+  - Conversations stored in `pre_build_conversations` table
+- **Mode 2 — Mid-Pipeline Clarification Interrupts:** Any agent can call `self.request_clarification(question, context)` to pause the pipeline and ask the user a question
+  - `ClarificationNeeded` exception caught by executor, saves question to `checkpoint_state`
+  - Executor polls DB every 2s (10min timeout) waiting for user answer
+  - Answer injected into pipeline context, node re-executed automatically
+  - Purple-themed clarification card in ProjectView with question display and answer input
+  - Frontend polls interrupt status every 3s during active builds
+- **Endpoints:**
+  - `POST /api/chat/` — Send message in pre-build conversation
+  - `GET /api/chat/{conversation_id}` — Get conversation history
+  - `POST /api/chat/start-build` — Convert conversation to brief and start pipeline
+  - `POST /api/chat/interrupt/{project_id}/answer` — Answer mid-pipeline clarification
+  - `GET /api/chat/interrupt/{project_id}/status` — Check for pending clarification
+
+### Live Code Preview with Sandpack (#3)
+- **Where:** `frontend/src/components/LiveCodePreview.tsx` (new), `frontend/src/components/ArtifactViewer.tsx` (modified)
+- Renders generated code as a working app in the browser using CodeSandbox's Sandpack
+- Code-split via `React.lazy()` so Sandpack (~628KB chunk) only loads when user opens the Live Preview tab
+- Auto-detects Sandpack template from file paths: Next.js, Vite React TS, Vue, Angular, or static
+- Builds Sandpack file map from multiple backend output structures (`file.content`, `file.code`, `file.source`, `fileContents` map)
+- Smart entry file detection with priority list (app/page.tsx → src/App.tsx → index.html, etc.)
+- Non-previewable project types (cli_tool, python_api, desktop_app, mobile_native_ios) show friendly fallback message
+- **Viewport switching:** Desktop (100%), Tablet (768px), Mobile (375px) responsive preview
+- **Fullscreen mode:** Fixed overlay with full viewport Sandpack editor + preview
+- **Editor toggle:** Show/hide code editor and file explorer alongside preview
+- "Live Preview" tab added to ArtifactViewer TAB_DEFINITIONS (gated on code_generation files existing)
+- `LivePreviewTab` wrapper extracts files from `outputs.code_generation` and renders Suspense-wrapped LiveCodePreview
+- Dependency: `@codesandbox/sandpack-react ^2.20.0`
+
+### Project History Timeline with Checkpoint Branching (#6)
+- **Where:** `frontend/src/components/ProjectTimeline.tsx` (new), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Interactive timeline showing full pipeline checkpoint history and audit log events
+- Three view modes: Combined (all events), Checkpoints only, Audit Log only
+- Checkpoint nodes expand to show full pipeline state at that point (per-agent status badges)
+- **Fork from any checkpoint:** "Fork from here" button calls `restartFromAgent()` to restart the pipeline from that agent
+- **Compare checkpoints:** Select any two checkpoints and see a side-by-side diff of node states, cost delta, and step delta
+- Audit log events shown with type-specific icons and colors (pipeline start/complete/failed, agent events, checkpoint events, retries, cost alerts)
+- Event type filter dropdown for audit log view
+- Auto-refreshes during active builds (5s polling)
+- Expands cost breakdown per checkpoint
+- New API client functions: `getProjectCheckpoints()`, `getProjectAuditLog()`
+- Renders as a dedicated "Pipeline History & Branching" card section in ProjectView
+
+### Persistent Project Memory with Context Files (#12)
+- **Where:** `backend/api/routes/project_memory.py` (new), `frontend/src/components/ProjectMemory.tsx` (new), `backend/orchestration/executor.py` (modified), `backend/main.py` (modified), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Eliminates AI amnesia between pipeline runs — decisions, preferences, and context persist
+- Uses existing `knowledge_base` table with project_id scoping and `project_memory` tag
+- **5 memory categories:** Decision, Preference, Context, Lesson Learned, Constraint
+- Full CRUD UI: create, edit, delete memory entries with category-grouped view
+- Category filter and expandable/collapsible groups
+- Usage tracking: entries show how many times they've been used by pipeline runs
+- **Pipeline integration:** Executor loads all project memory entries into `context["project_memory"]` at pipeline start, grouped by category, so every agent has access
+- Usage count auto-incremented on each pipeline run
+- Memory summary endpoint for compact context injection
+- **Backend endpoints:**
+  - `GET /api/projects/{id}/memory` — List memory entries (filterable by category)
+  - `POST /api/projects/{id}/memory` — Create memory entry
+  - `PUT /api/projects/{id}/memory/{entry_id}` — Update entry
+  - `DELETE /api/projects/{id}/memory/{entry_id}` — Delete entry
+  - `GET /api/projects/{id}/memory/categories` — List available categories
+  - `GET /api/projects/{id}/memory/summary` — Get grouped summary for pipeline context
+- New API client functions: `getProjectMemory()`, `createMemoryEntry()`, `updateMemoryEntry()`, `deleteMemoryEntry()`, `getMemoryCategories()`, `getMemorySummary()`
+
+### Automated Browser Testing with Video Evidence (#11)
+- **Where:** `backend/api/routes/browser_tests.py` (new), `frontend/src/components/BrowserTestPanel.tsx` (new), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Playwright-based headless browser testing of generated applications with video recording
+- Configurable viewport sizes: Desktop (1280x720), Tablet (768x1024), Mobile (375x812)
+- 7 test steps: navigation, title check, content rendering, console errors, layout overflow, interactive elements, theme toggle
+- Captures screenshots at each step, records full video session, collects performance metrics (DOM ready, load time, FCP, memory)
+- Graceful fallback: generates simulated results when Playwright is not installed
+- Test history: stores last 10 runs per project in `agent_outputs["browser_tests"]` JSONB
+- Frontend panel: viewport selector, theme testing toggle, run button with loading state, expandable step results with pass/fail/warning badges, performance metrics display, test history viewer
+- **Backend endpoints:**
+  - `POST /api/projects/{id}/browser-tests` — Run browser test (params: url, viewport, test_theme)
+  - `GET /api/projects/{id}/browser-tests` — Get test run history
+  - `GET /api/projects/{id}/browser-tests/evidence/{test_id}/{filename}` — Serve video/screenshot files
+- New API client functions: `runBrowserTest()`, `getBrowserTestHistory()`
+
+### Shareable Preview Links for Stakeholder Review (#22)
+- **Where:** `backend/api/routes/share.py` (new), `frontend/src/components/ShareLinkPanel.tsx` (new), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Generate read-only signed URLs to share project outputs without requiring login
+- HMAC-SHA256 token signing using `SECRET_KEY` env var: `{share_id}.{hmac_signature}` format
+- Configurable expiry: 1–90 days (default 7)
+- Granular permissions: toggle visibility of outputs, code, and QA reports per link
+- View count tracking per link, links can be revoked
+- Share metadata stored in `project.project_metadata["share_links"]` JSONB array
+- Public endpoint serves filtered project data (no auth required): outputs, code files, QA report based on link permissions
+- Frontend panel: create form with expiry/label/permission toggles, active links list with copy-to-clipboard, open in new tab, revoke actions, view count and expiry display
+- **Backend endpoints:**
+  - `POST /api/projects/{id}/share` — Create share link (params: expires_in_days, label, permissions)
+  - `GET /api/projects/{id}/share` — List active share links
+  - `DELETE /api/projects/{id}/share/{share_id}` — Revoke share link
+  - `GET /share/{project_id}?token=` — Public endpoint to view shared project (no auth)
+- New API client functions: `createShareLink()`, `getShareLinks()`, `revokeShareLink()`
+
+### Figma & Screenshot Import for Design Context (#23)
+- **Where:** `backend/api/routes/design_import.py` (new), `frontend/src/components/DesignImportPanel.tsx` (new), `frontend/src/pages/ProjectView.tsx` (modified), `frontend/src/lib/api.ts` (modified)
+- Import design context from Figma files or screenshot uploads for the Design System agent
+- **Figma import:** Parses Figma URLs, fetches file data via Figma REST API (`/v1/files/{key}`, `/v1/files/{key}/styles`), extracts design tokens (colors, typography, spacing, border radius, shadows, components)
+- **Screenshot import:** Upload PNG/JPG screenshots, analyzed by LLM vision (OpenRouter) to extract design tokens (colors, fonts, layout patterns, component styles)
+- Tokens stored in `project.requirements["figma_tokens"]` and `project.requirements["design_screenshots"]`
+- Merged tokens endpoint combines Figma + screenshot sources for unified design context
+- Figma access token resolved from env var `FIGMA_ACCESS_TOKEN` or integrations store
+- Frontend panel: Figma URL input with import button, screenshot upload with drag-and-drop, extracted tokens preview with color swatches, typography details, and component lists
+- **Backend endpoints:**
+  - `POST /api/projects/{id}/design-import/figma` — Import from Figma URL
+  - `POST /api/projects/{id}/design-import/screenshot` — Upload and analyze screenshot
+  - `GET /api/projects/{id}/design-import/tokens` — Get merged design tokens from all sources
+- New API client functions: `importFromFigma()`, `uploadDesignScreenshot()`, `getDesignTokens()`
+
+***
+
+## Known Bugs (Updated)
+
+### Fixed
+1. ~~Start button does nothing~~ — Fixed: NewProject.tsx now calls POST /api/projects with estimate approval flow
+2. ~~Pipeline never progresses~~ — Fixed: async pipeline execution via queue worker
+3. ~~MCP Servers page freezes~~ — Fixed: redirect/auth bug resolved
+4. ~~Integrations page no API key inputs~~ — Fixed: key inputs, encrypted storage, agent usage
+5. ~~Settings page no API key section~~ — Fixed: platform API key management added
+6. ~~Knowledge base no upload~~ — Fixed: file upload, text input, agent capture/query
+7. ~~Artifact viewer missing~~ — Fixed: ArtifactViewer + AgentOutputTimeline components
+8. ~~Pipeline progress view sloppy~~ — Fixed: PipelineDAG (React Flow) + PipelineVisualization
+9. ~~Queue not working~~ — Fixed: Redis-based queue with worker, priority, reorder
+10. ~~Backup/export not working~~ — Fixed: JSON/ZIP export, backup/restore
+11. ~~Light/dark mode broken~~ — Fixed: theme system with glassmorphism CSS variables
+
+### Remaining / Watch For
+- MCP server integration is scaffolded but depends on external MCP server processes being available
+- Voice input (VoiceInput.tsx) depends on browser Web Speech API support
+- Cost estimation accuracy improves with real pipeline runs (confidence starts at 0.75)
+- Tiktoken requires network access to download encoding files on first use; falls back to heuristic
+
+***
+
+## Architecture Overview
+
+```
+┌──────────────────────────────────────────────────┐
+│  React Frontend (Vite, port 5173)                │
+│  - 11 pages, 19 components                       │
+│  - SSE for real-time pipeline events              │
+│  - Axios API client (60+ functions)               │
+│  - Auth context (JWT), Theme context              │
+└──────────────────────┬───────────────────────────┘
+                       │ HTTP / SSE
+┌──────────────────────▼───────────────────────────┐
+│  FastAPI Backend (port 8000)                      │
+│  - 17 routers registered                          │
+│  - JWT auth middleware                             │
+│  - CORS for localhost:5173/3000                    │
+├───────────────────────────────────────────────────┤
+│  Project Flow:                                    │
+│  1. POST /api/projects → creates DB record        │
+│  2. Enqueues to Redis task queue                  │
+│  3. QueueWorker dequeues and calls executor       │
+│  4. PipelineExecutor runs 20 agents (DAG order)   │
+│  5. Each agent: get_model() → call_llm() → save   │
+│  6. Retry/circuit breaker/refinement per agent     │
+│  7. SSE events streamed to frontend in real-time   │
+└──────────────────────┬───────────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────────┐
+│  External Services                                │
+│  - PostgreSQL (14+ tables)                        │
+│  - Redis (queue + cache)                          │
+│  - OpenRouter (LLM API)                           │
+│  - Vercel v0 (code generation)                    │
+│  - GitHub API (repo delivery)                     │
+│  - MCP Servers (8 implementations)                │
+└──────────────────────┬───────────────────────────┘
+                       │ /metrics
+┌──────────────────────▼───────────────────────────┐
+│  Observability Stack                              │
+│  - Prometheus (port 9090) — scrapes /metrics      │
+│  - Grafana (port 3000) — 21-panel dashboard       │
+└───────────────────────────────────────────────────┘
+```
 
 ***
 
@@ -136,6 +670,8 @@ UPTIMEROBOT_API_KEY     — Monitoring
 - Docker Compose setup — it is the deployment method
 - Database schema — unless a fix absolutely requires it
 - OpenRouter as the LLM router — it is intentional
-- The goal is to fix existing code, not rewrite the architecture
-
-
+- Model routing architecture — centralized in config/model_routing.py
+- Error classification categories — they map to specific resolution strategies
+- Brief scoring dimensions and weights — tuned for project quality
+- Autonomy tier definitions — supervised/guided/autonomous are the three tiers
+- Prometheus metric names and labels — dashboards depend on them

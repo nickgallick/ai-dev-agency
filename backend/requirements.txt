@@ -65,3 +65,10 @@ pylint>=3.0.0
 bcrypt>=4.0.0
 PyJWT>=2.8.0
 email-validator>=2.0.0
+
+# Phase 12: LangSmith Tracing (optional — only used when LANGCHAIN_TRACING_V2=true)
+langsmith>=0.1.0
+
+# Phase 12: Prometheus metrics (#19)
+prometheus-client>=0.20.0
+prometheus-fastapi-instrumentator>=6.1.0

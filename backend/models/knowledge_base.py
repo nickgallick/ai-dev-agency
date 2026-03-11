@@ -3,7 +3,7 @@
 SQLAlchemy model for storing knowledge entries with embeddings.
 """
 from sqlalchemy import Column, String, Text, Float, Integer, DateTime, Boolean, ForeignKey, ARRAY
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import uuid
@@ -14,15 +14,15 @@ from .database import Base
 class KnowledgeBase(Base):
     """Knowledge base entry with vector embedding for RAG."""
     __tablename__ = "knowledge_base"
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     entry_type = Column(String(50), nullable=False)  # architecture_decision, qa_finding, prompt_result, code_pattern, user_preference
     title = Column(String(500), nullable=False)
     content = Column(Text, nullable=False)
     embedding = Column(ARRAY(Float), nullable=True)  # 1536-dim vector for OpenAI embeddings
-    
+
     # Metadata for filtering
-    project_id = Column(String(36), ForeignKey('projects.id'), nullable=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey('projects.id'), nullable=True)
     project_type = Column(String(50), nullable=True)
     industry = Column(String(100), nullable=True)
     tech_stack = Column(JSONB, nullable=True)  # ["nextjs", "supabase", "stripe"]
@@ -30,11 +30,11 @@ class KnowledgeBase(Base):
     quality_score = Column(Float, nullable=True)  # 0-1, based on downstream acceptance
     usage_count = Column(Integer, default=0)
     last_used_at = Column(DateTime, nullable=True)
-    
+
     # Audit
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    created_by = Column(String(36), ForeignKey('users.id'), nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
     
     # Additional data
     entry_metadata = Column(JSONB, nullable=True)  # Flexible storage for type-specific data
@@ -45,11 +45,11 @@ class KnowledgeBase(Base):
     
     def to_dict(self):
         return {
-            "id": self.id,
+            "id": str(self.id),
             "entry_type": self.entry_type,
             "title": self.title,
             "content": self.content,
-            "project_id": self.project_id,
+            "project_id": str(self.project_id) if self.project_id else None,
             "project_type": self.project_type,
             "industry": self.industry,
             "tech_stack": self.tech_stack,

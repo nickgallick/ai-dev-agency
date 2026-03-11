@@ -115,30 +115,35 @@ class CheckpointManager:
         state = self.project.checkpoint_state or {}
         return CheckpointState(state.get("status", "running"))
     
+    def get_autonomy_tier(self) -> str:
+        """Get the autonomy tier for this project."""
+        state = self.project.checkpoint_state or {}
+        return state.get("autonomy_tier", "autonomous")
+
     def should_pause_at(self, agent_name: str) -> bool:
         """
         Determine if execution should pause at this agent.
-        
+
         Args:
             agent_name: Name of the agent that just completed
-            
+
         Returns:
             True if should pause, False otherwise
         """
         mode = self.get_mode()
-        
+
         if mode == CheckpointMode.AUTO:
             return False
-        
+
         if mode == CheckpointMode.SUPERVISED:
             return agent_name.lower() in [cp.lower() for cp in DEFAULT_CHECKPOINTS]
-        
+
         if mode == CheckpointMode.MANUAL:
-            # Check user-defined checkpoints
+            # Check user-defined checkpoints (also used by autonomy tiers)
             state = self.project.checkpoint_state or {}
             custom_checkpoints = state.get("custom_checkpoints", [])
             return agent_name.lower() in [cp.lower() for cp in custom_checkpoints]
-        
+
         return False
     
     async def pause_at_checkpoint(
@@ -209,15 +214,25 @@ class CheckpointManager:
         self.db.commit()
     
     def _start_auto_continue_timer(self):
-        """Start timer for auto-continue after timeout"""
+        """Start timer for auto-continue after timeout.
+
+        Respects the per-tier auto_continue_timeout from checkpoint_state.
+        A timeout of 0 means wait forever (supervised tier).
+        """
         if self._auto_continue_task:
             self._auto_continue_task.cancel()
-        
+
+        state = self.project.checkpoint_state or {}
+        timeout = state.get("auto_continue_timeout", AUTO_CONTINUE_TIMEOUT)
+        if timeout == 0:
+            # Supervised tier: no auto-continue, wait for user
+            return
+
         async def auto_continue():
-            await asyncio.sleep(AUTO_CONTINUE_TIMEOUT)
+            await asyncio.sleep(timeout)
             if not self._pause_event.is_set():
                 self.resume_from_checkpoint()
-        
+
         self._auto_continue_task = asyncio.create_task(auto_continue())
     
     def resume_from_checkpoint(self, edited_output: Optional[Dict[str, Any]] = None):

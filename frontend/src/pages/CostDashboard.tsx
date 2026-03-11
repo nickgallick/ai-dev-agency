@@ -1,16 +1,27 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Card } from '@/components/Card'
-import { api } from '@/lib/api'
-import { 
-  DollarSign, TrendingUp, Zap, Clock, Trophy, BarChart3, 
-  AlertTriangle, Target, CheckCircle2, XCircle, Timer
+import { api, type Project, type AgentLog } from '@/lib/api'
+import {
+  DollarSign, TrendingUp, Zap, Clock, Trophy, BarChart3,
+  AlertTriangle, Target, CheckCircle2, XCircle, Timer, Flame, FolderOpen
 } from 'lucide-react'
 
-type TabType = 'overview' | 'agents' | 'models' | 'build-time' | 'issues' | 'accuracy'
+type TabType = 'overview' | 'per-project' | 'agents' | 'models' | 'build-time' | 'issues' | 'accuracy'
+
+const DATE_RANGE_OPTIONS = [
+  { label: 'Today', days: 1 },
+  { label: '7 Days', days: 7 },
+  { label: '30 Days', days: 30 },
+  { label: '90 Days', days: 90 },
+] as const
 
 export default function CostDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [days, setDays] = useState<number>(30)
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   // Existing cost queries
   const { data: summary } = useQuery({
@@ -29,29 +40,29 @@ export default function CostDashboard() {
   })
 
   const { data: trends } = useQuery({
-    queryKey: ['costTrends'],
-    queryFn: () => api.getCostTrends(30),
+    queryKey: ['costTrends', days],
+    queryFn: () => api.getCostTrends(days),
   })
 
-  // Phase 9A: New analytics queries
+  // Phase 9A: New analytics queries — all keyed on `days`
   const { data: analyticsSummary } = useQuery({
-    queryKey: ['analyticsSummary'],
-    queryFn: () => api.getAnalyticsSummary(30),
+    queryKey: ['analyticsSummary', days],
+    queryFn: () => api.getAnalyticsSummary(days),
   })
 
   const { data: successRates } = useQuery({
-    queryKey: ['agentSuccessRates'],
-    queryFn: () => api.getAgentSuccessRates(30, 20),
+    queryKey: ['agentSuccessRates', days],
+    queryFn: () => api.getAgentSuccessRates(days, 20),
   })
 
   const { data: modelComparison } = useQuery({
-    queryKey: ['modelComparison'],
-    queryFn: () => api.getModelComparison(undefined, 30),
+    queryKey: ['modelComparison', days],
+    queryFn: () => api.getModelComparison(undefined, days),
   })
 
   const { data: buildTimeWaterfall } = useQuery({
-    queryKey: ['buildTimeWaterfall'],
-    queryFn: () => api.getBuildTimeWaterfall(undefined, 30),
+    queryKey: ['buildTimeWaterfall', days],
+    queryFn: () => api.getBuildTimeWaterfall(undefined, days),
   })
 
   const { data: failurePatterns } = useQuery({
@@ -60,12 +71,66 @@ export default function CostDashboard() {
   })
 
   const { data: costAccuracy } = useQuery({
-    queryKey: ['costAccuracy'],
-    queryFn: () => api.getCostAccuracyStats(undefined, undefined, 90),
+    queryKey: ['costAccuracy', days],
+    queryFn: () => api.getCostAccuracyStats(undefined, undefined, days),
   })
+
+  // Per-project queries
+  const { data: projects } = useQuery({
+    queryKey: ['projects-cost-dashboard'],
+    queryFn: () => api.getProjects({ limit: 50 }),
+    enabled: activeTab === 'per-project',
+  })
+
+  const { data: projectAgentLogs } = useQuery({
+    queryKey: ['agentLogs', selectedProjectId],
+    queryFn: () => api.getAgentLogs({ project_id: selectedProjectId! }),
+    enabled: !!selectedProjectId,
+  })
+
+  // Compute total cost for flame icon thresholds
+  const totalAgentCost = useMemo(() => {
+    if (!byAgent || byAgent.length === 0) return 0
+    return byAgent.reduce((sum, a) => sum + a.total_cost, 0)
+  }, [byAgent])
+
+  const totalModelCost = useMemo(() => {
+    if (!byModel || byModel.length === 0) return 0
+    return byModel.reduce((sum, m) => sum + m.total_cost, 0)
+  }, [byModel])
+
+  // Per-project cost breakdown from agent logs
+  const projectCostBreakdown = useMemo(() => {
+    if (!projectAgentLogs || projectAgentLogs.length === 0) return []
+    const map: Record<string, { agent_name: string; total_cost: number; call_count: number }> = {}
+    for (const log of projectAgentLogs) {
+      if (!map[log.agent_name]) {
+        map[log.agent_name] = { agent_name: log.agent_name, total_cost: 0, call_count: 0 }
+      }
+      map[log.agent_name].total_cost += log.cost
+      map[log.agent_name].call_count += 1
+    }
+    return Object.values(map).sort((a, b) => b.total_cost - a.total_cost)
+  }, [projectAgentLogs])
+
+  const selectedProject = useMemo(() => {
+    if (!selectedProjectId || !projects) return null
+    return projects.find(p => p.id === selectedProjectId) || null
+  }, [selectedProjectId, projects])
+
+  const handleApplyCustomRange = () => {
+    if (customFrom && customTo) {
+      const from = new Date(customFrom)
+      const to = new Date(customTo)
+      const diffMs = to.getTime() - from.getTime()
+      const diffDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
+      setDays(diffDays)
+    }
+  }
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'per-project', label: 'Per Project', icon: FolderOpen },
     { id: 'agents', label: 'Agent Performance', icon: Trophy },
     { id: 'models', label: 'Model Comparison', icon: Zap },
     { id: 'build-time', label: 'Build Time', icon: Timer },
@@ -80,8 +145,47 @@ export default function CostDashboard() {
         <p className="text-text-secondary mt-1">Track spending and agent performance</p>
       </div>
 
+      {/* Date Range Filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        {DATE_RANGE_OPTIONS.map((opt) => (
+          <button
+            key={opt.days}
+            onClick={() => setDays(opt.days)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              days === opt.days
+                ? 'bg-accent-primary text-white'
+                : 'bg-background-secondary text-text-secondary hover:bg-background-tertiary'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+        <div className="flex items-center gap-1 ml-2">
+          <input
+            type="date"
+            value={customFrom}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            className="px-2 py-1.5 rounded-lg text-sm bg-background-secondary text-text-primary border border-border-subtle"
+          />
+          <span className="text-text-tertiary text-sm">to</span>
+          <input
+            type="date"
+            value={customTo}
+            onChange={(e) => setCustomTo(e.target.value)}
+            className="px-2 py-1.5 rounded-lg text-sm bg-background-secondary text-text-primary border border-border-subtle"
+          />
+          <button
+            onClick={handleApplyCustomRange}
+            disabled={!customFrom || !customTo}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-background-secondary text-text-secondary hover:bg-background-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Apply
+          </button>
+        </div>
+      </div>
+
       {/* Tab Navigation */}
-      <div className="flex flex-wrap gap-2 border-b border-border-default pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-border-subtle pb-2">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -89,7 +193,7 @@ export default function CostDashboard() {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-accent-primary text-white'
-                : 'text-text-secondary hover:bg-bg-secondary'
+                : 'text-text-secondary hover:bg-background-secondary'
             }`}
           >
             <tab.icon className="w-4 h-4" />
@@ -161,22 +265,28 @@ export default function CostDashboard() {
           <Card>
             <h3 className="font-medium text-text-primary mb-4">Cost by Agent</h3>
             <div className="space-y-3">
-              {byAgent?.map((agent) => (
-                <div key={agent.agent_name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-accent-primary" />
-                    <span className="text-sm text-text-primary capitalize">
-                      {agent.agent_name.replace('_', ' ')}
-                    </span>
+              {byAgent?.map((agent) => {
+                const isExpensive = totalAgentCost > 0 && agent.total_cost > totalAgentCost * 0.5
+                return (
+                  <div key={agent.agent_name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-accent-primary" />
+                      <span className="text-sm text-text-primary capitalize">
+                        {agent.agent_name.replace('_', ' ')}
+                      </span>
+                      {isExpensive && (
+                        <span title="Over 50% of total cost"><Flame className="w-4 h-4 text-orange-500" /></span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="text-text-tertiary">{agent.call_count} calls</span>
+                      <span className="text-text-primary font-mono">
+                        ${agent.total_cost.toFixed(4)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-text-tertiary">{agent.call_count} calls</span>
-                    <span className="text-text-primary font-mono">
-                      ${agent.total_cost.toFixed(4)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
               {(!byAgent || byAgent.length === 0) && (
                 <p className="text-sm text-text-secondary text-center py-4">No data yet</p>
               )}
@@ -187,29 +297,195 @@ export default function CostDashboard() {
           <Card>
             <h3 className="font-medium text-text-primary mb-4">Cost by Model</h3>
             <div className="space-y-3">
-              {byModel?.map((model) => (
-                <div key={model.model} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-accent-secondary" />
-                    <code className="text-sm text-text-primary">
-                      {model.model.split('/').pop()}
-                    </code>
+              {byModel?.map((model) => {
+                const isExpensive = totalModelCost > 0 && model.total_cost > totalModelCost * 0.5
+                return (
+                  <div key={model.model} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-accent-secondary" />
+                      <code className="text-sm text-text-primary">
+                        {model.model.split('/').pop()}
+                      </code>
+                      {isExpensive && (
+                        <span title="Over 50% of total cost"><Flame className="w-4 h-4 text-orange-500" /></span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="text-text-tertiary">
+                        {(model.prompt_tokens + model.completion_tokens).toLocaleString()} tokens
+                      </span>
+                      <span className="text-text-primary font-mono">
+                        ${model.total_cost.toFixed(4)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-text-tertiary">
-                      {(model.prompt_tokens + model.completion_tokens).toLocaleString()} tokens
-                    </span>
-                    <span className="text-text-primary font-mono">
-                      ${model.total_cost.toFixed(4)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
               {(!byModel || byModel.length === 0) && (
                 <p className="text-sm text-text-secondary text-center py-4">No data yet</p>
               )}
             </div>
           </Card>
+        </>
+      )}
+
+      {/* Per Project Tab */}
+      {activeTab === 'per-project' && (
+        <>
+          <Card>
+            <h3 className="font-medium text-text-primary mb-4 flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-accent-primary" />
+              Per-Project Cost Breakdown
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-text-secondary border-b border-border-subtle">
+                    <th className="pb-3 font-medium">Project Name</th>
+                    <th className="pb-3 font-medium">Type</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium">Total Cost</th>
+                    <th className="pb-3 font-medium">Created At</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projects?.map((project) => (
+                    <tr
+                      key={project.id}
+                      onClick={() => setSelectedProjectId(
+                        selectedProjectId === project.id ? null : project.id
+                      )}
+                      className={`border-b border-border-subtle/50 cursor-pointer transition-colors ${
+                        selectedProjectId === project.id
+                          ? 'bg-accent-primary/10'
+                          : 'hover:bg-background-secondary'
+                      }`}
+                    >
+                      <td className="py-3 text-text-primary font-medium">
+                        {project.name || project.brief?.slice(0, 40) || project.id.slice(0, 8)}
+                      </td>
+                      <td className="py-3 text-text-secondary capitalize">
+                        {project.project_type?.replace(/_/g, ' ') || '--'}
+                      </td>
+                      <td className="py-3">
+                        <span className={`px-2 py-0.5 text-xs rounded font-medium ${
+                          project.status === 'completed' ? 'bg-accent-success/20 text-accent-success' :
+                          project.status === 'running' || project.status === 'in_progress' ? 'bg-accent-primary/20 text-accent-primary' :
+                          project.status === 'failed' ? 'bg-accent-error/20 text-accent-error' :
+                          'bg-background-secondary text-text-tertiary'
+                        }`}>
+                          {project.status}
+                        </span>
+                      </td>
+                      <td className="py-3 font-mono text-text-primary">
+                        ${project.cost_estimate?.toFixed(4) || '0.0000'}
+                      </td>
+                      <td className="py-3 text-text-secondary">
+                        {new Date(project.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(!projects || projects.length === 0) && (
+                <p className="text-sm text-text-secondary text-center py-8">
+                  No projects found.
+                </p>
+              )}
+            </div>
+          </Card>
+
+          {/* Selected project detail */}
+          {selectedProject && (
+            <Card>
+              <h3 className="font-medium text-text-primary mb-4">
+                Agent Cost Breakdown: {selectedProject.name || selectedProject.id.slice(0, 8)}
+              </h3>
+              {projectCostBreakdown.length > 0 ? (
+                <div className="space-y-3">
+                  {projectCostBreakdown.map((item) => (
+                    <div key={item.agent_name} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-accent-primary" />
+                        <span className="text-sm text-text-primary capitalize">
+                          {item.agent_name.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-text-tertiary">{item.call_count} calls</span>
+                        <span className="text-text-primary font-mono">
+                          ${item.total_cost.toFixed(4)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-3 border-t border-border-subtle flex justify-between text-sm">
+                    <span className="text-text-secondary font-medium">Total</span>
+                    <span className="text-text-primary font-mono font-semibold">
+                      ${projectCostBreakdown.reduce((s, i) => s + i.total_cost, 0).toFixed(4)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-text-secondary text-center py-4">
+                  No agent logs found for this project.
+                </p>
+              )}
+
+              {/* Agent log details */}
+              {projectAgentLogs && projectAgentLogs.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium text-text-secondary mb-3">Agent Log Details</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-text-secondary border-b border-border-subtle">
+                          <th className="pb-2 font-medium">Agent</th>
+                          <th className="pb-2 font-medium">Model</th>
+                          <th className="pb-2 font-medium">Status</th>
+                          <th className="pb-2 font-medium">Tokens</th>
+                          <th className="pb-2 font-medium">Cost</th>
+                          <th className="pb-2 font-medium">Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {projectAgentLogs.map((log) => (
+                          <tr key={log.id} className="border-b border-border-subtle/50">
+                            <td className="py-2 capitalize text-text-primary">
+                              {log.agent_name.replace(/_/g, ' ')}
+                            </td>
+                            <td className="py-2">
+                              <code className="text-xs bg-background-secondary px-1.5 py-0.5 rounded text-text-secondary">
+                                {log.model_used.split('/').pop()}
+                              </code>
+                            </td>
+                            <td className="py-2">
+                              <span className={`text-xs ${
+                                log.status === 'success' ? 'text-accent-success' :
+                                log.status === 'failed' ? 'text-accent-error' :
+                                'text-text-tertiary'
+                              }`}>
+                                {log.status}
+                              </span>
+                            </td>
+                            <td className="py-2 text-text-secondary">
+                              {log.total_tokens.toLocaleString()}
+                            </td>
+                            <td className="py-2 font-mono text-text-primary">
+                              ${log.cost.toFixed(4)}
+                            </td>
+                            <td className="py-2 text-text-secondary">
+                              {(log.duration_ms / 1000).toFixed(1)}s
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
         </>
       )}
 
@@ -223,7 +499,7 @@ export default function CostDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-text-secondary border-b border-border-default">
+                <tr className="text-left text-text-secondary border-b border-border-subtle">
                   <th className="pb-3 font-medium">Rank</th>
                   <th className="pb-3 font-medium">Agent</th>
                   <th className="pb-3 font-medium">Success Rate</th>
@@ -236,13 +512,13 @@ export default function CostDashboard() {
               </thead>
               <tbody>
                 {successRates?.map((agent, index) => (
-                  <tr key={agent.agent_name} className="border-b border-border-default/50">
+                  <tr key={agent.agent_name} className="border-b border-border-subtle/50">
                     <td className="py-3">
                       <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
                         index === 0 ? 'bg-yellow-500/20 text-yellow-500' :
                         index === 1 ? 'bg-gray-400/20 text-gray-400' :
                         index === 2 ? 'bg-amber-600/20 text-amber-600' :
-                        'bg-bg-secondary text-text-tertiary'
+                        'bg-background-secondary text-text-tertiary'
                       }`}>
                         {index + 1}
                       </span>
@@ -268,8 +544,8 @@ export default function CostDashboard() {
                     </td>
                     <td className="py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-16 h-2 bg-bg-secondary rounded-full overflow-hidden">
-                          <div 
+                        <div className="w-16 h-2 bg-background-secondary rounded-full overflow-hidden">
+                          <div
                             className="h-full bg-accent-primary rounded-full"
                             style={{ width: `${agent.avg_quality_score * 100}%` }}
                           />
@@ -305,7 +581,7 @@ export default function CostDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-text-secondary border-b border-border-default">
+                <tr className="text-left text-text-secondary border-b border-border-subtle">
                   <th className="pb-3 font-medium">Agent</th>
                   <th className="pb-3 font-medium">Model</th>
                   <th className="pb-3 font-medium">Success Rate</th>
@@ -316,12 +592,12 @@ export default function CostDashboard() {
               </thead>
               <tbody>
                 {modelComparison?.map((item, index) => (
-                  <tr key={`${item.agent_name}-${item.model_used}-${index}`} className="border-b border-border-default/50">
+                  <tr key={`${item.agent_name}-${item.model_used}-${index}`} className="border-b border-border-subtle/50">
                     <td className="py-3 capitalize text-text-primary">
                       {item.agent_name.replace(/_/g, ' ')}
                     </td>
                     <td className="py-3">
-                      <code className="text-xs bg-bg-secondary px-2 py-1 rounded">
+                      <code className="text-xs bg-background-secondary px-2 py-1 rounded">
                         {item.model_used.split('/').pop()}
                       </code>
                     </td>
@@ -373,8 +649,8 @@ export default function CostDashboard() {
                     </span>
                   </div>
                 </div>
-                <div className="w-full h-4 bg-bg-secondary rounded-full overflow-hidden">
-                  <div 
+                <div className="w-full h-4 bg-background-secondary rounded-full overflow-hidden">
+                  <div
                     className="h-full bg-gradient-to-r from-accent-primary to-accent-secondary rounded-full transition-all duration-500"
                     style={{ width: `${Math.min(100, item.percentage_of_total)}%` }}
                   />
@@ -387,9 +663,9 @@ export default function CostDashboard() {
               </p>
             )}
           </div>
-          
+
           {buildTimeWaterfall && buildTimeWaterfall.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-border-default">
+            <div className="mt-6 pt-4 border-t border-border-subtle">
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Total Average Build Time:</span>
                 <span className="font-semibold text-text-primary">
@@ -410,9 +686,9 @@ export default function CostDashboard() {
           </h3>
           <div className="space-y-4">
             {failurePatterns?.map((pattern, index) => (
-              <div 
-                key={pattern.id} 
-                className="p-4 bg-bg-secondary rounded-lg border border-border-default"
+              <div
+                key={pattern.id}
+                className="p-4 bg-background-secondary rounded-lg border border-border-subtle"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
@@ -505,8 +781,8 @@ export default function CostDashboard() {
                     {type.replace(/_/g, ' ')}
                   </span>
                   <div className="flex items-center gap-3">
-                    <div className="w-32 h-2 bg-bg-secondary rounded-full overflow-hidden">
-                      <div 
+                    <div className="w-32 h-2 bg-background-secondary rounded-full overflow-hidden">
+                      <div
                         className={`h-full rounded-full ${
                           accuracy >= 80 ? 'bg-accent-success' :
                           accuracy >= 60 ? 'bg-accent-warning' :
@@ -536,8 +812,8 @@ export default function CostDashboard() {
                 <div key={profile} className="flex items-center justify-between">
                   <span className="text-sm text-text-primary capitalize">{profile}</span>
                   <div className="flex items-center gap-3">
-                    <div className="w-32 h-2 bg-bg-secondary rounded-full overflow-hidden">
-                      <div 
+                    <div className="w-32 h-2 bg-background-secondary rounded-full overflow-hidden">
+                      <div
                         className={`h-full rounded-full ${
                           accuracy >= 80 ? 'bg-accent-success' :
                           accuracy >= 60 ? 'bg-accent-warning' :

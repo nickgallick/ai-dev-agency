@@ -1,7 +1,7 @@
 """Phase 11A: Project Preset Model for saved configurations."""
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Text
+from sqlalchemy import Column, String, DateTime, Text, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from .database import Base
@@ -22,7 +22,7 @@ class ProjectPreset(Base):
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    use_count = Column(String(20), default="0")  # Track usage for popularity sorting
+    use_count = Column(Integer, default=0)  # Track usage for popularity sorting
     
     # Optional: Link to user if auth is enabled
     # user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)

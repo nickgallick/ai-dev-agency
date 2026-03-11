@@ -60,7 +60,21 @@ class Settings:
             "DATABASE_URL", "postgresql://postgres:postgres@db:5432/aidevagency"
         )
     )
-    
+
+    # Redis Configuration
+    redis_url: str = field(
+        default_factory=lambda: os.getenv("REDIS_URL", "redis://redis:6379/0")
+    )
+    redis_host: str = field(
+        default_factory=lambda: os.getenv("REDIS_HOST", "redis")
+    )
+    redis_port: int = field(
+        default_factory=lambda: int(os.getenv("REDIS_PORT", "6379"))
+    )
+    redis_password: Optional[str] = field(
+        default_factory=lambda: os.getenv("REDIS_PASSWORD")
+    )
+
     # ===========================================
     # LLM API Configuration
     # ===========================================
@@ -145,7 +159,23 @@ class Settings:
     inngest_event_key: Optional[str] = field(
         default_factory=lambda: os.getenv("INNGEST_EVENT_KEY")
     )
-    
+
+    # ===========================================
+    # Phase 12: LangSmith Tracing
+    # ===========================================
+    langchain_tracing_v2: bool = field(
+        default_factory=lambda: os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
+    )
+    langchain_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("LANGCHAIN_API_KEY")
+    )
+    langchain_project: str = field(
+        default_factory=lambda: os.getenv("LANGCHAIN_PROJECT", "ai-dev-agency")
+    )
+    langchain_endpoint: str = field(
+        default_factory=lambda: os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+    )
+
     # Helper properties for integration status
     @property
     def figma_configured(self) -> bool:

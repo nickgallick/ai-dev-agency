@@ -19,6 +19,7 @@ Phase 11D Enhancements:
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -28,6 +29,19 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from agents.base import AgentResult, BaseAgent
+
+# Phase 12: LangSmith tracing
+_langsmith_available = False
+_langsmith_client = None
+try:
+    if os.getenv("LANGCHAIN_TRACING_V2", "").lower() == "true":
+        from langsmith import Client as LangSmithClient
+        from langsmith.run_trees import RunTree
+        _langsmith_client = LangSmithClient()
+        _langsmith_available = True
+        logging.getLogger(__name__).info("LangSmith tracing enabled for pipeline")
+except ImportError:
+    pass
 # Phase 11B: Knowledge capture
 from knowledge.capture import capture_agent_knowledge, auto_generate_template
 # Import all actual agents
@@ -45,6 +59,7 @@ from agents.qa_testing import QATestingAgent
 from agents.deployment import DeploymentAgent
 from agents.analytics_monitoring import AnalyticsMonitoringAgent
 from agents.coding_standards import CodingStandardsAgent
+from agents.integration_wiring import IntegrationWiringAgent
 from agents.revision_handler import RevisionHandlerAgent
 from agents.project_manager import ProjectManagerAgent, COMPLEX_PROJECT_TYPES
 from agents.code_review import CodeReviewAgent
@@ -53,6 +68,7 @@ from agents.delivery import DeliveryAgent
 from config.settings import Settings
 from utils.cost_optimizer import get_cost_optimizer, CostProfile
 from utils.agent_analytics import log_agent_performance, get_agent_analytics
+from models.agent_log import AgentLog
 
 
 class NodeStatus(Enum):
@@ -321,14 +337,22 @@ class Pipeline:
             agent_class=CodeGenerationAgent,
             dependencies=["pm_checkpoint_1"],
         ))
-        
+
+        # Integration Wiring — wire all integrations after code gen
+        self.add_node(PipelineNode(
+            id="integration_wiring",
+            name="Integration Wiring",
+            agent_class=IntegrationWiringAgent,
+            dependencies=["code_generation"],
+        ))
+
         # ★ PM Checkpoint 2: Completeness validation
-        # Runs after Code Gen, before Quality Gate
+        # Runs after Code Gen + Integration Wiring, before Quality Gate
         self.add_node(PipelineNode(
             id="pm_checkpoint_2",
             name="PM Checkpoint 2 (Completeness)",
             agent_class=ProjectManagerAgent,
-            dependencies=["code_generation"],
+            dependencies=["integration_wiring"],
         ))
         
         # ★ Code Review Agent
@@ -438,20 +462,20 @@ class Pipeline:
                     node.dependencies.remove(node_id)
 
     def get_ready_nodes(self) -> List[PipelineNode]:
-        """Get nodes that are ready to execute (all dependencies completed)."""
+        """Get nodes that are ready to execute (all dependencies completed or skipped)."""
         ready = []
         for node in self.nodes.values():
             if node.status != NodeStatus.PENDING:
                 continue
 
-            # Check if all dependencies are completed
-            deps_completed = all(
-                self.nodes[dep].status == NodeStatus.COMPLETED
+            # Check if all dependencies are done (completed or skipped)
+            deps_done = all(
+                self.nodes[dep].status in (NodeStatus.COMPLETED, NodeStatus.SKIPPED)
                 for dep in node.dependencies
                 if dep in self.nodes
             )
 
-            # Check if any dependency failed
+            # Check if any dependency failed (not skipped — skipped is OK)
             deps_failed = any(
                 self.nodes[dep].status == NodeStatus.FAILED
                 for dep in node.dependencies
@@ -462,7 +486,7 @@ class Pipeline:
                 node.status = NodeStatus.SKIPPED
                 continue
 
-            if deps_completed:
+            if deps_done:
                 ready.append(node)
 
         return ready
@@ -480,10 +504,14 @@ class Pipeline:
         return groups
 
     async def execute_node(self, node: PipelineNode) -> AgentResult:
-        """Execute a single pipeline node with performance analytics tracking."""
+        """Execute a single pipeline node with performance analytics tracking.
+
+        When LangSmith is configured, each agent execution is wrapped in a
+        trace span for full end-to-end observability.
+        """
         self.logger.info(f"Executing node: {node.name}")
         node.status = NodeStatus.RUNNING
-        
+
         # Phase 9A: Track execution time
         start_time = time.time()
         model_used = "placeholder"
@@ -491,6 +519,25 @@ class Pipeline:
         cost = 0.0
         error_occurred = False
         error_message = None
+
+        # Phase 12: LangSmith trace context
+        run_tree = None
+        if _langsmith_available and _langsmith_client:
+            try:
+                project_id = self.context.get("project_id", "unknown")
+                run_tree = RunTree(
+                    name=f"agent:{node.id}",
+                    run_type="chain",
+                    inputs={
+                        "agent": node.id,
+                        "project_id": str(project_id),
+                        "brief": str(self.context.get("brief", ""))[:500],
+                    },
+                    project_name=os.getenv("LANGCHAIN_PROJECT", "ai-dev-agency"),
+                )
+            except Exception as e:
+                self.logger.debug(f"LangSmith trace setup failed: {e}")
+                run_tree = None
 
         try:
             # Skip placeholder agents
@@ -504,12 +551,67 @@ class Pipeline:
                 )
                 return node.result
 
-            # Create and run agent
-            agent = node.agent_class(settings=self.settings)
-            result = await asyncio.wait_for(
-                agent.run(self.context),
-                timeout=self.config.timeout_per_node,
+            # Create and run agent with Layer 2 retry for transient failures
+            from utils.retry import retry_agent_execution
+            from orchestration.refinement import (
+                score_agent_output,
+                should_refine,
+                build_refinement_feedback,
+                RefinementConfig,
             )
+
+            _settings = self.settings
+            _context = self.context
+            _timeout = self.config.timeout_per_node
+            _agent_cls = node.agent_class
+
+            async def _run_agent():
+                """Create a fresh agent instance per attempt."""
+                a = _agent_cls(settings=_settings)
+                return await asyncio.wait_for(a.run(_context), timeout=_timeout)
+
+            result = await retry_agent_execution(
+                _run_agent,
+                max_retries=2,
+                base_delay=3.0,
+                max_delay=30.0,
+                agent_name=node.id,
+            )
+
+            # Iterative refinement: re-run agent if quality is below threshold
+            refinement_config = RefinementConfig()
+            iteration = 0
+            while result.success:
+                score = score_agent_output(node.id, result)
+                if not should_refine(node.id, score, iteration, refinement_config):
+                    # Store quality score in result data for downstream visibility
+                    if isinstance(result.data, dict):
+                        result.data["_quality_score"] = score.overall
+                        result.data["_quality_issues"] = score.issues
+                        result.data["_refinement_iterations"] = iteration
+                    break
+
+                # Inject feedback and re-run
+                iteration += 1
+                feedback = build_refinement_feedback(node.id, result, score)
+                _context["refinement_feedback"] = feedback
+                _context["refinement_iteration"] = iteration
+                self.logger.info(
+                    f"Refinement loop: re-running {node.id} "
+                    f"(iteration {iteration}, score={score.overall:.2f})"
+                )
+
+                result = await retry_agent_execution(
+                    _run_agent,
+                    max_retries=1,
+                    base_delay=3.0,
+                    max_delay=30.0,
+                    agent_name=f"{node.id}_refinement_{iteration}",
+                )
+
+            # Clean up refinement context keys
+            _context.pop("refinement_feedback", None)
+            _context.pop("refinement_iteration", None)
 
             node.result = result
             node.status = (
@@ -536,10 +638,17 @@ class Pipeline:
             node.status = NodeStatus.FAILED
             error_occurred = True
             error_message = "Execution timed out"
+            from utils.error_classifier import classify_error
+            classified = classify_error("Execution timed out")
             node.result = AgentResult(
                 success=False,
                 agent_name=node.name,
                 errors=["Execution timed out"],
+                data={
+                    "_error_category": classified.category.value,
+                    "_error_strategy": classified.strategy.value,
+                    "_error_user_message": classified.user_message,
+                },
             )
             return node.result
 
@@ -548,10 +657,20 @@ class Pipeline:
             node.status = NodeStatus.FAILED
             error_occurred = True
             error_message = str(e)
+            from utils.error_classifier import classify_error
+            classified = classify_error(
+                str(e), exception_type=type(e).__name__
+            )
             node.result = AgentResult(
                 success=False,
                 agent_name=node.name,
                 errors=[str(e)],
+                data={
+                    "_error_category": classified.category.value,
+                    "_error_strategy": classified.strategy.value,
+                    "_error_user_message": classified.user_message,
+                    "_error_should_retry": classified.should_retry,
+                },
             )
             return node.result
         
@@ -567,10 +686,37 @@ class Pipeline:
                 error_occurred=error_occurred,
                 error_message=error_message,
             )
-            
+
+            # Write to agent_logs table so every agent has a visible log row
+            self._write_agent_log(
+                node=node,
+                execution_time_ms=execution_time_ms,
+                model_used=model_used,
+                tokens_used=tokens_used,
+                cost=cost,
+                error_message=error_message,
+            )
+
             # Phase 11B: Capture knowledge from completed agent
             if node.status == NodeStatus.COMPLETED and node.result and node.result.success:
                 await self._capture_agent_knowledge(node)
+
+            # Phase 12: Complete LangSmith trace span
+            if run_tree:
+                try:
+                    run_tree.end(
+                        outputs={
+                            "status": node.status.value,
+                            "success": not error_occurred,
+                            "duration_ms": execution_time_ms,
+                            "cost": cost,
+                            "model": model_used,
+                        },
+                        error=error_message,
+                    )
+                    run_tree.post()
+                except Exception as e:
+                    self.logger.debug(f"LangSmith trace post failed: {e}")
     
     async def _capture_agent_knowledge(self, node: PipelineNode) -> None:
         """Capture knowledge from a completed agent.
@@ -683,6 +829,59 @@ class Pipeline:
         except Exception as e:
             # Don't fail the pipeline if analytics logging fails
             self.logger.warning(f"Failed to log agent performance: {e}")
+
+    def _write_agent_log(
+        self,
+        node: PipelineNode,
+        execution_time_ms: int,
+        model_used: str,
+        tokens_used: Dict[str, int],
+        cost: float,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """Write a row to agent_logs for every agent that runs."""
+        if not self.db:
+            return
+
+        project_id = self.context.get("project_id")
+        if not project_id:
+            return
+
+        try:
+            import uuid as uuid_module
+            status = "failed" if node.status == NodeStatus.FAILED else (
+                "timeout" if error_message == "Execution timed out" else "completed"
+            )
+            output_data = {}
+            if node.result and hasattr(node.result, "data") and isinstance(node.result.data, dict):
+                # Store a summary (not full data to keep rows manageable)
+                output_data = {
+                    k: v for k, v in (node.result.data or {}).items()
+                    if k in ("success", "model_used", "cost", "summary", "error")
+                }
+
+            log_entry = AgentLog(
+                id=uuid_module.uuid4(),
+                project_id=project_id if isinstance(project_id, UUID) else UUID(str(project_id)),
+                agent_name=node.id,
+                model_used=model_used,
+                prompt_tokens=tokens_used.get("input_tokens", tokens_used.get("prompt_tokens", 0)),
+                completion_tokens=tokens_used.get("output_tokens", tokens_used.get("completion_tokens", 0)),
+                total_tokens=tokens_used.get("total_tokens", 0),
+                cost=cost,
+                duration_ms=execution_time_ms,
+                status=status,
+                error_message=error_message,
+                output_data=output_data,
+            )
+            self.db.add(log_entry)
+            self.db.commit()
+        except Exception as e:
+            self.logger.warning(f"Failed to write agent_log for {node.id}: {e}")
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
 
     async def execute_parallel_group(
         self, nodes: List[PipelineNode]

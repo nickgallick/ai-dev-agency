@@ -6,15 +6,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { api, BriefAnalysis, Preset, ProjectTemplate } from '@/lib/api'
+import { api, BriefAnalysis, BriefScoreResult, Preset, ProjectTemplate, PipelineEstimate, ChatMessage, PipelinePlan } from '@/lib/api'
+import PipelinePlanReview from '@/components/PipelinePlanReview'
 import VoiceInput from '@/components/VoiceInput'
 import TemplateBrowser from '@/components/TemplateBrowser'
-import { 
-  Globe, Smartphone, Monitor, Chrome, Terminal, Server, Sparkles, 
+import {
+  Globe, Smartphone, Monitor, Chrome, Terminal, Server, Sparkles,
   ArrowRight, Zap, Shield, Crown, ChevronDown, ChevronUp, Save,
   Figma, Info, AlertCircle, Check, Plus, X, Palette, Settings2,
   Rocket, FileCode, Layers, Database, Mail, CreditCard, Users,
-  Bell, Search, Upload, MessageSquare, Moon, Sun, LayoutTemplate
+  Bell, Search, Upload, MessageSquare, Moon, Sun, LayoutTemplate,
+  DollarSign, Clock, CheckCircle, Wand2, Send, Bot, User, Loader2
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -117,7 +119,7 @@ interface FormState {
   deploymentPlatform: string
   autoDeploy: boolean
   customInstructions: string
-  buildMode: 'full_auto' | 'step_approval' | 'preview_only'
+  buildMode: 'autonomous' | 'guided' | 'supervised'
 }
 
 const defaultFormState: FormState = {
@@ -155,7 +157,7 @@ const defaultFormState: FormState = {
   deploymentPlatform: '',
   autoDeploy: true,
   customInstructions: '',
-  buildMode: 'full_auto',
+  buildMode: 'autonomous',
 }
 
 // ============ Main Component ============
@@ -177,6 +179,30 @@ export default function NewProject() {
   // Phase 11B: Template Browser
   const [showTemplateBrowser, setShowTemplateBrowser] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  // Brief wizard: completeness scoring
+  const [briefScore, setBriefScore] = useState<BriefScoreResult | null>(null)
+  const [isEnhancing, setIsEnhancing] = useState(false)
+
+  // Pre-execution estimation & approval
+  const [estimate, setEstimate] = useState<PipelineEstimate | null>(null)
+  const [showEstimate, setShowEstimate] = useState(false)
+  const [isEstimating, setIsEstimating] = useState(false)
+
+  // Pipeline plan review (#13)
+  const [pipelinePlan, setPipelinePlan] = useState<PipelinePlan | null>(null)
+  const [showPlanReview, setShowPlanReview] = useState(false)
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false)
+
+  // Pre-build chat mode
+  const [chatMode, setChatMode] = useState(true)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [chatReadyToBuild, setChatReadyToBuild] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Load presets
   const { data: presets = [] } = useQuery({
@@ -204,21 +230,26 @@ export default function NewProject() {
     }
   }, [form])
 
-  // Debounced brief analysis
+  // Debounced brief analysis + completeness scoring
   const analyzeBrief = useCallback(async (brief: string) => {
     if (brief.length < 10) {
       setAnalysis(null)
+      setBriefScore(null)
       return
     }
-    
+
     setIsAnalyzing(true)
     try {
-      const result = await api.analyzeBrief(brief)
-      setAnalysis(result)
-      
+      const [analysisResult, scoreResult] = await Promise.all([
+        api.analyzeBrief(brief),
+        api.scoreBrief(brief, form.projectType || 'web_simple'),
+      ])
+      setAnalysis(analysisResult)
+      setBriefScore(scoreResult)
+
       // Auto-select detected type if user hasn't manually selected
-      if (result.detected_project_type && !form.projectType) {
-        setForm(prev => ({ ...prev, projectType: result.detected_project_type }))
+      if (analysisResult.detected_project_type && !form.projectType) {
+        setForm(prev => ({ ...prev, projectType: analysisResult.detected_project_type }))
       }
     } catch (e) {
       console.error('Brief analysis failed:', e)
@@ -226,6 +257,25 @@ export default function NewProject() {
       setIsAnalyzing(false)
     }
   }, [form.projectType])
+
+  // Enhance brief handler
+  const handleEnhanceBrief = async () => {
+    if (!form.brief.trim()) return
+    setIsEnhancing(true)
+    try {
+      const result = await api.enhanceBrief({
+        brief: form.brief,
+        project_type: form.projectType || 'web_simple',
+        detected_features: analysis?.suggested_features,
+        detected_pages: analysis?.suggested_pages,
+      })
+      setForm(prev => ({ ...prev, brief: result.enhanced }))
+    } catch (e) {
+      console.error('Brief enhancement failed:', e)
+    } finally {
+      setIsEnhancing(false)
+    }
+  }
 
   // Trigger analysis on brief change (debounced 1s)
   useEffect(() => {
@@ -248,8 +298,16 @@ export default function NewProject() {
   const createProject = useMutation({
     mutationFn: api.createProject,
     onSuccess: (data) => {
+      setSubmitError(null)
       localStorage.removeItem(STORAGE_KEY)
       navigate(`/project/${data.id}`)
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        'Failed to create project. Is the backend running?'
+      setSubmitError(msg)
     },
   })
 
@@ -321,12 +379,114 @@ export default function NewProject() {
     }))
   }
 
-  // Handle form submit
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.brief.trim() || !form.projectType) return
+  // ── Pre-Build Chat handlers ──────────────────────────────────────────
 
-    const requirements = {
+  const handleSendChatMessage = async () => {
+    const msg = chatInput.trim()
+    if (!msg || chatLoading) return
+
+    setChatInput('')
+    setChatLoading(true)
+    setChatMessages(prev => [...prev, { role: 'user', message: msg }])
+
+    try {
+      const response = await api.sendChatMessage(msg, conversationId || undefined)
+      setConversationId(response.conversation_id)
+      setChatMessages(prev => [
+        ...prev,
+        { role: 'assistant', message: response.message, ready_to_build: response.ready_to_build },
+      ])
+      if (response.ready_to_build) {
+        setChatReadyToBuild(true)
+      }
+    } catch (e) {
+      setChatMessages(prev => [
+        ...prev,
+        { role: 'assistant', message: 'Sorry, I had trouble connecting. Please try again or skip to the form.' },
+      ])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  // Scroll to bottom of chat when new messages arrive
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  const handleChatKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendChatMessage()
+    }
+  }
+
+  const handleStartBuildFromChat = async () => {
+    if (!conversationId) return
+    setChatLoading(true)
+
+    // Build a brief from user messages for plan generation
+    const userMessages = chatMessages.filter(m => m.role === 'user').map(m => m.message)
+    const chatBrief = userMessages.join('\n\n')
+
+    try {
+      // Generate plan for review
+      const plan = await api.generatePlan({
+        brief: chatBrief || 'Project from chat',
+        project_type: 'web_simple',
+        cost_profile: 'balanced',
+        build_mode: form.buildMode,
+      })
+      setPipelinePlan(plan)
+      setShowPlanReview(true)
+    } catch {
+      // Fall back to direct build if plan fails
+      try {
+        const result = await api.startBuildFromChat({
+          conversation_id: conversationId,
+          cost_profile: 'balanced',
+        })
+        localStorage.removeItem(STORAGE_KEY)
+        navigate(`/project/${result.project_id}`)
+        return
+      } catch (e: any) {
+        setSubmitError(e?.response?.data?.detail || e?.message || 'Failed to start build')
+      }
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  // Handle plan approval from chat mode
+  const handleApprovePlanFromChat = async (skippedAgents: string[]) => {
+    if (!conversationId) return
+    setShowPlanReview(false)
+    setChatLoading(true)
+    try {
+      const result = await api.startBuildFromChat({
+        conversation_id: conversationId,
+        cost_profile: 'balanced',
+      })
+      localStorage.removeItem(STORAGE_KEY)
+      navigate(`/project/${result.project_id}`)
+    } catch (e: any) {
+      setSubmitError(e?.response?.data?.detail || e?.message || 'Failed to start build')
+      setChatLoading(false)
+    }
+  }
+
+  const handleSwitchToForm = () => {
+    // Populate brief from chat conversation
+    const userMessages = chatMessages.filter(m => m.role === 'user').map(m => m.message)
+    if (userMessages.length > 0) {
+      setForm(prev => ({ ...prev, brief: userMessages.join('\n\n') }))
+    }
+    setChatMode(false)
+  }
+
+  // Build the requirements object (shared by estimate + submit)
+  const buildRequirements = () => {
+    const requirements: Record<string, any> = {
       brief: form.brief,
       project_type: form.projectType,
       name: form.name || undefined,
@@ -358,55 +518,111 @@ export default function NewProject() {
     }
 
     // Add type-specific options
-    if (['web_complex', 'python_saas'].includes(form.projectType)) {
-      Object.assign(requirements, {
-        web_complex_options: {
-          key_features: form.selectedFeatures,
-          pages: form.pages,
-          include_auth: form.selectedFeatures.includes('authentication'),
-          include_dashboard: form.selectedFeatures.includes('dashboard'),
-          include_billing: form.selectedFeatures.includes('payments'),
-          include_email: form.selectedFeatures.includes('email'),
-        }
-      })
+    if (['web_complex', 'python_saas'].includes(form.projectType!)) {
+      requirements.web_complex_options = {
+        key_features: form.selectedFeatures,
+        pages: form.pages,
+        include_auth: form.selectedFeatures.includes('authentication'),
+        include_dashboard: form.selectedFeatures.includes('dashboard'),
+        include_billing: form.selectedFeatures.includes('payments'),
+        include_email: form.selectedFeatures.includes('email'),
+      }
     } else if (form.projectType === 'web_simple') {
-      Object.assign(requirements, {
-        web_simple_options: {
-          num_pages: form.numPages,
-          sections: form.sections,
-          include_contact_form: form.includeContactForm,
-          include_blog: form.includeBlog,
-        }
-      })
-    } else if (['mobile_native_ios', 'mobile_cross_platform', 'mobile_pwa'].includes(form.projectType)) {
-      Object.assign(requirements, {
-        mobile_options: {
-          platforms: form.mobilePlatforms,
-          framework: form.mobileFramework,
-          submit_to_stores: form.submitToStores,
-        }
-      })
+      requirements.web_simple_options = {
+        num_pages: form.numPages,
+        sections: form.sections,
+        include_contact_form: form.includeContactForm,
+        include_blog: form.includeBlog,
+      }
+    } else if (['mobile_native_ios', 'mobile_cross_platform', 'mobile_pwa'].includes(form.projectType!)) {
+      requirements.mobile_options = {
+        platforms: form.mobilePlatforms,
+        framework: form.mobileFramework,
+        submit_to_stores: form.submitToStores,
+      }
     } else if (form.projectType === 'cli_tool') {
-      Object.assign(requirements, {
-        cli_options: {
-          language: form.cliLanguage,
-          publish_to_registry: form.publishToRegistry,
-        }
-      })
+      requirements.cli_options = {
+        language: form.cliLanguage,
+        publish_to_registry: form.publishToRegistry,
+      }
     } else if (form.projectType === 'desktop_app') {
-      Object.assign(requirements, {
-        desktop_options: {
-          target_platforms: form.desktopPlatforms,
-          framework: form.desktopFramework,
-        }
-      })
+      requirements.desktop_options = {
+        target_platforms: form.desktopPlatforms,
+        framework: form.desktopFramework,
+      }
     }
+
+    return requirements
+  }
+
+  // Handle form submit — generate pipeline plan for review
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.brief.trim() || !form.projectType) return
+    setSubmitError(null)
+
+    // Generate pipeline plan for review before starting
+    setIsGeneratingPlan(true)
+    api.generatePlan({
+      brief: form.brief,
+      project_type: form.projectType,
+      cost_profile: form.costProfile,
+      num_features: form.selectedFeatures.length,
+      num_pages: form.pages.length || form.numPages || 0,
+      build_mode: form.buildMode,
+    })
+      .then((plan) => {
+        setPipelinePlan(plan)
+        setShowPlanReview(true)
+      })
+      .catch((err) => {
+        // If plan generation fails, fall back to estimate modal
+        setSubmitError(`Plan generation failed: ${err.message}. You can still proceed.`)
+        api.estimateProject({
+          brief: form.brief,
+          project_type: form.projectType!,
+          cost_profile: form.costProfile,
+          num_features: form.selectedFeatures.length,
+          num_pages: form.pages.length || form.numPages || 0,
+        })
+          .then((est) => {
+            setEstimate(est)
+            setShowEstimate(true)
+          })
+          .catch(() => {
+            setShowEstimate(true)
+            setEstimate(null)
+          })
+      })
+      .finally(() => setIsGeneratingPlan(false))
+  }
+
+  // Approve plan and start the build (from PipelinePlanReview)
+  const handleApprovePlan = (skippedAgents: string[]) => {
+    setShowPlanReview(false)
+    const requirements = buildRequirements()
 
     createProject.mutate({
       brief: form.brief,
       name: form.name || undefined,
       cost_profile: form.costProfile,
-      project_type: form.projectType,
+      project_type: form.projectType!,
+      figma_url: form.figmaUrl || undefined,
+      requirements,
+      pipeline_plan: skippedAgents.length > 0 ? { skipped_agents: skippedAgents } : undefined,
+    })
+  }
+
+  // Approve estimate and start the build (fallback when plan fails)
+  const handleApproveAndBuild = () => {
+    setShowEstimate(false)
+    const requirements = buildRequirements()
+
+    createProject.mutate({
+      brief: form.brief,
+      name: form.name || undefined,
+      cost_profile: form.costProfile,
+      project_type: form.projectType!,
       figma_url: form.figmaUrl || undefined,
       requirements,
     })
@@ -460,16 +676,182 @@ export default function NewProject() {
   }
 
   return (
-    <div className="space-y-6 pb-32">
+    <div className="space-y-6 pb-8 lg:pb-32">
       {/* Header */}
       <div className="mb-2">
         <h1 className="text-2xl lg:text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
           New Project
         </h1>
         <p className="mt-1" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-base)' }}>
-          Tell us what you want to build
+          {chatMode ? 'Describe what you want to build — I\'ll ask clarifying questions' : 'Tell us what you want to build'}
         </p>
       </div>
+
+      {/* ── Mode Toggle ───────────────────────────────────────────────── */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setChatMode(true)}
+          className={clsx(
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+            chatMode
+              ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/40'
+              : 'bg-background-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+          )}
+        >
+          <MessageSquare className="w-4 h-4" />
+          Chat with AI
+        </button>
+        <button
+          type="button"
+          onClick={() => setChatMode(false)}
+          className={clsx(
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+            !chatMode
+              ? 'bg-accent-primary/20 text-accent-primary border border-accent-primary/40'
+              : 'bg-background-tertiary text-text-secondary hover:text-text-primary border border-transparent'
+          )}
+        >
+          <Settings2 className="w-4 h-4" />
+          Form Builder
+        </button>
+      </div>
+
+      {/* ── Pre-Build Chat Mode ──────────────────────────────────────── */}
+      {chatMode && (
+        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+          {/* Chat header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+            <Bot className="w-5 h-5 text-accent-primary" />
+            <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              Project Clarification Chat
+            </span>
+            {chatReadyToBuild && (
+              <span className="ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--accent-success-bg, rgba(74,222,128,0.15))', color: 'var(--accent-success)' }}>
+                <CheckCircle className="w-3 h-3" />
+                Ready to build
+              </span>
+            )}
+          </div>
+
+          {/* Messages */}
+          <div className="h-[400px] overflow-y-auto px-4 py-4 space-y-4" style={{ background: 'var(--background-primary)' }}>
+            {chatMessages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-center" style={{ color: 'var(--text-tertiary)' }}>
+                <Bot className="w-10 h-10 mb-3 opacity-40" />
+                <p className="text-sm font-medium mb-1">What would you like to build?</p>
+                <p className="text-xs max-w-sm">
+                  Describe your project idea and I'll ask clarifying questions to make sure we build exactly what you need.
+                </p>
+              </div>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={clsx('flex gap-3', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                {msg.role === 'assistant' && (
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'var(--accent-primary-bg, rgba(59,130,246,0.15))' }}>
+                    <Bot className="w-4 h-4 text-accent-primary" />
+                  </div>
+                )}
+                <div
+                  className={clsx(
+                    'max-w-[80%] px-3.5 py-2.5 rounded-xl text-sm leading-relaxed',
+                    msg.role === 'user'
+                      ? 'rounded-br-sm'
+                      : 'rounded-bl-sm'
+                  )}
+                  style={{
+                    background: msg.role === 'user' ? 'var(--accent-primary)' : 'var(--background-secondary)',
+                    color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
+                    border: msg.role === 'assistant' ? '1px solid var(--border-subtle)' : 'none',
+                  }}
+                >
+                  {msg.message}
+                </div>
+                {msg.role === 'user' && (
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'var(--accent-primary)' }}>
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'var(--accent-primary-bg, rgba(59,130,246,0.15))' }}>
+                  <Bot className="w-4 h-4 text-accent-primary" />
+                </div>
+                <div className="px-3.5 py-2.5 rounded-xl rounded-bl-sm text-sm" style={{ background: 'var(--background-secondary)', border: '1px solid var(--border-subtle)' }}>
+                  <Loader2 className="w-4 h-4 animate-spin text-accent-primary" />
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input area */}
+          <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border-subtle)', background: 'var(--background-secondary)' }}>
+            <div className="flex gap-2">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={handleChatKeyDown}
+                placeholder="Describe your project idea..."
+                rows={1}
+                className="flex-1 px-3 py-2 rounded-lg text-sm resize-none"
+                style={{
+                  background: 'var(--background-primary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-primary)',
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleSendChatMessage}
+                disabled={!chatInput.trim() || chatLoading}
+                className="flex items-center justify-center w-10 h-10 rounded-lg transition-colors disabled:opacity-40"
+                style={{ background: 'var(--accent-primary)', color: '#fff' }}
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Chat actions */}
+          {chatMessages.length > 0 && (
+            <div className="px-4 py-3 border-t flex flex-wrap gap-2" style={{ borderColor: 'var(--border-subtle)', background: 'var(--background-secondary)' }}>
+              <button
+                type="button"
+                onClick={handleStartBuildFromChat}
+                disabled={chatLoading}
+                className="btn-primary flex items-center gap-2"
+                style={{ padding: '8px 16px', fontSize: 'var(--text-sm)' }}
+              >
+                <Rocket className="w-4 h-4" />
+                Start Build
+              </button>
+              <button
+                type="button"
+                onClick={handleSwitchToForm}
+                className="btn-secondary flex items-center gap-2"
+                style={{ padding: '8px 16px', fontSize: 'var(--text-sm)' }}
+              >
+                <Settings2 className="w-4 h-4" />
+                Configure Details
+              </button>
+            </div>
+          )}
+
+          {submitError && (
+            <div className="px-4 py-2" style={{ color: 'var(--accent-error)', fontSize: 'var(--text-sm)' }}>
+              <AlertCircle className="w-4 h-4 inline mr-1" />
+              {submitError}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Form Builder Mode (existing UI) ──────────────────────────── */}
+      {!chatMode && <>
 
       {/* Phase 11B: Template Browser Section */}
       <div className="glass-card" style={{ padding: 'var(--space-4)' }}>
@@ -610,6 +992,64 @@ export default function NewProject() {
                 </span>
               </div>
             </div>
+
+            {/* Brief Completeness Score */}
+            {briefScore && form.brief.length >= 10 && (
+              <div className="px-4 pb-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      Brief completeness
+                    </span>
+                    <span className="text-xs font-bold" style={{
+                      color: briefScore.overall >= 0.7 ? '#34D399' : briefScore.overall >= 0.4 ? '#FBBF24' : '#ef4444'
+                    }}>
+                      {Math.round(briefScore.overall * 100)}% — {briefScore.quality_label}
+                    </span>
+                  </div>
+                  {briefScore.overall < 0.7 && (
+                    <button
+                      type="button"
+                      onClick={handleEnhanceBrief}
+                      disabled={isEnhancing}
+                      className="btn-ghost flex items-center gap-1.5 py-1 px-2"
+                      style={{ fontSize: 'var(--text-xs)' }}
+                    >
+                      {isEnhancing ? (
+                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <Wand2 className="w-3 h-3" />
+                      )}
+                      Enhance
+                    </button>
+                  )}
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-1.5 rounded-full" style={{ background: 'var(--background-tertiary)' }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.round(briefScore.overall * 100)}%`,
+                      background: briefScore.overall >= 0.7 ? '#34D399' : briefScore.overall >= 0.4 ? '#FBBF24' : '#ef4444',
+                    }}
+                  />
+                </div>
+                {/* Suggestions */}
+                {briefScore.suggestions.length > 0 && briefScore.overall < 0.7 && (
+                  <div className="space-y-1">
+                    {briefScore.suggestions.slice(0, 3).map((s, i) => (
+                      <p key={i} className="text-xs flex items-start gap-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                        <Info className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#FBBF24' }} />
+                        {s}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1315,36 +1755,46 @@ export default function NewProject() {
                 </div>
               </div>
 
-              {/* Build Mode */}
+              {/* Autonomy Tier (#26) */}
               <div>
                 <h4 className="flex items-center gap-2 mb-3 font-medium" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
                   <Rocket className="w-4 h-4" />
-                  Build Mode
+                  Autonomy Level
                 </h4>
                 <div className="flex gap-3">
                   {[
-                    { id: 'full_auto', label: 'Full Auto', desc: 'Run entire pipeline automatically' },
-                    { id: 'step_approval', label: 'Step Approval', desc: 'Pause after each step for review' },
-                    { id: 'preview_only', label: 'Preview Only', desc: 'Generate plan without execution' },
-                  ].map(mode => (
+                    { id: 'supervised', label: 'Supervised', desc: 'Pause after every agent for approval', icon: '🔍' },
+                    { id: 'guided', label: 'Guided', desc: 'Pause at 5 critical decision points', icon: '🎯' },
+                    { id: 'autonomous', label: 'Autonomous', desc: 'Run the entire pipeline hands-free', icon: '🚀' },
+                  ].map(tier => (
                     <button
-                      key={mode.id}
+                      key={tier.id}
                       type="button"
-                      onClick={() => setForm(prev => ({ ...prev, buildMode: mode.id as any }))}
+                      onClick={() => setForm(prev => ({ ...prev, buildMode: tier.id as any }))}
                       className={clsx(
                         'glass-card flex-1 p-3 text-left transition-all',
-                        form.buildMode === mode.id && 'glass-card-iridescent'
+                        form.buildMode === tier.id && 'glass-card-iridescent'
                       )}
                     >
-                      <span className="block font-medium text-sm" style={{ 
-                        color: form.buildMode === mode.id ? 'var(--accent-primary)' : 'var(--text-primary)' 
+                      <span className="block font-medium text-sm" style={{
+                        color: form.buildMode === tier.id ? 'var(--accent-primary)' : 'var(--text-primary)'
                       }}>
-                        {mode.label}
+                        {tier.icon} {tier.label}
                       </span>
-                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{mode.desc}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{tier.desc}</span>
                     </button>
                   ))}
                 </div>
+                {form.buildMode === 'guided' && (
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    Pauses at: Research, Architect, Code Generation, QA, and Deployment for your review. Auto-continues after 5 minutes if no action.
+                  </p>
+                )}
+                {form.buildMode === 'supervised' && (
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    Pauses after every agent. You must approve each step before the pipeline continues. No auto-continue timeout.
+                  </p>
+                )}
               </div>
 
               {/* Custom Instructions */}
@@ -1404,9 +1854,66 @@ export default function NewProject() {
           )}
         </div>
 
-        {/* ============ STEP 4: BUILD SUMMARY (Sticky) ============ */}
-        <div 
-          className="fixed bottom-0 left-0 right-0 z-50 lg:left-64"
+        {/* ============ STEP 4: BUILD SUMMARY (Mobile inline) ============ */}
+        <div className="lg:hidden glass-card p-4 space-y-3">
+          <div className="flex items-center gap-3 mb-1">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold"
+                  style={{ background: form.brief && form.projectType ? 'var(--gradient-accent)' : 'var(--background-tertiary)', color: 'white' }}>4</span>
+            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Build Summary</span>
+            {costEstimate[form.costProfile] && (
+              <span className="ml-auto text-lg font-bold" style={{ color: 'var(--accent-primary)' }}>
+                Est: {costEstimate[form.costProfile]}
+              </span>
+            )}
+          </div>
+          {(!form.brief.trim() || !form.projectType) && (
+            <p className="text-sm text-center" style={{ color: 'var(--text-tertiary)' }}>
+              {!form.brief.trim()
+                ? 'Enter a project description to continue'
+                : 'Select a project type above to continue'}
+            </p>
+          )}
+          {submitError && (
+            <div className="flex items-start gap-2 rounded-lg p-3"
+                 style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#ef4444' }} />
+              <p className="text-sm" style={{ color: '#ef4444' }}>{submitError}</p>
+            </div>
+          )}
+          <button
+            type="submit"
+            className="btn-iridescent w-full"
+            disabled={!form.brief.trim() || !form.projectType || createProject.isPending || isGeneratingPlan}
+          >
+            {createProject.isPending ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Starting Build...
+              </span>
+            ) : isGeneratingPlan ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Generating Plan...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <Layers className="w-5 h-5" />
+                Review Plan &amp; Build
+                <ArrowRight className="w-5 h-5" />
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* ============ STEP 4: BUILD SUMMARY (Desktop sticky footer) ============ */}
+        <div
+          className="hidden lg:block fixed bottom-0 left-0 right-0 z-[110] lg:left-64"
           style={{ 
             background: 'var(--background-primary)',
             borderTop: '1px solid var(--glass-border)',
@@ -1465,11 +1972,31 @@ export default function NewProject() {
               </div>
             )}
 
+            {/* Validation hint */}
+            {(!form.brief.trim() || !form.projectType) && (
+              <p className="text-sm text-center" style={{ color: 'var(--text-tertiary)' }}>
+                {!form.brief.trim()
+                  ? 'Enter a project description to continue'
+                  : 'Select a project type above to continue'}
+              </p>
+            )}
+
+            {/* Error message */}
+            {submitError && (
+              <div
+                className="flex items-start gap-2 rounded-lg p-3"
+                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}
+              >
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#ef4444' }} />
+                <p className="text-sm" style={{ color: '#ef4444' }}>{submitError}</p>
+              </div>
+            )}
+
             {/* Submit Button */}
             <button
               type="submit"
               className="btn-iridescent w-full"
-              disabled={!form.brief.trim() || !form.projectType || createProject.isPending}
+              disabled={!form.brief.trim() || !form.projectType || createProject.isPending || isGeneratingPlan}
             >
               {createProject.isPending ? (
                 <span className="flex items-center justify-center gap-2">
@@ -1479,10 +2006,18 @@ export default function NewProject() {
                   </svg>
                   Starting Build...
                 </span>
+              ) : isGeneratingPlan ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Generating Plan...
+                </span>
               ) : (
                 <span className="flex items-center justify-center gap-2">
-                  <Rocket className="w-5 h-5" />
-                  Start Building
+                  <Layers className="w-5 h-5" />
+                  Review Plan &amp; Build
                   <ArrowRight className="w-5 h-5" />
                 </span>
               )}
@@ -1490,6 +2025,134 @@ export default function NewProject() {
           </div>
         </div>
       </form>
+
+      {/* Cost Estimate Approval Modal */}
+      {showEstimate && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+             style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="glass-card w-full max-w-lg p-6 space-y-5"
+               style={{ background: 'var(--background-primary)', border: '1px solid var(--glass-border)' }}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                Cost Estimate
+              </h2>
+              <button type="button" onClick={() => setShowEstimate(false)}
+                      className="p-1 rounded hover:bg-white/10">
+                <X className="w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
+              </button>
+            </div>
+
+            {estimate ? (
+              <>
+                {/* Main cost display */}
+                <div className="text-center py-4">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <DollarSign className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
+                    <span className="text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                      ${estimate.total_cost.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                    Range: ${estimate.min_cost.toFixed(2)} &ndash; ${estimate.max_cost.toFixed(2)}
+                    <span className="ml-2">({Math.round(estimate.confidence * 100)}% confidence)</span>
+                  </p>
+                </div>
+
+                {/* Time + tokens summary */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center p-3 rounded-lg" style={{ background: 'var(--background-secondary)' }}>
+                    <Clock className="w-4 h-4 mx-auto mb-1" style={{ color: 'var(--text-tertiary)' }} />
+                    <span className="block font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                      {estimate.total_time_display}
+                    </span>
+                    <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Est. time</span>
+                  </div>
+                  <div className="text-center p-3 rounded-lg" style={{ background: 'var(--background-secondary)' }}>
+                    <Zap className="w-4 h-4 mx-auto mb-1" style={{ color: 'var(--text-tertiary)' }} />
+                    <span className="block font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                      {(estimate.total_tokens / 1000).toFixed(0)}K
+                    </span>
+                    <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Tokens</span>
+                  </div>
+                  <div className="text-center p-3 rounded-lg" style={{ background: 'var(--background-secondary)' }}>
+                    <Layers className="w-4 h-4 mx-auto mb-1" style={{ color: 'var(--text-tertiary)' }} />
+                    <span className="block font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                      {estimate.agents.length}
+                    </span>
+                    <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Agents</span>
+                  </div>
+                </div>
+
+                {/* Top 5 agents by cost */}
+                <div>
+                  <h3 className="text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    Top agents by cost
+                  </h3>
+                  <div className="space-y-1">
+                    {[...estimate.agents]
+                      .sort((a, b) => b.cost - a.cost)
+                      .slice(0, 5)
+                      .map((agent) => (
+                        <div key={agent.agent_id} className="flex items-center justify-between text-sm py-1">
+                          <span style={{ color: 'var(--text-primary)' }}>
+                            {agent.agent_id.replace(/_/g, ' ')}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                              {agent.model.split('/')[1]}
+                            </span>
+                            <span className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>
+                              ${agent.cost.toFixed(3)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <AlertCircle className="w-8 h-8 mx-auto mb-2" style={{ color: '#FBBF24' }} />
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  {submitError || 'Could not generate estimate. You can still proceed.'}
+                </p>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEstimate(false)}
+                className="btn-ghost flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveAndBuild}
+                className="btn-iridescent flex-1 flex items-center justify-center gap-2"
+                disabled={createProject.isPending}
+              >
+                <CheckCircle className="w-4 h-4" />
+                {estimate ? `Approve $${estimate.total_cost.toFixed(2)} & Build` : 'Proceed Anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      </>}
+
+      {/* Pipeline Plan Review (#13) */}
+      {showPlanReview && pipelinePlan && (
+        <PipelinePlanReview
+          plan={pipelinePlan}
+          onApprove={chatMode && conversationId ? handleApprovePlanFromChat : handleApprovePlan}
+          onCancel={() => setShowPlanReview(false)}
+          isSubmitting={createProject.isPending || chatLoading}
+        />
+      )}
 
       {/* Phase 11B: Template Browser Modal */}
       <TemplateBrowser

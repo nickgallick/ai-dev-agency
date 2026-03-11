@@ -23,6 +23,15 @@ if TYPE_CHECKING:
     from knowledge.types import KnowledgeQueryResult
 
 
+class ClarificationNeeded(Exception):
+    """Raised when an agent needs clarification from the user before proceeding."""
+    def __init__(self, question: str, context: str = "", agent_name: str = ""):
+        self.question = question
+        self.context = context
+        self.agent_name = agent_name
+        super().__init__(question)
+
+
 class AgentStatus(Enum):
     """Agent execution status."""
     IDLE = "idle"
@@ -30,6 +39,27 @@ class AgentStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+@dataclass
+class AgentReasoning:
+    """Captures the reasoning behind an agent's decisions."""
+    goal: str = ""
+    approach: str = ""
+    key_decisions: List[Dict[str, str]] = field(default_factory=list)
+    alternatives_considered: List[str] = field(default_factory=list)
+    confidence: float = 0.0
+    constraints: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "goal": self.goal,
+            "approach": self.approach,
+            "key_decisions": self.key_decisions,
+            "alternatives_considered": self.alternatives_considered,
+            "confidence": self.confidence,
+            "constraints": self.constraints,
+        }
 
 
 @dataclass
@@ -42,10 +72,11 @@ class AgentResult:
     warnings: List[str] = field(default_factory=list)
     execution_time: float = 0.0
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    reasoning: Optional[AgentReasoning] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert result to dictionary."""
-        return {
+        result = {
             "success": self.success,
             "agent_name": self.agent_name,
             "data": self.data,
@@ -54,6 +85,9 @@ class AgentResult:
             "execution_time": self.execution_time,
             "timestamp": self.timestamp,
         }
+        if self.reasoning:
+            result["reasoning"] = self.reasoning.to_dict()
+        return result
 
 
 class BaseAgent(ABC):
@@ -108,6 +142,62 @@ class BaseAgent(ABC):
         """Execute the agent's main task."""
         pass
 
+    def build_reasoning(
+        self,
+        goal: str,
+        approach: str,
+        key_decisions: Optional[List[Dict[str, str]]] = None,
+        alternatives_considered: Optional[List[str]] = None,
+        confidence: float = 0.8,
+        constraints: Optional[List[str]] = None,
+    ) -> AgentReasoning:
+        """Build a reasoning object to attach to an AgentResult."""
+        return AgentReasoning(
+            goal=goal,
+            approach=approach,
+            key_decisions=key_decisions or [],
+            alternatives_considered=alternatives_considered or [],
+            confidence=confidence,
+            constraints=constraints or [],
+        )
+
+    def request_clarification(self, question: str, context: str = "") -> None:
+        """Interrupt the pipeline to ask the user a clarification question.
+
+        Raises ClarificationNeeded which is caught by the executor to pause
+        the pipeline, surface the question to the frontend, and wait for the
+        user's answer before resuming.
+        """
+        raise ClarificationNeeded(
+            question=question,
+            context=context,
+            agent_name=self.name,
+        )
+
+    def get_model(self, context: Optional[Dict[str, Any]] = None) -> str:
+        """Get the optimal model for this agent via centralized routing.
+
+        Uses the cost_profile from context (set by PipelineConfig) and
+        the agent's pipeline ID to look up the best model from the
+        routing table in config/model_routing.py.
+
+        Falls back to the agent's own _select_model() if it exists,
+        or the default model if routing is unavailable.
+        """
+        from config.model_routing import get_model_for_agent
+
+        # Derive agent_id from class name: "IntakeAgent" → "intake"
+        agent_id = self.__class__.__name__.replace("Agent", "").lower()
+        # Allow context to override with explicit agent_id
+        if context and "agent_id" in context:
+            agent_id = context["agent_id"]
+
+        cost_profile = "balanced"
+        if context:
+            cost_profile = context.get("cost_profile", "balanced")
+
+        return get_model_for_agent(agent_id, cost_profile=cost_profile)
+
     async def run(self, context: Dict[str, Any]) -> AgentResult:
         """Run the agent with status tracking and timing."""
         import time
@@ -130,6 +220,17 @@ class BaseAgent(ABC):
                     errors=result.get("errors", []) if isinstance(result.get("errors"), list) else [],
                     warnings=result.get("warnings", []) if isinstance(result.get("warnings"), list) else [],
                 )
+            elif hasattr(result, 'status') and hasattr(result, 'error_message'):
+                # Handle AgentOutput from models.schemas
+                success = getattr(result, 'status', None) != AgentStatus.FAILED
+                errors = [result.error_message] if result.error_message else []
+                output_data = getattr(result, 'output_data', {}) or {}
+                agent_result = AgentResult(
+                    success=success,
+                    agent_name=self.name,
+                    data=output_data,
+                    errors=errors,
+                )
             else:
                 # Unexpected return type
                 agent_result = AgentResult(
@@ -140,6 +241,11 @@ class BaseAgent(ABC):
             
             self.status = AgentStatus.COMPLETED if agent_result.success else AgentStatus.FAILED
             agent_result.execution_time = time.time() - start_time
+
+            # Auto-generate reasoning if the agent didn't provide one
+            if agent_result.reasoning is None and agent_result.success:
+                agent_result.reasoning = self._infer_reasoning(agent_result, context)
+
             self.logger.info(
                 f"{self.name} agent completed in {agent_result.execution_time:.2f}s"
             )
@@ -163,6 +269,47 @@ class BaseAgent(ABC):
                 execution_time=time.time() - start_time,
             )
 
+    def _infer_reasoning(self, result: AgentResult, context: Dict[str, Any]) -> AgentReasoning:
+        """Infer reasoning from agent result data when not explicitly provided."""
+        agent_id = self.__class__.__name__.replace("Agent", "").lower()
+        cost_profile = context.get("cost_profile", "balanced")
+        model = self.get_model(context)
+
+        goal = f"Execute {self.name} stage of the pipeline"
+        approach = f"Used model {model} with {cost_profile} cost profile"
+        decisions = []
+        constraints = []
+
+        # Extract meaningful decisions from result data
+        data = result.data or {}
+        if "project_type" in data or "detected_project_type" in data:
+            pt = data.get("project_type") or data.get("detected_project_type")
+            decisions.append({"decision": f"Classified as {pt}", "reason": "Based on brief analysis"})
+        if "tech_stack" in data:
+            decisions.append({"decision": "Selected tech stack", "reason": "Matched project requirements"})
+        if "files" in data or "generated_files" in data:
+            fc = len(data.get("files") or data.get("generated_files") or [])
+            decisions.append({"decision": f"Generated {fc} files", "reason": "Based on architecture spec"})
+        if data.get("auto_fixes_applied"):
+            decisions.append({"decision": f"Applied {len(data['auto_fixes_applied'])} auto-fixes", "reason": "Resolved automatically fixable issues"})
+        if "score" in data or "quality_score" in data:
+            s = data.get("score") or data.get("quality_score")
+            decisions.append({"decision": f"Quality score: {s}", "reason": "Evaluated against quality criteria"})
+
+        if result.warnings:
+            constraints = [f"Warning: {w}" for w in result.warnings[:3]]
+
+        confidence = 0.85 if result.success and not result.warnings else 0.65
+
+        return AgentReasoning(
+            goal=goal,
+            approach=approach,
+            key_decisions=decisions,
+            alternatives_considered=[],
+            confidence=confidence,
+            constraints=constraints,
+        )
+
     async def call_llm(
         self,
         prompt: str,
@@ -171,13 +318,28 @@ class BaseAgent(ABC):
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> Dict[str, Any]:
-        """Call the LLM via OpenRouter API.
-        
+        """Call the LLM via OpenRouter API with automatic retry and circuit breaker.
+
+        Three layers of fault tolerance:
+        1. Exponential backoff retries for transient HTTP errors (429, 502, 503, 504)
+        2. Circuit breaker that fails-fast when a provider is consistently failing
+        3. Graceful error responses (never raises, always returns a dict)
+
         Returns dict with: content, prompt_tokens, completion_tokens, total_tokens, cost, duration_ms
         """
         import httpx
         import time
-        
+        from utils.retry import (
+            llm_circuit_breaker,
+            is_retryable_status,
+            _backoff_delay,
+            RETRYABLE_EXCEPTIONS,
+        )
+
+        MAX_RETRIES = 3
+        BASE_DELAY = 2.0
+        MAX_DELAY = 60.0
+
         api_key = self.settings.openrouter_api_key
         if not api_key:
             self.logger.warning("OpenRouter API key not configured, returning mock response")
@@ -189,71 +351,169 @@ class BaseAgent(ABC):
                 "cost": 0.0,
                 "duration_ms": 0,
             }
-        
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-        
-        start_time = time.time()
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://ai-dev-agency.local",
-                        "X-Title": "AI Dev Agency",
-                    },
-                    json={
-                        "model": model,
-                        "messages": messages,
-                        "max_tokens": max_tokens,
-                        "temperature": temperature,
-                    },
-                    timeout=120.0,
-                )
-                
-                duration_ms = int((time.time() - start_time) * 1000)
-                
-                if response.status_code != 200:
-                    self.logger.error(f"LLM API error: {response.status_code} - {response.text}")
-                    return {
-                        "content": f"Error: API returned {response.status_code}",
-                        "prompt_tokens": 0,
-                        "completion_tokens": 0,
-                        "total_tokens": 0,
-                        "cost": 0.0,
-                        "duration_ms": duration_ms,
-                        "error": response.text,
-                    }
-                
-                data = response.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                usage = data.get("usage", {})
-                
-                return {
-                    "content": content,
-                    "prompt_tokens": usage.get("prompt_tokens", 0),
-                    "completion_tokens": usage.get("completion_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
-                    "cost": self._calculate_cost(model, usage),
-                    "duration_ms": duration_ms,
-                }
-                
-        except Exception as e:
-            self.logger.error(f"LLM call failed: {e}")
+
+        provider = model.split("/")[0] if "/" in model else "unknown"
+
+        # Layer 3: Circuit breaker — fail fast if provider is down
+        if llm_circuit_breaker.is_open(provider):
+            self.logger.warning(f"Circuit breaker OPEN for {provider} — failing fast")
             return {
-                "content": f"Error: {str(e)}",
+                "content": f"Error: Service temporarily unavailable ({provider})",
                 "prompt_tokens": 0,
                 "completion_tokens": 0,
                 "total_tokens": 0,
                 "cost": 0.0,
-                "duration_ms": int((time.time() - start_time) * 1000),
-                "error": str(e),
+                "duration_ms": 0,
+                "error": f"circuit_breaker_open:{provider}",
             }
+
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        start_time = time.time()
+        last_error = None
+
+        # Layer 1: Exponential backoff retries for transient errors
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://ai-dev-agency.local",
+                            "X-Title": "AI Dev Agency",
+                        },
+                        json={
+                            "model": model,
+                            "messages": messages,
+                            "max_tokens": max_tokens,
+                            "temperature": temperature,
+                        },
+                        timeout=120.0,
+                    )
+
+                    duration_ms = int((time.time() - start_time) * 1000)
+
+                    if response.status_code != 200:
+                        from utils.error_classifier import classify_error, ResolutionStrategy
+
+                        error_text = response.text
+                        classified = classify_error(
+                            error_text,
+                            status_code=response.status_code,
+                            model=model,
+                        )
+                        last_error = f"API returned {response.status_code}"
+
+                        # Route based on classified error strategy
+                        if classified.should_retry and attempt < MAX_RETRIES:
+                            delay = classified.retry_delay or _backoff_delay(attempt, BASE_DELAY, MAX_DELAY)
+
+                            # For rate limits, respect Retry-After header
+                            retry_after = response.headers.get("retry-after")
+                            if retry_after and response.status_code == 429:
+                                try:
+                                    delay = max(delay, float(retry_after))
+                                except ValueError:
+                                    pass
+
+                            # Model fallback: swap to alternate model on next attempt
+                            if classified.strategy == ResolutionStrategy.FALLBACK_MODEL and classified.fallback_model:
+                                model = classified.fallback_model
+                                provider = model.split("/")[0]
+                                self.logger.warning(
+                                    f"Falling back to {model} after {classified.category.value} error"
+                                )
+                                # Update the request payload for next attempt
+                                messages  # messages already set, model var is updated
+
+                            self.logger.warning(
+                                f"LLM API {response.status_code} [{classified.category.value}], "
+                                f"retrying in {delay:.1f}s "
+                                f"(attempt {attempt + 1}/{MAX_RETRIES + 1}, model={model})"
+                            )
+                            llm_circuit_breaker.record_failure(provider)
+                            await asyncio.sleep(delay)
+                            continue
+
+                        # Non-retryable or retries exhausted
+                        self.logger.error(
+                            f"LLM API error [{classified.category.value}]: "
+                            f"{response.status_code} - {error_text[:200]}"
+                        )
+                        llm_circuit_breaker.record_failure(provider)
+                        return {
+                            "content": f"Error: {classified.user_message}",
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                            "cost": 0.0,
+                            "duration_ms": duration_ms,
+                            "error": error_text,
+                            "error_category": classified.category.value,
+                            "error_strategy": classified.strategy.value,
+                        }
+
+                    data = response.json()
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    usage = data.get("usage", {})
+
+                    # Success — record with circuit breaker and return
+                    llm_circuit_breaker.record_success(provider)
+
+                    if attempt > 0:
+                        self.logger.info(f"LLM call succeeded after {attempt + 1} attempts (model={model})")
+
+                    return {
+                        "content": content,
+                        "prompt_tokens": usage.get("prompt_tokens", 0),
+                        "completion_tokens": usage.get("completion_tokens", 0),
+                        "total_tokens": usage.get("total_tokens", 0),
+                        "cost": self._calculate_cost(model, usage),
+                        "duration_ms": duration_ms,
+                    }
+
+            except RETRYABLE_EXCEPTIONS as e:
+                last_error = str(e)
+                llm_circuit_breaker.record_failure(provider)
+                if attempt < MAX_RETRIES:
+                    delay = _backoff_delay(attempt, BASE_DELAY, MAX_DELAY)
+                    self.logger.warning(
+                        f"LLM call failed ({type(e).__name__}: {e}), retrying in {delay:.1f}s "
+                        f"(attempt {attempt + 1}/{MAX_RETRIES + 1}, model={model})"
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    self.logger.error(f"LLM call failed after {MAX_RETRIES + 1} attempts: {e}")
+
+            except Exception as e:
+                # Non-retryable exception — fail immediately
+                self.logger.error(f"LLM call failed (non-retryable): {e}")
+                llm_circuit_breaker.record_failure(provider)
+                return {
+                    "content": f"Error: {str(e)}",
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "cost": 0.0,
+                    "duration_ms": int((time.time() - start_time) * 1000),
+                    "error": str(e),
+                }
+
+        # All retries exhausted
+        return {
+            "content": f"Error: Exhausted {MAX_RETRIES + 1} retries. Last error: {last_error}",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": 0.0,
+            "duration_ms": int((time.time() - start_time) * 1000),
+            "error": f"retries_exhausted:{last_error}",
+        }
     
     def _calculate_cost(self, model: str, usage: Dict[str, int]) -> float:
         """Calculate cost based on model and token usage."""
@@ -485,3 +745,29 @@ class BaseAgent(ABC):
             sections.append(f"\n{entry.content}\n")
         
         return "\n".join(sections)
+
+    # ── Integration Key Helpers ───────────────────────────────────────────────
+
+    @staticmethod
+    def get_integration_key(env_key: str, required: bool = False) -> Optional[str]:
+        """Get an integration key, checking the UI store first then env vars.
+
+        Args:
+            env_key: The environment variable name (e.g. ``GITHUB_TOKEN``).
+            required: If ``True``, log a warning when the key is missing.
+
+        Returns:
+            The key value, or ``None`` if not configured.
+        """
+        try:
+            from api.routes.integrations import get_integration_value
+            value = get_integration_value(env_key)
+        except Exception:
+            value = os.environ.get(env_key) or None
+
+        if not value and required:
+            logging.getLogger("agents.base").warning(
+                f"Integration key {env_key} is not configured — "
+                "the agent will skip features that depend on it"
+            )
+        return value

@@ -32,7 +32,7 @@ class ActivityEvent(BaseModel):
     id: str
     project_id: str
     timestamp: datetime
-    event_type: str  # "agent_start", "agent_thinking", "agent_progress", "agent_complete", "agent_error", "log"
+    event_type: str  # "agent_start", "agent_thinking", "agent_progress", "agent_complete", "agent_error", "checkpoint_pause", "checkpoint_resume", "log"
     agent_name: Optional[str] = None
     agent_display_name: Optional[str] = None
     message: str

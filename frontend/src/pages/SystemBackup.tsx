@@ -3,19 +3,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/Card'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
-import { api, BackupInfo } from '@/lib/api'
-import { 
-  Download, 
-  Upload, 
-  HardDrive, 
-  Cloud, 
-  Database, 
+import { api, BackupInfo, Project } from '@/lib/api'
+import {
+  Download,
+  Upload,
+  HardDrive,
+  Cloud,
+  Database,
   RefreshCw,
   Check,
   AlertTriangle,
   Clock,
   Trash2,
-  FileArchive
+  FileArchive,
+  Package
 } from 'lucide-react'
 
 export default function SystemBackup() {
@@ -25,11 +26,34 @@ export default function SystemBackup() {
   const [includeProjects, setIncludeProjects] = useState(false)
   const [backupStatus, setBackupStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle')
   const [lastBackupResult, setLastBackupResult] = useState<any>(null)
+  const [exportingProjectId, setExportingProjectId] = useState<string | null>(null)
 
   const { data: backups, isLoading } = useQuery({
     queryKey: ['backups'],
     queryFn: api.listBackups,
   })
+
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects({ limit: 50 }),
+  })
+
+  const exportProjectFn = async (projectId: string, projectName?: string) => {
+    setExportingProjectId(projectId)
+    try {
+      const blob = await api.exportProject(projectId)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `project_${projectName || projectId.slice(0, 8)}_${new Date().toISOString().split('T')[0]}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Export failed: ' + (err as Error).message)
+    } finally {
+      setExportingProjectId(null)
+    }
+  }
 
   const backupMutation = useMutation({
     mutationFn: () => api.createBackup(destination, undefined, includeProjects),
@@ -250,6 +274,48 @@ export default function SystemBackup() {
           </div>
         </Card>
       </div>
+
+      {/* Individual Project Export */}
+      {projects && projects.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-blue-500/10">
+              <Package className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h3 className="font-medium text-text-primary">Export Individual Project</h3>
+              <p className="text-sm text-text-secondary">Download a project's full artifact package</p>
+            </div>
+          </div>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {projects.map((project: Project) => (
+              <div key={project.id} className="flex items-center justify-between p-3 bg-background-tertiary rounded-lg">
+                <div>
+                  <p className="font-medium text-text-primary text-sm">
+                    {project.name || project.brief?.slice(0, 50) || project.id.slice(0, 8)}
+                  </p>
+                  <p className="text-xs text-text-secondary">
+                    {project.status} &middot; {new Date(project.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => exportProjectFn(project.id, project.name)}
+                  disabled={exportingProjectId === project.id}
+                >
+                  {exportingProjectId === project.id ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span className="ml-1">Export</span>
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Backup History */}
       <Card>

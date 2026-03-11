@@ -3,17 +3,35 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/Card'
 import { Badge } from '@/components/Badge'
 import { PipelineVisualization } from '@/components/PipelineVisualization'
+import { PipelineDAG } from '@/components/PipelineDAG'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { ActivityFeed } from '@/components/ActivityFeed'
 import { api } from '@/lib/api'
-import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2 } from 'lucide-react'
+import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock, ArrowLeftRight, MessageCircle, Send, HelpCircle, GitBranch, Brain, Monitor, Share2 } from 'lucide-react'
 import { Button } from '@/components/Button'
-import { useState } from 'react'
+import { ArtifactViewer } from '@/components/ArtifactViewer'
+import { AgentOutputTimeline } from '@/components/AgentOutputTimeline'
+import { ProjectTimeline } from '@/components/ProjectTimeline'
+import { ProjectMemory } from '@/components/ProjectMemory'
+import { BrowserTestPanel } from '@/components/BrowserTestPanel'
+import { ShareLinkPanel } from '@/components/ShareLinkPanel'
+import { DesignImportPanel } from '@/components/DesignImportPanel'
+import { lazy, Suspense, useState, useCallback } from 'react'
+
+// Code-split Monaco diff editor — only loaded when user clicks "Compare Outputs"
+const AgentOutputDiffModal = lazy(() =>
+  import('@/components/MonacoDiffEditor').then((m) => ({ default: m.AgentOutputDiffModal }))
+)
 
 export default function ProjectView() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const [showCheckpointModal, setShowCheckpointModal] = useState(false)
+  const [editingOutput, setEditingOutput] = useState<string | null>(null)
+  const [showDiffModal, setShowDiffModal] = useState(false)
+  const [clarificationAnswer, setClarificationAnswer] = useState('')
+  const [answeringClarification, setAnsweringClarification] = useState(false)
+  const [editedOutputText, setEditedOutputText] = useState('')
 
   const { data: project, isLoading, refetch } = useQuery({
     queryKey: ['project', id],
@@ -26,6 +44,23 @@ export default function ProjectView() {
     queryKey: ['projectOutputs', id],
     queryFn: () => api.getProjectOutputs(id!),
     enabled: !!project,
+    refetchInterval: (query) => {
+      const status = query.state.data
+      // Poll every 4s while building so agent output cards fill in live
+      if (project?.status === 'completed' || project?.status === 'failed') return false
+      return 4000
+    },
+  })
+
+  // Per-agent cost & token tracking
+  const { data: agentLogs } = useQuery({
+    queryKey: ['agentLogs', id],
+    queryFn: () => api.getAgentLogs({ project_id: id! }),
+    enabled: !!project,
+    refetchInterval: (query) => {
+      if (project?.status === 'completed' || project?.status === 'failed') return false
+      return 5000
+    },
   })
 
   // Phase 11C: Checkpoint status
@@ -35,6 +70,29 @@ export default function ProjectView() {
     enabled: !!project && project.status !== 'completed' && project.status !== 'failed',
     refetchInterval: 5000,
   })
+
+  // Mid-pipeline clarification interrupt status
+  const { data: interruptStatus } = useQuery({
+    queryKey: ['interruptStatus', id],
+    queryFn: () => api.getInterruptStatus(id!),
+    enabled: !!project && project.status !== 'completed' && project.status !== 'failed',
+    refetchInterval: 3000,
+  })
+
+  const handleAnswerClarification = async () => {
+    if (!clarificationAnswer.trim() || !id) return
+    setAnsweringClarification(true)
+    try {
+      await api.answerInterrupt(id, clarificationAnswer)
+      setClarificationAnswer('')
+      queryClient.invalidateQueries({ queryKey: ['interruptStatus', id] })
+      refetch()
+    } catch (e) {
+      console.error('Failed to answer clarification:', e)
+    } finally {
+      setAnsweringClarification(false)
+    }
+  }
 
   // Checkpoint mutations
   const pauseMutation = useMutation({
@@ -59,6 +117,45 @@ export default function ProjectView() {
       queryClient.invalidateQueries({ queryKey: ['checkpointStatus', id] })
     },
   })
+
+  const resumeWithEditMutation = useMutation({
+    mutationFn: (editedOutput: Record<string, any>) => api.resumeProject(id!, editedOutput),
+    onSuccess: () => {
+      setEditingOutput(null)
+      setEditedOutputText('')
+      refetch()
+      queryClient.invalidateQueries({ queryKey: ['checkpointStatus', id] })
+    },
+  })
+
+  const restartFromMutation = useMutation({
+    mutationFn: (agentName: string) => api.restartFromAgent(id!, agentName),
+    onSuccess: () => {
+      refetch()
+      queryClient.invalidateQueries({ queryKey: ['checkpointStatus', id] })
+    },
+  })
+
+  const handleApproveCheckpoint = useCallback(() => {
+    resumeMutation.mutate()
+  }, [resumeMutation])
+
+  const handleApproveWithEdits = useCallback(() => {
+    try {
+      const parsed = JSON.parse(editedOutputText)
+      resumeWithEditMutation.mutate(parsed)
+    } catch {
+      // If not valid JSON, wrap as a simple edit
+      resumeWithEditMutation.mutate({ edited_content: editedOutputText })
+    }
+  }, [editedOutputText, resumeWithEditMutation])
+
+  const handleRejectCheckpoint = useCallback(() => {
+    const pausedAgent = checkpointStatus?.paused_at_agent
+    if (pausedAgent) {
+      restartFromMutation.mutate(pausedAgent)
+    }
+  }, [checkpointStatus, restartFromMutation])
 
   if (isLoading) {
     return (
@@ -124,11 +221,23 @@ export default function ProjectView() {
         </div>
       </div>
 
-      {/* Pipeline Visualization */}
-      <Card>
-        <h3 className="font-medium text-text-primary mb-4">Pipeline Progress</h3>
-        <PipelineVisualization agents={agents} />
+      {/* Real-Time Pipeline DAG */}
+      <Card className="!p-0 overflow-hidden">
+        <PipelineDAG
+          projectId={id!}
+          projectStatus={project.status}
+        />
       </Card>
+
+      {/* Fallback compact view (mobile / accessibility) */}
+      <details className="group">
+        <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary px-1 py-2">
+          Show compact pipeline list
+        </summary>
+        <Card>
+          <PipelineVisualization agents={agents} />
+        </Card>
+      </details>
 
       {/* Real-time Activity Feed */}
       {project.status !== 'completed' && project.status !== 'failed' && (
@@ -144,7 +253,7 @@ export default function ProjectView() {
         </Card>
       )}
 
-      {/* Phase 11C: Checkpoint Controls */}
+      {/* Phase 11C: Build Controls & HITL Approval Gates */}
       {project.status !== 'completed' && project.status !== 'failed' && (
         <Card>
           <div className="flex items-center justify-between mb-4">
@@ -153,76 +262,329 @@ export default function ProjectView() {
               <h3 className="font-medium text-text-primary">Build Controls</h3>
             </div>
             {checkpointStatus && (
-              <Badge variant={checkpointStatus.state === 'paused' ? 'warning' : 'info'}>
+              <Badge variant={checkpointStatus.state === 'paused' ? 'warning' : checkpointStatus.state === 'running' ? 'info' : 'default'}>
                 {checkpointStatus.state}
               </Badge>
             )}
           </div>
 
           <div className="flex flex-wrap gap-3 mb-4">
-            {/* Pause/Resume Button */}
-            {project.status === 'paused' || checkpointStatus?.state === 'paused' ? (
-              <Button
-                onClick={() => resumeMutation.mutate()}
-                disabled={resumeMutation.isPending}
-                variant="primary"
-                size="sm"
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Resume Build
-              </Button>
-            ) : (
-              <Button
-                onClick={() => pauseMutation.mutate()}
-                disabled={pauseMutation.isPending}
-                variant="secondary"
-                size="sm"
-              >
-                <Pause className="w-4 h-4 mr-2" />
-                Pause Build
-              </Button>
+            {/* Pause/Resume Button — only show when NOT at a HITL checkpoint */}
+            {!(checkpointStatus?.state === 'paused' && checkpointStatus?.current_checkpoint) && (
+              project.status === 'paused' ? (
+                <Button
+                  onClick={() => resumeMutation.mutate()}
+                  disabled={resumeMutation.isPending}
+                  variant="primary"
+                  size="sm"
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Resume Build
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => pauseMutation.mutate()}
+                  disabled={pauseMutation.isPending}
+                  variant="secondary"
+                  size="sm"
+                >
+                  <Pause className="w-4 h-4 mr-2" />
+                  Pause Build
+                </Button>
+              )
             )}
 
-            {/* Mode Selector */}
+            {/* Autonomy Tier Selector (#26) */}
             <div className="flex items-center gap-2">
-              <span className="text-sm text-text-secondary">Mode:</span>
+              <span className="text-sm text-text-secondary">Autonomy:</span>
               <select
-                value={checkpointStatus?.mode || 'auto'}
-                onChange={(e) => setModeMutation.mutate(e.target.value)}
+                value={
+                  (checkpointStatus as any)?.custom_checkpoints?.length > 5
+                    ? 'supervised-tier'
+                    : (checkpointStatus as any)?.custom_checkpoints?.length > 0
+                    ? 'guided-tier'
+                    : checkpointStatus?.mode || 'auto'
+                }
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === 'supervised-tier') {
+                    setModeMutation.mutate('manual')
+                  } else if (val === 'guided-tier') {
+                    setModeMutation.mutate('manual')
+                  } else {
+                    setModeMutation.mutate(val)
+                  }
+                }}
                 className="bg-background-tertiary border border-border-subtle rounded px-2 py-1 text-sm text-text-primary"
               >
-                <option value="auto">Auto (no checkpoints)</option>
-                <option value="supervised">Supervised (pause at key points)</option>
+                <option value="auto">Autonomous (no checkpoints)</option>
+                <option value="guided-tier">Guided (5 critical checkpoints)</option>
+                <option value="supervised-tier">Supervised (every agent)</option>
                 <option value="manual">Manual (custom checkpoints)</option>
               </select>
             </div>
           </div>
 
-          {/* Current Checkpoint Info */}
-          {checkpointStatus?.current_checkpoint && (
-            <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm font-medium text-yellow-400">Paused at Checkpoint</span>
+          {/* ── Mid-Pipeline Clarification Interrupt ───────────────── */}
+          {interruptStatus?.has_question && (
+            <div className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/30">
+              <div className="flex items-center gap-2 mb-3">
+                <HelpCircle className="w-5 h-5 text-purple-400" />
+                <span className="font-semibold text-purple-400">
+                  Clarification Needed — {interruptStatus.agent_name?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </span>
               </div>
-              <p className="text-sm text-text-primary">
-                Agent: <strong>{checkpointStatus.paused_at_agent}</strong>
+
+              <p className="text-sm text-text-primary mb-2 font-medium">
+                {interruptStatus.question}
               </p>
-              <p className="text-xs text-text-secondary mt-1">
+
+              {interruptStatus.context && (
+                <p className="text-xs text-text-tertiary mb-3 italic">
+                  Context: {interruptStatus.context}
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={clarificationAnswer}
+                  onChange={(e) => setClarificationAnswer(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAnswerClarification() }}
+                  placeholder="Type your answer..."
+                  className="flex-1 px-3 py-2 bg-background-secondary border border-border-subtle rounded-lg text-sm text-text-primary"
+                />
+                <Button
+                  onClick={handleAnswerClarification}
+                  disabled={!clarificationAnswer.trim() || answeringClarification}
+                  variant="primary"
+                  size="sm"
+                >
+                  <Send className="w-4 h-4 mr-1" />
+                  Answer
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ── HITL Approval Gate ────────────────────────────────── */}
+          {checkpointStatus?.state === 'paused' && checkpointStatus?.current_checkpoint && (
+            <div className="p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                <span className="font-semibold text-yellow-400">
+                  Approval Required — {checkpointStatus.paused_at_agent?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </span>
+              </div>
+
+              <p className="text-sm text-text-secondary mb-3">
+                The pipeline has paused after <strong className="text-text-primary">{checkpointStatus.paused_at_agent}</strong>.
+                Review the output below and choose to approve, edit, or reject.
+              </p>
+
+              <p className="text-xs text-text-tertiary mb-4">
                 Paused at: {checkpointStatus.paused_at ? new Date(checkpointStatus.paused_at).toLocaleString() : 'N/A'}
+                {' — '}Auto-continues in 5 minutes if not acted upon.
               </p>
-              <p className="text-xs text-text-tertiary mt-2">
-                Will auto-continue in 5 minutes if not resumed
-              </p>
+
+              {/* Agent Output Preview */}
+              {checkpointStatus.current_checkpoint?.output_data && (
+                <details className="group mb-4" open>
+                  <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary mb-2">
+                    Agent Output
+                  </summary>
+                  <pre className="p-3 bg-background-secondary rounded-lg text-xs text-text-secondary overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap border border-border-subtle">
+                    {JSON.stringify(checkpointStatus.current_checkpoint.output_data, null, 2)}
+                  </pre>
+                </details>
+              )}
+
+              {/* Edit Mode */}
+              {editingOutput === checkpointStatus.paused_at_agent && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Edit Output (JSON)
+                  </label>
+                  <textarea
+                    value={editedOutputText}
+                    onChange={(e) => setEditedOutputText(e.target.value)}
+                    className="w-full h-40 p-3 bg-background-secondary border border-border-subtle rounded-lg text-xs text-text-primary font-mono resize-y"
+                    placeholder="Edit the agent output JSON..."
+                  />
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={handleApproveCheckpoint}
+                  disabled={resumeMutation.isPending}
+                  variant="primary"
+                  size="sm"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Approve & Continue
+                </Button>
+
+                {editingOutput === checkpointStatus.paused_at_agent ? (
+                  <>
+                    <Button
+                      onClick={handleApproveWithEdits}
+                      disabled={resumeWithEditMutation.isPending}
+                      variant="primary"
+                      size="sm"
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Apply Edits & Continue
+                    </Button>
+                    <Button
+                      onClick={() => { setEditingOutput(null); setEditedOutputText('') }}
+                      variant="ghost"
+                      size="sm"
+                    >
+                      Cancel Edit
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setEditingOutput(checkpointStatus.paused_at_agent || null)
+                      setEditedOutputText(
+                        JSON.stringify(checkpointStatus.current_checkpoint?.output_data || {}, null, 2)
+                      )
+                    }}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    <Code2 className="w-4 h-4 mr-2" />
+                    Edit Output
+                  </Button>
+                )}
+
+                <Button
+                  onClick={handleRejectCheckpoint}
+                  disabled={restartFromMutation.isPending}
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-400 hover:text-red-300"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Reject & Re-run
+                </Button>
+              </div>
             </div>
           )}
 
           {/* Available Checkpoints Info */}
-          {checkpointStatus?.mode === 'supervised' && (
+          {checkpointStatus?.mode !== 'auto' && checkpointStatus?.state !== 'paused' && (
             <div className="mt-3 text-xs text-text-secondary">
-              <span className="font-medium">Default checkpoints:</span> {checkpointStatus.available_checkpoints?.join(', ')}
+              <span className="font-medium">Checkpoint agents:</span>{' '}
+              {(checkpointStatus?.custom_checkpoints?.length
+                ? checkpointStatus.custom_checkpoints
+                : checkpointStatus?.available_checkpoints
+              )?.join(', ')}
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Per-Agent Cost & Token Tracking */}
+      {agentLogs && agentLogs.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <DollarSign className="w-5 h-5 text-accent-primary" />
+            <h3 className="font-medium text-text-primary">Cost & Token Tracking</h3>
+          </div>
+
+          {/* Summary Stats */}
+          {(() => {
+            const totalCost = agentLogs.reduce((sum: number, l: any) => sum + (l.cost || 0), 0)
+            const totalTokens = agentLogs.reduce((sum: number, l: any) => sum + (l.total_tokens || 0), 0)
+            const totalPrompt = agentLogs.reduce((sum: number, l: any) => sum + (l.prompt_tokens || 0), 0)
+            const totalCompletion = agentLogs.reduce((sum: number, l: any) => sum + (l.completion_tokens || 0), 0)
+            const totalDuration = agentLogs.reduce((sum: number, l: any) => sum + (l.duration_ms || 0), 0)
+
+            return (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                  <div className="bg-accent-primary/10 rounded-lg p-3 text-center">
+                    <div className="text-xl font-bold text-accent-primary">${totalCost.toFixed(4)}</div>
+                    <div className="text-xs text-text-secondary">Total Cost</div>
+                  </div>
+                  <div className="bg-background-tertiary rounded-lg p-3 text-center">
+                    <div className="text-xl font-bold text-text-primary">{totalTokens.toLocaleString()}</div>
+                    <div className="text-xs text-text-secondary">Total Tokens</div>
+                  </div>
+                  <div className="bg-background-tertiary rounded-lg p-3 text-center">
+                    <div className="text-lg font-bold text-text-primary">
+                      {totalPrompt.toLocaleString()} / {totalCompletion.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-text-secondary">Prompt / Completion</div>
+                  </div>
+                  <div className="bg-background-tertiary rounded-lg p-3 text-center">
+                    <div className="text-xl font-bold text-text-primary">
+                      {totalDuration < 60000
+                        ? `${(totalDuration / 1000).toFixed(1)}s`
+                        : `${Math.floor(totalDuration / 60000)}m ${Math.round((totalDuration % 60000) / 1000)}s`
+                      }
+                    </div>
+                    <div className="text-xs text-text-secondary">Total Duration</div>
+                  </div>
+                </div>
+
+                {/* Per-Agent Breakdown */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-text-secondary mb-2">Per-Agent Breakdown</h4>
+                  {(() => {
+                    const agentMap: Record<string, { cost: number; tokens: number; prompt: number; completion: number; duration: number; model: string; status: string }> = {}
+                    for (const log of agentLogs) {
+                      if (!agentMap[log.agent_name]) {
+                        agentMap[log.agent_name] = { cost: 0, tokens: 0, prompt: 0, completion: 0, duration: 0, model: log.model_used || 'unknown', status: log.status || 'completed' }
+                      }
+                      agentMap[log.agent_name].cost += log.cost || 0
+                      agentMap[log.agent_name].tokens += log.total_tokens || 0
+                      agentMap[log.agent_name].prompt += log.prompt_tokens || 0
+                      agentMap[log.agent_name].completion += log.completion_tokens || 0
+                      agentMap[log.agent_name].duration += log.duration_ms || 0
+                      if (log.model_used) agentMap[log.agent_name].model = log.model_used
+                      if (log.status) agentMap[log.agent_name].status = log.status
+                    }
+                    const sorted = Object.entries(agentMap).sort((a, b) => b[1].cost - a[1].cost)
+                    const maxCost = sorted.length > 0 ? sorted[0][1].cost : 1
+
+                    return sorted.map(([name, data]) => (
+                      <div key={name} className="flex items-center gap-3 p-2 bg-background-tertiary rounded-lg">
+                        <div className="w-24 flex-shrink-0">
+                          <span className="text-sm font-medium text-text-primary truncate block">
+                            {name.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                          </span>
+                        </div>
+                        {/* Cost bar */}
+                        <div className="flex-1 min-w-0">
+                          <div className="h-2 rounded-full bg-background-secondary overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                data.status === 'failed' ? 'bg-accent-error' : 'bg-accent-primary'
+                              }`}
+                              style={{ width: `${maxCost > 0 ? Math.max(2, (data.cost / maxCost) * 100) : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-text-secondary flex-shrink-0">
+                          <span className="font-mono">${data.cost.toFixed(4)}</span>
+                          <span>{data.tokens.toLocaleString()} tok</span>
+                          <span className="text-text-tertiary hidden md:inline">{data.model.split('/').pop()}</span>
+                          <span className="text-text-tertiary">
+                            {data.duration < 1000 ? `${data.duration}ms` : `${(data.duration / 1000).toFixed(1)}s`}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              </>
+            )
+          })()}
         </Card>
       )}
 
@@ -266,8 +628,21 @@ export default function ProjectView() {
         </div>
       )}
 
+      {/* Artifact Viewer - only show for completed projects */}
+      {project.status === 'completed' && (
+        <ArtifactViewer
+          projectId={id!}
+          projectType={project.project_type}
+          liveUrl={project.live_url}
+          githubRepo={project.github_repo}
+          outputs={outputs?.agent_outputs}
+        />
+      )}
+
+      {/* Inline report cards - only show during build (not when completed, since ArtifactViewer handles it) */}
+
       {/* PM Checkpoint 1 - Build Manifest */}
-      {pmCheckpoint1 && pmCheckpoint1.build_manifest && (
+      {project.status !== 'completed' && pmCheckpoint1 && pmCheckpoint1.build_manifest && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <ClipboardCheck className="w-5 h-5 text-accent-primary" />
@@ -330,7 +705,7 @@ export default function ProjectView() {
       )}
 
       {/* Code Review Report */}
-      {codeReviewReport && (
+      {project.status !== 'completed' && codeReviewReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Code2 className="w-5 h-5 text-accent-primary" />
@@ -398,7 +773,7 @@ export default function ProjectView() {
       )}
 
       {/* QA Test Results */}
-      {qaReport && (
+      {project.status !== 'completed' && qaReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <TestTube className="w-5 h-5 text-accent-primary" />
@@ -501,7 +876,7 @@ export default function ProjectView() {
       )}
 
       {/* Deployment Status */}
-      {deploymentReport && (
+      {project.status !== 'completed' && deploymentReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Rocket className="w-5 h-5 text-accent-primary" />
@@ -579,7 +954,7 @@ export default function ProjectView() {
       )}
 
       {/* Post-Deploy Verification */}
-      {deployVerificationReport && (
+      {project.status !== 'completed' && deployVerificationReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-accent-primary" />
@@ -685,7 +1060,7 @@ export default function ProjectView() {
       )}
 
       {/* Monitoring Status - Phase 6 */}
-      {monitoringReport && (
+      {project.status !== 'completed' && monitoringReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-5 h-5 text-accent-primary" />
@@ -764,7 +1139,7 @@ export default function ProjectView() {
       )}
 
       {/* Documentation Status - Phase 6 */}
-      {codingStandardsReport && (
+      {project.status !== 'completed' && codingStandardsReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <FileText className="w-5 h-5 text-accent-primary" />
@@ -827,25 +1202,86 @@ export default function ProjectView() {
         </p>
       </Card>
 
-      {/* Agent Outputs */}
-      {outputs?.agent_outputs && Object.keys(outputs.agent_outputs).length > 0 && (
-        <Card>
-          <h3 className="font-medium text-text-primary mb-4">Agent Outputs</h3>
-          <div className="space-y-4">
-            {Object.entries(outputs.agent_outputs)
-              .filter(([agent]) => !['qa', 'deployment', 'analytics_monitoring', 'coding_standards'].includes(agent))
-              .map(([agent, output]) => (
-              <details key={agent} className="group">
-                <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
-                  {agent.charAt(0).toUpperCase() + agent.slice(1).replace('_', ' ')}
-                </summary>
-                <pre className="mt-2 p-3 bg-background-tertiary rounded-lg text-xs text-text-secondary overflow-x-auto">
-                  {JSON.stringify(output, null, 2)}
-                </pre>
-              </details>
-            ))}
-          </div>
-        </Card>
+      {/* Agent Output Timeline — live per-agent artifact view */}
+      <Card>
+        <div className="flex items-center justify-between mb-2">
+          <div />
+          {Object.keys(outputs?.agent_outputs || {}).length >= 2 && (
+            <button
+              onClick={() => setShowDiffModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary bg-background-tertiary hover:bg-white/10 rounded-md transition-colors"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" />
+              Compare Outputs
+            </button>
+          )}
+        </div>
+        <AgentOutputTimeline
+          projectStatus={project.status}
+          agentOutputs={outputs?.agent_outputs || {}}
+        />
+      </Card>
+
+      {/* Project History Timeline — checkpoint branching & audit log (#6) */}
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <GitBranch className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Pipeline History & Branching
+          </h3>
+        </div>
+        <ProjectTimeline projectId={id!} projectStatus={project.status} />
+      </Card>
+
+      {/* Persistent Project Memory (#12) */}
+      <Card>
+        <ProjectMemory projectId={id!} />
+      </Card>
+
+      {/* Automated Browser Testing (#11) */}
+      <Card>
+        <BrowserTestPanel projectId={id!} liveUrl={project.live_url} />
+      </Card>
+
+      {/* Shareable Preview Links (#22) */}
+      <Card>
+        <ShareLinkPanel projectId={id!} />
+      </Card>
+
+      {/* Figma & Screenshot Import (#23) */}
+      <Card>
+        <DesignImportPanel projectId={id!} />
+      </Card>
+
+      {/* Monaco Diff Editor Modal — code-split, only loaded on demand */}
+      {showDiffModal && (
+        <Suspense fallback={null}>
+          <AgentOutputDiffModal
+            agentOutputs={outputs?.agent_outputs || {}}
+            agents={[
+              { id: 'intake', label: 'Intake' },
+              { id: 'research', label: 'Research' },
+              { id: 'architect', label: 'Architect' },
+              { id: 'design_system', label: 'Design System' },
+              { id: 'asset_generation', label: 'Assets' },
+              { id: 'content_generation', label: 'Content' },
+              { id: 'pm_checkpoint_1', label: 'PM Check 1' },
+              { id: 'code_generation', label: 'Code Gen' },
+              { id: 'pm_checkpoint_2', label: 'PM Check 2' },
+              { id: 'code_review', label: 'Code Review' },
+              { id: 'security', label: 'Security' },
+              { id: 'seo', label: 'SEO' },
+              { id: 'accessibility', label: 'Accessibility' },
+              { id: 'qa', label: 'QA Testing' },
+              { id: 'deployment', label: 'Deploy' },
+              { id: 'post_deploy_verification', label: 'Verify' },
+              { id: 'analytics_monitoring', label: 'Analytics' },
+              { id: 'coding_standards', label: 'Standards' },
+              { id: 'delivery', label: 'Delivery' },
+            ]}
+            onClose={() => setShowDiffModal(false)}
+          />
+        </Suspense>
       )}
     </div>
   )

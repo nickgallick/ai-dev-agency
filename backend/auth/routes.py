@@ -398,10 +398,15 @@ async def get_me(user: User = Depends(require_auth)):
     )
 
 
+class ChangePasswordRequest(BaseModel):
+    """Change password request."""
+    current_password: str
+    new_password: str
+
+
 @router.post("/change-password")
 async def change_password(
-    current_password: str,
-    new_password: str,
+    request: ChangePasswordRequest,
     user: User = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
@@ -410,21 +415,21 @@ async def change_password(
     Requires current password verification.
     """
     # Verify current password
-    if not verify_password(current_password, user.password_hash):
+    if not verify_password(request.current_password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
         )
-    
+
     # Validate new password
-    if len(new_password) < 8:
+    if len(request.new_password) < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="New password must be at least 8 characters",
         )
-    
+
     # Update password
-    user.password_hash = hash_password(new_password)
+    user.password_hash = hash_password(request.new_password)
     user.updated_at = datetime.utcnow()
     db.commit()
     

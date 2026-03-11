@@ -41,6 +41,15 @@ export default function Queue() {
     },
   })
 
+  const moveMutation = useMutation({
+    mutationFn: ({ projectId, direction }: { projectId: string; direction: 'up' | 'down' }) =>
+      api.moveProjectInQueue(projectId, direction),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queueStatus'] })
+      queryClient.invalidateQueries({ queryKey: ['queueStats'] })
+    },
+  })
+
   const removeMutation = useMutation({
     mutationFn: (projectId: string) => api.removeFromQueue(projectId),
     onSuccess: () => {
@@ -255,7 +264,33 @@ export default function Queue() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      {/* Position move buttons */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => moveMutation.mutate({
+                          projectId: item.project_id,
+                          direction: 'up'
+                        })}
+                        disabled={item.position <= 1}
+                        title="Move Up"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => moveMutation.mutate({
+                          projectId: item.project_id,
+                          direction: 'down'
+                        })}
+                        disabled={item.position >= (queueStatus?.queue_length || 0)}
+                        title="Move Down"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </Button>
+                      {/* Priority shortcuts */}
                       {item.priority !== 'urgent' && (
                         <Button
                           variant="ghost"
@@ -264,22 +299,10 @@ export default function Queue() {
                             projectId: item.project_id,
                             priority: 'urgent'
                           })}
-                          title="Move to Urgent"
+                          title="Set Urgent Priority"
+                          className="text-red-400 hover:text-red-300"
                         >
-                          <ArrowUp className="w-4 h-4" />
-                        </Button>
-                      )}
-                      {item.priority !== 'background' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => reprioritizeMutation.mutate({
-                            projectId: item.project_id,
-                            priority: 'background'
-                          })}
-                          title="Move to Background"
-                        >
-                          <ArrowDown className="w-4 h-4" />
+                          <Zap className="w-4 h-4" />
                         </Button>
                       )}
                       <Button

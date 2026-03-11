@@ -193,7 +193,7 @@ class AssetGenerationAgent(BaseAgent):
                 status=AgentStatus.FAILED,
                 started_at=started_at,
                 completed_at=datetime.utcnow(),
-                error=str(e)
+                error_message=str(e)
             )
     
     async def _generate_favicons(
@@ -613,26 +613,26 @@ Return a complete, valid SVG element."""
     ) -> str:
         """Return fallback SVG templates."""
         templates = {
-            "logo": f'''<svg viewBox="0 0 100 100" xmlns="https://upload.wikimedia.org/wikipedia/commons/thumb/6/61/Urantia_three-concentric-blue-circles-on-white_symbol.svg/960px-Urantia_three-concentric-blue-circles-on-white_symbol.svg.png">
+            "logo": f'''<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <circle cx="50" cy="50" r="40" fill="{primary}"/>
   <circle cx="50" cy="50" r="25" fill="{secondary}" opacity="0.8"/>
   <circle cx="50" cy="50" r="10" fill="white"/>
 </svg>''',
-            "icon-feature-1": f'''<svg viewBox="0 0 100 100" xmlns="https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Circle-icons-check.svg/960px-Circle-icons-check.svg.png">
+            "icon-feature-1": f'''<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <rect x="20" y="20" width="60" height="60" rx="10" fill="{primary}"/>
   <path d="M35 50 L45 60 L65 40" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
 </svg>''',
-            "icon-feature-2": f'''<svg viewBox="0 0 100 100" xmlns="https://www.shareicon.net/data/2016/05/07/761206_triangle_512x512.png">
+            "icon-feature-2": f'''<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <polygon points="50,15 85,85 15,85" fill="{secondary}"/>
   <circle cx="50" cy="55" r="15" fill="white"/>
 </svg>''',
-            "icon-feature-3": f'''<svg viewBox="0 0 100 100" xmlns="https://static.vecteezy.com/system/resources/thumbnails/021/574/060/small/geometric-icon-of-triangle-and-circle-blue-triangle-and-circle-with-outline-illustration-of-geometric-for-graphic-resource-simple-shape-of-geometry-for-design-element-decoration-sign-or-symbol-free-vector.jpg">
+            "icon-feature-3": f'''<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <rect x="15" y="30" width="70" height="40" rx="5" fill="{accent}"/>
   <circle cx="35" cy="50" r="10" fill="white"/>
   <rect x="50" y="42" width="25" height="4" fill="white"/>
   <rect x="50" y="52" width="18" height="4" fill="white"/>
 </svg>''',
-            "decoration-1": f'''<svg viewBox="0 0 100 100" xmlns="https://images.unsplash.com/vector-1748935415614-8e0b0d590d67?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDMyfHx8ZW58MHx8fHx8&fm=jpg&q=60&w=3000">
+            "decoration-1": f'''<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <circle cx="25" cy="25" r="20" fill="{primary}" opacity="0.3"/>
   <circle cx="75" cy="75" r="25" fill="{secondary}" opacity="0.3"/>
   <circle cx="70" cy="30" r="15" fill="{accent}" opacity="0.3"/>
