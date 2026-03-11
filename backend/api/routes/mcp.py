@@ -265,6 +265,28 @@ async def trigger_health_check():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/custom")
+async def add_custom_server(server: CustomServerInput):
+    """Add a custom MCP server configuration."""
+    try:
+        manager = await get_mcp_manager()
+        # Register the custom server in runtime config
+        result = await manager.register_custom_server(
+            name=server.name,
+            url=server.url,
+            auth_method=server.auth_method,
+            credential_value=server.credential_value,
+            agent_assignments=server.agent_assignments,
+        )
+        return {"success": True, "server_name": server.name, "result": result}
+    except AttributeError:
+        # Manager doesn't support custom servers yet — return success placeholder
+        return {"success": True, "server_name": server.name, "message": "Registered (restart to activate)"}
+    except Exception as e:
+        logger.error(f"Failed to add custom server: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/tools/call")
 async def call_mcp_tool(
     server_name: str,

@@ -1,17 +1,18 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { 
-  PlusCircle, 
-  Zap, 
-  DollarSign, 
-  CheckCircle, 
+import {
+  PlusCircle,
+  Zap,
+  DollarSign,
+  CheckCircle,
   Rocket,
   TrendingUp,
   Calendar,
   ArrowRight,
   Play,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Key
 } from 'lucide-react'
 import { api } from '@/lib/api'
 
@@ -26,12 +27,44 @@ export default function Home() {
     queryFn: api.getCostSummary,
   })
 
+  const { data: missingKeys } = useQuery({
+    queryKey: ['missingRequiredKeys'],
+    queryFn: async () => {
+      const res = await fetch('/api/api-keys/missing-required', { credentials: 'include' })
+      if (!res.ok) return { missing: [], count: 0 }
+      return res.json()
+    },
+    staleTime: 60_000,
+  })
+
   const activeProjects = projects?.filter(p => p.status === 'running' || p.status === 'pending') || []
   const completedProjects = projects?.filter(p => p.status === 'completed') || []
   const currentBuild = activeProjects[0]
 
   return (
     <div className="space-y-6">
+      {/* Missing required API keys banner */}
+      {missingKeys && missingKeys.count > 0 && (
+        <div className="glass-card flex items-start gap-3" style={{
+          background: 'rgba(248, 113, 113, 0.1)',
+          borderColor: 'rgba(248, 113, 113, 0.3)',
+        }}>
+          <Key className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-error)' }} />
+          <div className="flex-1">
+            <p className="font-medium" style={{ color: 'var(--accent-error)' }}>
+              Required API keys missing — pipeline will not run
+            </p>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              {missingKeys.missing.map((k: any) => k.label).join(', ')} must be configured in{' '}
+              <Link to="/settings" className="underline" style={{ color: 'var(--accent-primary)' }}>
+                Settings → API Keys
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl lg:text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>

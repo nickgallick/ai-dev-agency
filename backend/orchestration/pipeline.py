@@ -53,6 +53,7 @@ from agents.delivery import DeliveryAgent
 from config.settings import Settings
 from utils.cost_optimizer import get_cost_optimizer, CostProfile
 from utils.agent_analytics import log_agent_performance, get_agent_analytics
+from models.agent_log import AgentLog
 
 
 class NodeStatus(Enum):
@@ -567,7 +568,17 @@ class Pipeline:
                 error_occurred=error_occurred,
                 error_message=error_message,
             )
-            
+
+            # Write to agent_logs table so every agent has a visible log row
+            self._write_agent_log(
+                node=node,
+                execution_time_ms=execution_time_ms,
+                model_used=model_used,
+                tokens_used=tokens_used,
+                cost=cost,
+                error_message=error_message,
+            )
+
             # Phase 11B: Capture knowledge from completed agent
             if node.status == NodeStatus.COMPLETED and node.result and node.result.success:
                 await self._capture_agent_knowledge(node)
@@ -683,6 +694,59 @@ class Pipeline:
         except Exception as e:
             # Don't fail the pipeline if analytics logging fails
             self.logger.warning(f"Failed to log agent performance: {e}")
+
+    def _write_agent_log(
+        self,
+        node: PipelineNode,
+        execution_time_ms: int,
+        model_used: str,
+        tokens_used: Dict[str, int],
+        cost: float,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """Write a row to agent_logs for every agent that runs."""
+        if not self.db:
+            return
+
+        project_id = self.context.get("project_id")
+        if not project_id:
+            return
+
+        try:
+            import uuid as uuid_module
+            status = "failed" if node.status == NodeStatus.FAILED else (
+                "timeout" if error_message == "Execution timed out" else "completed"
+            )
+            output_data = {}
+            if node.result and hasattr(node.result, "data") and isinstance(node.result.data, dict):
+                # Store a summary (not full data to keep rows manageable)
+                output_data = {
+                    k: v for k, v in (node.result.data or {}).items()
+                    if k in ("success", "model_used", "cost", "summary", "error")
+                }
+
+            log_entry = AgentLog(
+                id=uuid_module.uuid4(),
+                project_id=project_id if isinstance(project_id, UUID) else UUID(str(project_id)),
+                agent_name=node.id,
+                model_used=model_used,
+                prompt_tokens=tokens_used.get("input_tokens", tokens_used.get("prompt_tokens", 0)),
+                completion_tokens=tokens_used.get("output_tokens", tokens_used.get("completion_tokens", 0)),
+                total_tokens=tokens_used.get("total_tokens", 0),
+                cost=cost,
+                duration_ms=execution_time_ms,
+                status=status,
+                error_message=error_message,
+                output_data=output_data,
+            )
+            self.db.add(log_entry)
+            self.db.commit()
+        except Exception as e:
+            self.logger.warning(f"Failed to write agent_log for {node.id}: {e}")
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
 
     async def execute_parallel_group(
         self, nodes: List[PipelineNode]

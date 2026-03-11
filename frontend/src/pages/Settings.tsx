@@ -3,11 +3,22 @@ import { MCPServerCard } from '../components/MCPServerCard';
 import { CredentialModal } from '../components/CredentialModal';
 import { AddCustomServerModal } from '../components/AddCustomServerModal';
 import { useTheme, ThemeMode } from '../contexts/ThemeContext';
-import { 
+import {
   RefreshCw, Plus, Server, CheckCircle, AlertTriangle, XCircle, HelpCircle,
   Figma, Globe, Mail, HardDrive, Zap, Settings2, ExternalLink,
-  Monitor, Sun, Moon, Palette
+  Monitor, Sun, Moon, Palette, Key, Eye, EyeOff, Save, Wifi
 } from 'lucide-react';
+
+// ── Platform API Key types ────────────────────────────────────────────────
+interface ApiKeyStatus {
+  key_id: string;
+  label: string;
+  description: string;
+  required: boolean;
+  configured: boolean;
+  masked_value: string | null;
+  source: 'ui' | 'env' | 'none';
+}
 
 interface MCPServerStatus {
   status: 'connected' | 'degraded' | 'disconnected' | 'disabled';
@@ -156,12 +167,12 @@ export function Settings() {
   const [stats, setStats] = useState({ total: 0, connected: 0, degraded: 0, disconnected: 0, disabled: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Phase 10: Integration state
   const [integrations, setIntegrations] = useState<Record<string, IntegrationStatus>>({});
   const [integrationsLoading, setIntegrationsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'appearance' | 'mcp' | 'integrations'>('appearance');
-  
+  const [activeTab, setActiveTab] = useState<'appearance' | 'mcp' | 'integrations' | 'api-keys'>('appearance');
+
   // Modal states
   const [credentialModal, setCredentialModal] = useState<{
     isOpen: boolean;
@@ -170,14 +181,23 @@ export function Settings() {
   }>({ isOpen: false, serverName: '', credentialKey: '' });
   const [addServerModal, setAddServerModal] = useState(false);
 
+  // Platform API Keys state
+  const [apiKeys, setApiKeys] = useState<ApiKeyStatus[]>([]);
+  const [apiKeysLoading, setApiKeysLoading] = useState(true);
+  const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
+  const [keyVisible, setKeyVisible] = useState<Record<string, boolean>>({});
+  const [keySaving, setKeySaving] = useState<Record<string, boolean>>({});
+  const [keyTesting, setKeyTesting] = useState<Record<string, boolean>>({});
+  const [keyTestResults, setKeyTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
+
   const API_BASE = '/api/mcp';
   const INTEGRATIONS_API = '/api/integrations';
 
   // Fetch server statuses
   const fetchServers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/servers`);
-      if (!response.ok) throw new Error('Failed to fetch servers');
+      const response = await fetch(`${API_BASE}/servers`, { credentials: 'include' });
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
       const data: AllServersResponse = await response.json();
       setServers(data.servers);
       setStats({
@@ -198,7 +218,7 @@ export function Settings() {
   // Fetch integrations status
   const fetchIntegrations = async () => {
     try {
-      const response = await fetch(`${INTEGRATIONS_API}/status`);
+      const response = await fetch(`${INTEGRATIONS_API}/status`, { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch integrations');
       const data: IntegrationsResponse = await response.json();
       setIntegrations(data.integrations);
@@ -209,30 +229,103 @@ export function Settings() {
     }
   };
 
+  // Fetch platform API keys
+  const fetchApiKeys = async () => {
+    try {
+      const response = await fetch('/api/api-keys/', { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch API keys');
+      const data: ApiKeyStatus[] = await response.json();
+      setApiKeys(data);
+    } catch (err: any) {
+      console.error('Failed to fetch API keys:', err);
+    } finally {
+      setApiKeysLoading(false);
+    }
+  };
+
+  const saveApiKey = async (keyId: string) => {
+    const value = keyInputs[keyId]?.trim();
+    if (!value) return;
+    setKeySaving((p) => ({ ...p, [keyId]: true }));
+    try {
+      const response = await fetch(`/api/api-keys/${keyId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ value }),
+      });
+      if (!response.ok) throw new Error('Save failed');
+      setKeyInputs((p) => ({ ...p, [keyId]: '' }));
+      await fetchApiKeys();
+    } catch (err: any) {
+      console.error('Failed to save key:', err);
+    } finally {
+      setKeySaving((p) => ({ ...p, [keyId]: false }));
+    }
+  };
+
+  const deleteApiKey = async (keyId: string) => {
+    try {
+      await fetch(`/api/api-keys/${keyId}`, { method: 'DELETE', credentials: 'include' });
+      await fetchApiKeys();
+    } catch (err: any) {
+      console.error('Failed to delete key:', err);
+    }
+  };
+
+  const testApiKey = async (keyId: string) => {
+    setKeyTesting((p) => ({ ...p, [keyId]: true }));
+    setKeyTestResults((p) => ({ ...p, [keyId]: { success: false, message: 'Testing...' } }));
+    try {
+      const response = await fetch(`/api/api-keys/${keyId}/test`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await response.json();
+      setKeyTestResults((p) => ({ ...p, [keyId]: data }));
+    } catch (err: any) {
+      setKeyTestResults((p) => ({ ...p, [keyId]: { success: false, message: err.message } }));
+    } finally {
+      setKeyTesting((p) => ({ ...p, [keyId]: false }));
+    }
+  };
+
   useEffect(() => {
     fetchServers();
     fetchIntegrations();
+    fetchApiKeys();
     const interval = setInterval(fetchServers, 30000);
     return () => clearInterval(interval);
   }, []);
 
   // Test connection
   const testConnection = async (serverName: string) => {
-    const response = await fetch(`${API_BASE}/servers/${serverName}/test`, {
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error('Test failed');
-    await fetchServers();
+    try {
+      const response = await fetch(`${API_BASE}/servers/${serverName}/test`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Test failed');
+      await fetchServers();
+    } catch (err: any) {
+      setError(`Test connection failed for ${serverName}: ${err.message}`);
+      throw err; // Re-throw so MCPServerCard can show local error
+    }
   };
 
   // Toggle server enabled/disabled
   const toggleServer = async (serverName: string, enabled: boolean) => {
     const endpoint = enabled ? 'enable' : 'disable';
-    const response = await fetch(`${API_BASE}/servers/${serverName}/${endpoint}`, {
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error(`Failed to ${endpoint} server`);
-    await fetchServers();
+    try {
+      const response = await fetch(`${API_BASE}/servers/${serverName}/${endpoint}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`Failed to ${endpoint} server`);
+      await fetchServers();
+    } catch (err: any) {
+      setError(`Failed to toggle ${serverName}: ${err.message}`);
+    }
   };
 
   // Save credential
@@ -240,6 +333,7 @@ export function Settings() {
     const response = await fetch(`${API_BASE}/credentials`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         server_name: serverName,
         credential_key: credentialKey,
@@ -255,6 +349,7 @@ export function Settings() {
     const response = await fetch(`${API_BASE}/credentials`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         server_name: serverName,
         credential_key: credentialKey,
@@ -264,7 +359,7 @@ export function Settings() {
     await fetchServers();
   };
 
-  // Add custom server (placeholder)
+  // Add custom server
   const addCustomServer = async (server: {
     name: string;
     url: string;
@@ -272,8 +367,23 @@ export function Settings() {
     credentialValue?: string;
     agentAssignments: string[];
   }) => {
-    console.log('Adding custom server:', server);
-    throw new Error('Custom server support coming in future update');
+    const response = await fetch(`${API_BASE}/custom`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        name: server.name,
+        url: server.url,
+        auth_method: server.authMethod,
+        credential_value: server.credentialValue,
+        agent_assignments: server.agentAssignments,
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to add custom server');
+    }
+    await fetchServers();
   };
 
   // Trigger health check
@@ -392,7 +502,7 @@ export function Settings() {
         <button
           onClick={() => setActiveTab('mcp')}
           className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-            activeTab === 'mcp' 
+            activeTab === 'mcp'
               ? 'bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white'
               : 'glass-card'
           }`}
@@ -400,6 +510,23 @@ export function Settings() {
         >
           <Server className="w-4 h-4 inline-block mr-2" />
           MCP Servers
+        </button>
+        <button
+          onClick={() => setActiveTab('api-keys')}
+          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+            activeTab === 'api-keys'
+              ? 'bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white'
+              : 'glass-card'
+          }`}
+          style={activeTab !== 'api-keys' ? { color: 'var(--text-secondary)' } : {}}
+        >
+          <Key className="w-4 h-4 inline-block mr-2" />
+          API Keys
+          {apiKeys.some((k) => k.required && !k.configured) && (
+            <span className="ml-2 badge badge-error" style={{ fontSize: '10px', padding: '2px 6px' }}>
+              Missing
+            </span>
+          )}
         </button>
       </div>
 
@@ -721,6 +848,159 @@ export function Settings() {
           </div>
         </section>
       </section>
+      )}
+
+      {/* API Keys Tab */}
+      {activeTab === 'api-keys' && (
+        <div className="space-y-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <Key className="w-5 h-5" style={{ color: 'var(--accent-primary)' }} />
+              Platform API Keys
+            </h2>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
+              Keys are stored securely and injected at runtime — never hardcoded.
+              UI values override environment variables.
+            </p>
+          </div>
+
+          {/* Missing required keys banner */}
+          {apiKeys.some((k) => k.required && !k.configured) && (
+            <div className="glass-card flex items-start gap-3" style={{
+              background: 'rgba(248, 113, 113, 0.1)',
+              borderColor: 'rgba(248, 113, 113, 0.3)',
+            }}>
+              <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-error)' }} />
+              <div>
+                <p className="font-medium" style={{ color: 'var(--accent-error)' }}>Required keys missing</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                  {apiKeys.filter((k) => k.required && !k.configured).map((k) => k.label).join(', ')} must be configured before starting a build.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {apiKeysLoading ? (
+            <div className="glass-card text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 mx-auto mb-3"
+                   style={{ border: '2px solid var(--glass-border)', borderTopColor: 'var(--accent-primary)' }} />
+              <p style={{ color: 'var(--text-secondary)' }}>Loading API keys...</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {apiKeys.map((key) => {
+                const testResult = keyTestResults[key.key_id];
+                return (
+                  <div key={key.key_id} className="glass-card" style={{
+                    borderColor: key.required && !key.configured ? 'rgba(248, 113, 113, 0.3)' : undefined,
+                  }}>
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            {key.label}
+                          </h3>
+                          {key.required && (
+                            <span className="badge badge-error" style={{ fontSize: '10px' }}>Required</span>
+                          )}
+                          {key.configured && (
+                            <span className={`badge ${key.source === 'ui' ? 'badge-success' : 'badge-info'}`}
+                                  style={{ fontSize: '10px' }}>
+                              {key.source === 'ui' ? 'Saved' : 'From env'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                          {key.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Current masked value */}
+                    {key.configured && key.masked_value && (
+                      <div className="flex items-center gap-2 mb-3 font-mono text-sm"
+                           style={{ color: 'var(--text-tertiary)' }}>
+                        <span>{keyVisible[key.key_id] ? '(shown in input below)' : key.masked_value}</span>
+                        {key.source === 'ui' && (
+                          <button
+                            onClick={() => deleteApiKey(key.key_id)}
+                            className="text-xs ml-auto"
+                            style={{ color: 'var(--accent-error)' }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Input + Save */}
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <input
+                          type={keyVisible[key.key_id] ? 'text' : 'password'}
+                          placeholder={key.configured ? 'Enter new value to update…' : 'Enter key…'}
+                          value={keyInputs[key.key_id] || ''}
+                          onChange={(e) => setKeyInputs((p) => ({ ...p, [key.key_id]: e.target.value }))}
+                          className="w-full px-3 py-2 pr-10 rounded-lg font-mono text-sm"
+                          style={{
+                            background: 'var(--glass-bg-elevated)',
+                            border: '1px solid var(--glass-border)',
+                            color: 'var(--text-primary)',
+                          }}
+                          onKeyDown={(e) => e.key === 'Enter' && saveApiKey(key.key_id)}
+                        />
+                        <button
+                          onClick={() => setKeyVisible((p) => ({ ...p, [key.key_id]: !p[key.key_id] }))}
+                          className="absolute right-2 top-1/2 -translate-y-1/2"
+                          style={{ color: 'var(--text-tertiary)' }}
+                          tabIndex={-1}
+                        >
+                          {keyVisible[key.key_id] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => saveApiKey(key.key_id)}
+                        disabled={!keyInputs[key.key_id]?.trim() || keySaving[key.key_id]}
+                        className="btn-primary flex items-center gap-1"
+                        style={{ padding: 'var(--space-2) var(--space-3)', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}
+                      >
+                        <Save className="w-4 h-4" />
+                        {keySaving[key.key_id] ? 'Saving…' : 'Save'}
+                      </button>
+                      {key.configured && (
+                        <button
+                          onClick={() => testApiKey(key.key_id)}
+                          disabled={keyTesting[key.key_id]}
+                          className="btn-secondary flex items-center gap-1"
+                          style={{ padding: 'var(--space-2) var(--space-3)', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}
+                        >
+                          <Wifi className="w-4 h-4" />
+                          {keyTesting[key.key_id] ? 'Testing…' : 'Test'}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Test result */}
+                    {testResult && (
+                      <div className="mt-2 glass-card" style={{
+                        padding: 'var(--space-2) var(--space-3)',
+                        background: testResult.success ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)',
+                        borderColor: testResult.success ? 'rgba(52, 211, 153, 0.3)' : 'rgba(248, 113, 113, 0.3)',
+                      }}>
+                        <p style={{
+                          color: testResult.success ? 'var(--accent-success)' : 'var(--accent-error)',
+                          fontSize: 'var(--text-sm)',
+                        }}>
+                          {testResult.success ? '✓ ' : '✗ '}{testResult.message}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Modals */}

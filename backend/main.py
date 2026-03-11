@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from api import projects_router, agents_router, costs_router, health_router
-from api.routes import revisions_router, analytics_router, integrations_router
+from api.routes import revisions_router, analytics_router, integrations_router, mcp_router, api_keys_router
 from api.routes.presets import router as presets_router  # Phase 11A
 from api.routes.templates import router as templates_router  # Phase 11B
 from api.routes.knowledge import router as knowledge_router  # Phase 11B
@@ -85,6 +85,8 @@ app.include_router(checkpoints_router, prefix="/api")  # Phase 11C: Checkpoints
 app.include_router(queue_router, prefix="/api")  # Phase 11C: Queue
 app.include_router(export_router, prefix="/api")  # Phase 11C: Export
 app.include_router(activity_router, prefix="/api")  # Real-time activity streaming
+app.include_router(mcp_router, prefix="/api")  # MCP Server management
+app.include_router(api_keys_router, prefix="/api")  # Platform API key management
 
 
 # Static file serving for production

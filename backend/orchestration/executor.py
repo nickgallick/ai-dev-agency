@@ -169,11 +169,46 @@ class PipelineExecutor:
         results = {}
         pipeline.context = context
 
+        # QA retry tracking (max 3 attempts)
+        qa_retry_count = 0
+        MAX_QA_RETRIES = 3
+        QA_RETRY_NODES = [
+            "code_generation", "pm_checkpoint_2", "code_review",
+            "security", "seo", "accessibility", "qa"
+        ]
+
         # Run agents in proper order respecting dependencies
         while True:
             ready_nodes = pipeline.get_ready_nodes()
             if not ready_nodes:
-                # Check if we're done or stuck
+                # Check if QA failed and we should retry code generation
+                qa_node = pipeline.nodes.get("qa")
+                if (
+                    qa_node
+                    and qa_node.status == NodeStatus.FAILED
+                    and qa_retry_count < MAX_QA_RETRIES
+                ):
+                    qa_retry_count += 1
+                    logger.warning(
+                        f"QA failed — retrying code generation "
+                        f"(attempt {qa_retry_count}/{MAX_QA_RETRIES})"
+                    )
+                    self._emit_activity(
+                        project_id, "agent_retry",
+                        f"🔄 QA found issues — retrying code generation "
+                        f"(attempt {qa_retry_count}/{MAX_QA_RETRIES})",
+                        progress=52
+                    )
+                    # Reset the code-gen → QA nodes back to PENDING
+                    for node_id in QA_RETRY_NODES:
+                        node = pipeline.nodes.get(node_id)
+                        if node:
+                            node.status = NodeStatus.PENDING
+                            node.result = None
+                    pipeline.context["qa_retry_count"] = qa_retry_count
+                    continue
+
+                # Truly done or stuck
                 pending = [n for n in pipeline.nodes.values()
                           if n.status == NodeStatus.PENDING]
                 if pending:
