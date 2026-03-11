@@ -49,3 +49,35 @@ async def readiness_check(db: Session = Depends(get_db)):
         "timestamp": datetime.utcnow().isoformat(),
         "checks": checks,
     }
+
+
+@router.get("/health/circuit-breaker")
+async def circuit_breaker_status():
+    """Get circuit breaker status for all LLM providers.
+
+    Returns per-provider state (closed/open/half_open), failure counts,
+    and success counts.  Useful for monitoring API health.
+    """
+    from utils.retry import llm_circuit_breaker
+
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "providers": llm_circuit_breaker.get_status(),
+        "config": {
+            "failure_threshold": llm_circuit_breaker.failure_threshold,
+            "cooldown_seconds": llm_circuit_breaker.cooldown_seconds,
+            "window_seconds": llm_circuit_breaker.window_seconds,
+        },
+    }
+
+
+@router.post("/health/circuit-breaker/reset")
+async def reset_circuit_breaker(provider: str = None):
+    """Reset circuit breaker state.  Optionally reset a single provider."""
+    from utils.retry import llm_circuit_breaker
+
+    llm_circuit_breaker.reset(provider)
+    return {
+        "success": True,
+        "reset": provider or "all",
+    }

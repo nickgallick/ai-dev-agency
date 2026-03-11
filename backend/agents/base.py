@@ -182,13 +182,28 @@ class BaseAgent(ABC):
         temperature: float = 0.7,
         max_tokens: int = 4096,
     ) -> Dict[str, Any]:
-        """Call the LLM via OpenRouter API.
-        
+        """Call the LLM via OpenRouter API with automatic retry and circuit breaker.
+
+        Three layers of fault tolerance:
+        1. Exponential backoff retries for transient HTTP errors (429, 502, 503, 504)
+        2. Circuit breaker that fails-fast when a provider is consistently failing
+        3. Graceful error responses (never raises, always returns a dict)
+
         Returns dict with: content, prompt_tokens, completion_tokens, total_tokens, cost, duration_ms
         """
         import httpx
         import time
-        
+        from utils.retry import (
+            llm_circuit_breaker,
+            is_retryable_status,
+            _backoff_delay,
+            RETRYABLE_EXCEPTIONS,
+        )
+
+        MAX_RETRIES = 3
+        BASE_DELAY = 2.0
+        MAX_DELAY = 60.0
+
         api_key = self.settings.openrouter_api_key
         if not api_key:
             self.logger.warning("OpenRouter API key not configured, returning mock response")
@@ -200,71 +215,145 @@ class BaseAgent(ABC):
                 "cost": 0.0,
                 "duration_ms": 0,
             }
-        
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-        
-        start_time = time.time()
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://ai-dev-agency.local",
-                        "X-Title": "AI Dev Agency",
-                    },
-                    json={
-                        "model": model,
-                        "messages": messages,
-                        "max_tokens": max_tokens,
-                        "temperature": temperature,
-                    },
-                    timeout=120.0,
-                )
-                
-                duration_ms = int((time.time() - start_time) * 1000)
-                
-                if response.status_code != 200:
-                    self.logger.error(f"LLM API error: {response.status_code} - {response.text}")
-                    return {
-                        "content": f"Error: API returned {response.status_code}",
-                        "prompt_tokens": 0,
-                        "completion_tokens": 0,
-                        "total_tokens": 0,
-                        "cost": 0.0,
-                        "duration_ms": duration_ms,
-                        "error": response.text,
-                    }
-                
-                data = response.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                usage = data.get("usage", {})
-                
-                return {
-                    "content": content,
-                    "prompt_tokens": usage.get("prompt_tokens", 0),
-                    "completion_tokens": usage.get("completion_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
-                    "cost": self._calculate_cost(model, usage),
-                    "duration_ms": duration_ms,
-                }
-                
-        except Exception as e:
-            self.logger.error(f"LLM call failed: {e}")
+
+        provider = model.split("/")[0] if "/" in model else "unknown"
+
+        # Layer 3: Circuit breaker — fail fast if provider is down
+        if llm_circuit_breaker.is_open(provider):
+            self.logger.warning(f"Circuit breaker OPEN for {provider} — failing fast")
             return {
-                "content": f"Error: {str(e)}",
+                "content": f"Error: Service temporarily unavailable ({provider})",
                 "prompt_tokens": 0,
                 "completion_tokens": 0,
                 "total_tokens": 0,
                 "cost": 0.0,
-                "duration_ms": int((time.time() - start_time) * 1000),
-                "error": str(e),
+                "duration_ms": 0,
+                "error": f"circuit_breaker_open:{provider}",
             }
+
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        start_time = time.time()
+        last_error = None
+
+        # Layer 1: Exponential backoff retries for transient errors
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://ai-dev-agency.local",
+                            "X-Title": "AI Dev Agency",
+                        },
+                        json={
+                            "model": model,
+                            "messages": messages,
+                            "max_tokens": max_tokens,
+                            "temperature": temperature,
+                        },
+                        timeout=120.0,
+                    )
+
+                    duration_ms = int((time.time() - start_time) * 1000)
+
+                    if response.status_code != 200:
+                        last_error = f"API returned {response.status_code}"
+
+                        # Retry on transient status codes
+                        if is_retryable_status(response.status_code) and attempt < MAX_RETRIES:
+                            delay = _backoff_delay(attempt, BASE_DELAY, MAX_DELAY)
+
+                            # For 429 rate-limit, respect Retry-After header if present
+                            retry_after = response.headers.get("retry-after")
+                            if retry_after and response.status_code == 429:
+                                try:
+                                    delay = max(delay, float(retry_after))
+                                except ValueError:
+                                    pass
+
+                            self.logger.warning(
+                                f"LLM API {response.status_code}, retrying in {delay:.1f}s "
+                                f"(attempt {attempt + 1}/{MAX_RETRIES + 1}, model={model})"
+                            )
+                            llm_circuit_breaker.record_failure(provider)
+                            await asyncio.sleep(delay)
+                            continue
+
+                        # Non-retryable error or retries exhausted
+                        self.logger.error(f"LLM API error: {response.status_code} - {response.text}")
+                        llm_circuit_breaker.record_failure(provider)
+                        return {
+                            "content": f"Error: API returned {response.status_code}",
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                            "cost": 0.0,
+                            "duration_ms": duration_ms,
+                            "error": response.text,
+                        }
+
+                    data = response.json()
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    usage = data.get("usage", {})
+
+                    # Success — record with circuit breaker and return
+                    llm_circuit_breaker.record_success(provider)
+
+                    if attempt > 0:
+                        self.logger.info(f"LLM call succeeded after {attempt + 1} attempts (model={model})")
+
+                    return {
+                        "content": content,
+                        "prompt_tokens": usage.get("prompt_tokens", 0),
+                        "completion_tokens": usage.get("completion_tokens", 0),
+                        "total_tokens": usage.get("total_tokens", 0),
+                        "cost": self._calculate_cost(model, usage),
+                        "duration_ms": duration_ms,
+                    }
+
+            except RETRYABLE_EXCEPTIONS as e:
+                last_error = str(e)
+                llm_circuit_breaker.record_failure(provider)
+                if attempt < MAX_RETRIES:
+                    delay = _backoff_delay(attempt, BASE_DELAY, MAX_DELAY)
+                    self.logger.warning(
+                        f"LLM call failed ({type(e).__name__}: {e}), retrying in {delay:.1f}s "
+                        f"(attempt {attempt + 1}/{MAX_RETRIES + 1}, model={model})"
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    self.logger.error(f"LLM call failed after {MAX_RETRIES + 1} attempts: {e}")
+
+            except Exception as e:
+                # Non-retryable exception — fail immediately
+                self.logger.error(f"LLM call failed (non-retryable): {e}")
+                llm_circuit_breaker.record_failure(provider)
+                return {
+                    "content": f"Error: {str(e)}",
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "cost": 0.0,
+                    "duration_ms": int((time.time() - start_time) * 1000),
+                    "error": str(e),
+                }
+
+        # All retries exhausted
+        return {
+            "content": f"Error: Exhausted {MAX_RETRIES + 1} retries. Last error: {last_error}",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": 0.0,
+            "duration_ms": int((time.time() - start_time) * 1000),
+            "error": f"retries_exhausted:{last_error}",
+        }
     
     def _calculate_cost(self, model: str, usage: Dict[str, int]) -> float:
         """Calculate cost based on model and token usage."""

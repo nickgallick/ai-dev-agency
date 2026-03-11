@@ -551,11 +551,25 @@ class Pipeline:
                 )
                 return node.result
 
-            # Create and run agent
-            agent = node.agent_class(settings=self.settings)
-            result = await asyncio.wait_for(
-                agent.run(self.context),
-                timeout=self.config.timeout_per_node,
+            # Create and run agent with Layer 2 retry for transient failures
+            from utils.retry import retry_agent_execution
+
+            _settings = self.settings
+            _context = self.context
+            _timeout = self.config.timeout_per_node
+            _agent_cls = node.agent_class
+
+            async def _run_agent():
+                """Create a fresh agent instance per attempt."""
+                a = _agent_cls(settings=_settings)
+                return await asyncio.wait_for(a.run(_context), timeout=_timeout)
+
+            result = await retry_agent_execution(
+                _run_agent,
+                max_retries=2,
+                base_delay=3.0,
+                max_delay=30.0,
+                agent_name=node.id,
             )
 
             node.result = result
