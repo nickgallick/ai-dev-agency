@@ -7,10 +7,10 @@ interface StatusDotProps {
 }
 
 const statusColors: Record<string, string> = {
-  connected: 'bg-green-500',
-  degraded: 'bg-yellow-500',
-  disconnected: 'bg-red-500',
-  disabled: 'bg-gray-400',
+  connected: 'bg-accent-success',
+  degraded: 'bg-accent-warning',
+  disconnected: 'bg-accent-error',
+  disabled: 'bg-text-tertiary',
 };
 
 const sizeClasses: Record<string, string> = {

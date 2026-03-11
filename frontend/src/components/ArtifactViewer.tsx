@@ -139,7 +139,7 @@ function DirGroup({ dir, files, selectedFile, onSelect }: {
         className="w-full text-left flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono text-text-tertiary hover:text-text-secondary hover:bg-bg-secondary/50 transition-colors"
       >
         {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        <Folder className="w-3 h-3 text-yellow-400" />
+        <Folder className="w-3 h-3 text-accent-warning" />
         {dir}
       </button>
       {open && (
@@ -175,12 +175,12 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 function SeverityBadge({ level }: { level: string }) {
   const cls = {
-    critical: 'bg-red-500/20 text-red-400',
-    high: 'bg-orange-500/20 text-orange-400',
-    medium: 'bg-yellow-500/20 text-yellow-400',
-    low: 'bg-blue-500/20 text-blue-400',
-    info: 'bg-gray-500/20 text-gray-400',
-  }[level.toLowerCase()] || 'bg-gray-500/20 text-gray-400'
+    critical: 'bg-accent-error/20 text-accent-error',
+    high: 'bg-accent-error/15 text-accent-error',
+    medium: 'bg-accent-warning/20 text-accent-warning',
+    low: 'bg-accent-secondary/20 text-accent-secondary',
+    info: 'bg-bg-secondary text-text-tertiary',
+  }[level.toLowerCase()] || 'bg-bg-secondary text-text-tertiary'
   return <span className={`px-2 py-0.5 text-xs rounded font-medium ${cls}`}>{level}</span>
 }
 
@@ -368,7 +368,7 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ag
                 <div className="flex flex-wrap gap-2">
                   {artifacts.deployment_urls.map((dep, idx) => (
                     <a key={idx} href={dep.url} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-lg text-green-400 hover:bg-green-500/20 transition-colors text-xs">
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-accent-success/10 rounded-lg text-accent-success hover:bg-accent-success/20 transition-colors text-xs">
                       <Rocket className="w-3 h-3" />
                       {dep.platform}
                     </a>
@@ -708,7 +708,7 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ag
         {activeTab === 'seo' && (
           <div className="space-y-6">
             <h3 className="text-base font-semibold text-text-primary flex items-center gap-2">
-              <Search className="w-5 h-5 text-blue-400" />
+              <Search className="w-5 h-5 text-accent-secondary" />
               SEO Report
             </h3>
             {Object.keys(seo).length === 0 ? (
@@ -717,7 +717,7 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ag
               <>
                 <div className="flex items-center gap-6">
                   {seoScore !== null && (
-                    <ScoreCircle score={seoScore} label="SEO Score" color="#3b82f6" />
+                    <ScoreCircle score={seoScore} label="SEO Score" color="var(--accent-secondary)" />
                   )}
                   <div className="flex-1 space-y-1">
                     {seo.meta_tags && <InfoRow label="Meta Tags" value={seo.meta_tags} />}
@@ -734,8 +734,8 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ag
                     <h4 className="text-sm font-medium text-text-secondary mb-2">Issues</h4>
                     <div className="space-y-2">
                       {seo.issues.map((issue: any, i: number) => (
-                        <div key={i} className="flex items-start gap-3 p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
-                          <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                        <div key={i} className="flex items-start gap-3 p-3 bg-accent-warning/5 border border-accent-warning/20 rounded-lg">
+                          <AlertTriangle className="w-4 h-4 text-accent-warning flex-shrink-0 mt-0.5" />
                           <p className="text-sm text-text-secondary">{typeof issue === 'string' ? issue : issue.description || JSON.stringify(issue)}</p>
                         </div>
                       ))}
@@ -751,7 +751,7 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ag
         {activeTab === 'accessibility' && (
           <div className="space-y-6">
             <h3 className="text-base font-semibold text-text-primary flex items-center gap-2">
-              <Eye className="w-5 h-5 text-purple-400" />
+              <Eye className="w-5 h-5 text-accent-purple" />
               Accessibility Report
             </h3>
             {Object.keys(accessibility).length === 0 ? (
@@ -760,12 +760,12 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ag
               <>
                 <div className="flex items-center gap-6">
                   {a11yScore !== null && (
-                    <ScoreCircle score={a11yScore} label="A11y Score" color="#a855f7" />
+                    <ScoreCircle score={a11yScore} label="A11y Score" color="var(--accent-purple)" />
                   )}
                   <div className="flex-1 space-y-1">
                     {accessibility.compliance_level && (
                       <InfoRow label="Compliance Level" value={
-                        <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded font-medium">
+                        <span className="px-2 py-0.5 bg-accent-purple/20 text-accent-purple text-xs rounded font-medium">
                           {accessibility.compliance_level}
                         </span>
                       } />
