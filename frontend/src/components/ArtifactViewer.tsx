@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, ProjectArtifacts } from '@/lib/api'
 import { Card } from '@/components/Card'
@@ -34,8 +34,12 @@ import {
   LayoutDashboard,
   Minus,
   Check,
+  Play,
 } from 'lucide-react'
 import { Button } from '@/components/Button'
+
+// Code-split: Sandpack only loads when user opens the Live Preview tab
+const LiveCodePreview = lazy(() => import('@/components/LiveCodePreview'))
 
 interface ArtifactViewerProps {
   projectId: string
@@ -169,6 +173,7 @@ const TAB_DEFINITIONS = [
   { key: 'architecture', label: 'Architecture', icon: <Layers className="w-4 h-4" /> },
   { key: 'design', label: 'Design System', icon: <Palette className="w-4 h-4" /> },
   { key: 'code', label: 'Generated Code', icon: <Code2 className="w-4 h-4" /> },
+  { key: 'preview', label: 'Live Preview', icon: <Play className="w-4 h-4" /> },
   { key: 'qa', label: 'QA Report', icon: <TestTube className="w-4 h-4" /> },
   { key: 'security', label: 'Security Report', icon: <Shield className="w-4 h-4" /> },
   { key: 'seo', label: 'SEO Report', icon: <Search className="w-4 h-4" /> },
@@ -231,6 +236,11 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ou
       case 'architecture': return !!outputs?.architect
       case 'design': return !!outputs?.design_system
       case 'code': return !!(artifacts?.file_structure && artifacts.file_structure.length > 0) || !!outputs?.code_generation
+      case 'preview': {
+        const cg = outputs?.code_generation
+        const codeFiles = cg?.files || cg?.generated_files || []
+        return codeFiles.length > 0
+      }
       case 'qa': return !!outputs?.qa?.report
       case 'security': return !!outputs?.security
       case 'seo': return !!outputs?.seo
@@ -313,6 +323,9 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ou
         {activeTab === 'architecture' && <ArchitectureTab outputs={outputs} />}
         {activeTab === 'design' && <DesignSystemTab outputs={outputs} />}
         {activeTab === 'code' && <GeneratedCodeTab artifacts={artifacts} outputs={outputs} />}
+        {activeTab === 'preview' && (
+          <LivePreviewTab outputs={outputs} projectType={projectType} />
+        )}
         {activeTab === 'qa' && <QAReportTab outputs={outputs} />}
         {activeTab === 'security' && <SecurityReportTab outputs={outputs} />}
         {activeTab === 'seo' && <SEOReportTab outputs={outputs} />}
@@ -748,6 +761,41 @@ function DesignSystemTab({ outputs }: { outputs?: Record<string, any> }) {
 }
 
 // ─── Generated Code Tab ────────────────────────────────────────────────────────
+
+// ─── Live Preview Tab (#3) ──────────────────────────────────────────────────
+
+function LivePreviewTab({ outputs, projectType }: { outputs?: Record<string, any>; projectType?: string | null }) {
+  const codeGen = outputs?.code_generation
+  const codeFiles = codeGen?.files || codeGen?.generated_files || []
+  const fileContents = codeGen?.file_contents || codeGen?.code || codeGen?.source_files
+
+  if (!codeFiles.length) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-sm text-text-tertiary">No code files available for live preview.</p>
+      </div>
+    )
+  }
+
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-16">
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-2 border-accent-primary border-t-transparent rounded-full mx-auto mb-3" />
+          <p className="text-sm text-text-tertiary">Loading live preview...</p>
+        </div>
+      </div>
+    }>
+      <LiveCodePreview
+        files={codeFiles}
+        projectType={projectType || undefined}
+        fileContents={typeof fileContents === 'object' ? fileContents : undefined}
+      />
+    </Suspense>
+  )
+}
+
+// ─── Generated Code Tab ─────────────────────────────────────────────────────
 
 function GeneratedCodeTab({ artifacts, outputs }: { artifacts?: ProjectArtifacts; outputs?: Record<string, any> }) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null)

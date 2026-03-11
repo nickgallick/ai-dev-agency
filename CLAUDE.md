@@ -170,6 +170,7 @@ frontend/src/components/AgentOutputTimeline.tsx   Vertical timeline of all 21 ag
 frontend/src/components/TemplateBrowser.tsx       Template gallery modal with search and filtering
 frontend/src/components/VoiceInput.tsx            Voice-to-text via Web Speech API
 frontend/src/components/RevisionPanel.tsx         Revision request panel
+frontend/src/components/LiveCodePreview.tsx        Code-split Sandpack live preview for generated code
 frontend/src/components/MonacoDiffEditor.tsx      Code-split Monaco diff editor for agent output comparison
 frontend/src/components/ScoreGauge.tsx            Animated SVG circular gauge
 frontend/src/lib/api.ts                          Axios API client — 60+ functions, all TypeScript types
@@ -464,6 +465,21 @@ These features are complete and integrated. Do not re-implement them.
   - `POST /api/chat/start-build` — Convert conversation to brief and start pipeline
   - `POST /api/chat/interrupt/{project_id}/answer` — Answer mid-pipeline clarification
   - `GET /api/chat/interrupt/{project_id}/status` — Check for pending clarification
+
+### Live Code Preview with Sandpack (#3)
+- **Where:** `frontend/src/components/LiveCodePreview.tsx` (new), `frontend/src/components/ArtifactViewer.tsx` (modified)
+- Renders generated code as a working app in the browser using CodeSandbox's Sandpack
+- Code-split via `React.lazy()` so Sandpack (~628KB chunk) only loads when user opens the Live Preview tab
+- Auto-detects Sandpack template from file paths: Next.js, Vite React TS, Vue, Angular, or static
+- Builds Sandpack file map from multiple backend output structures (`file.content`, `file.code`, `file.source`, `fileContents` map)
+- Smart entry file detection with priority list (app/page.tsx → src/App.tsx → index.html, etc.)
+- Non-previewable project types (cli_tool, python_api, desktop_app, mobile_native_ios) show friendly fallback message
+- **Viewport switching:** Desktop (100%), Tablet (768px), Mobile (375px) responsive preview
+- **Fullscreen mode:** Fixed overlay with full viewport Sandpack editor + preview
+- **Editor toggle:** Show/hide code editor and file explorer alongside preview
+- "Live Preview" tab added to ArtifactViewer TAB_DEFINITIONS (gated on code_generation files existing)
+- `LivePreviewTab` wrapper extracts files from `outputs.code_generation` and renders Suspense-wrapped LiveCodePreview
+- Dependency: `@codesandbox/sandpack-react ^2.20.0`
 
 ***
 
