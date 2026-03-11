@@ -355,8 +355,8 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ag
                 <div className="flex flex-wrap gap-6 justify-center p-4 bg-bg-secondary rounded-lg">
                   {qaScore !== null && <ScoreCircle score={qaScore} label="QA" color="var(--accent-success, #22c55e)" />}
                   {secScore !== null && <ScoreCircle score={secScore} label="Security" color="var(--accent-primary, #6366f1)" />}
-                  {seoScore !== null && <ScoreCircle score={seoScore} label="SEO" color="#3b82f6" />}
-                  {a11yScore !== null && <ScoreCircle score={a11yScore} label="Accessibility" color="#a855f7" />}
+                  {seoScore !== null && <ScoreCircle score={seoScore} label="SEO" color="var(--accent-secondary)" />}
+                  {a11yScore !== null && <ScoreCircle score={a11yScore} label="Accessibility" color="var(--accent-purple)" />}
                 </div>
               </div>
             )}
@@ -894,7 +894,7 @@ export function ArtifactViewer({ projectId, projectType, liveUrl, githubRepo, ag
                   )}
                   {postDeploy.visual_diff_score != null && (
                     <div className="p-3 bg-bg-secondary rounded-lg flex items-center justify-center">
-                      <ScoreCircle score={postDeploy.visual_diff_score} label="Visual" color="#6366f1" />
+                      <ScoreCircle score={postDeploy.visual_diff_score} label="Visual" color="var(--accent-purple)" />
                     </div>
                   )}
                 </div>

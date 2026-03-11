@@ -361,8 +361,7 @@ export default function SystemBackup() {
       {/* Restore confirmation dialog */}
       {confirmRestore && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           onClick={() => setConfirmRestore(null)}
           onKeyDown={(e) => e.key === 'Escape' && setConfirmRestore(null)}
           tabIndex={-1}

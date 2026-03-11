@@ -176,10 +176,10 @@ const SecuritySection: React.FC<{ report: SecurityReport }> = ({ report }) => {
   }));
 
   const severityColors: Record<string, string> = {
-    critical: '#dc2626',
-    high: '#ea580c',
-    medium: '#f59e0b',
-    low: '#84cc16',
+    critical: 'var(--accent-error)',
+    high: 'var(--accent-warning)',
+    medium: 'var(--accent-warning)',
+    low: 'var(--accent-success)',
   };
 
   return (
@@ -347,10 +347,10 @@ const AccessibilitySection: React.FC<{ report: AccessibilityReport }> = ({ repor
   }));
 
   const impactColors: Record<string, string> = {
-    critical: '#dc2626',
-    serious: '#ea580c',
-    moderate: '#f59e0b',
-    minor: '#84cc16',
+    critical: 'var(--accent-error)',
+    serious: 'var(--accent-warning)',
+    moderate: 'var(--accent-warning)',
+    minor: 'var(--accent-success)',
   };
 
   const wcagStatus = Object.entries(report.wcag_compliance);
