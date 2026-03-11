@@ -195,10 +195,12 @@ Tech Stack:
 
 class LLMCodeStrategy(CodeGenerationStrategy):
     """Use LLM prompts for code generation (mobile, desktop, CLI, etc.)."""
-    
-    def __init__(self, llm_client, project_type: str):
+
+    def __init__(self, llm_client, project_type: str, model: str = "anthropic/claude-sonnet-4", max_tokens: int = 32000):
         self.llm_client = llm_client
         self.project_type = project_type
+        self.model = model
+        self.max_tokens = max_tokens
         self.templates = self._load_templates()
     
     def _load_templates(self) -> Dict[str, str]:
@@ -271,12 +273,13 @@ Generate these files:
 
         result = await self.llm_client(
             prompt=prompt,
-            model="anthropic/claude-sonnet-4",
+            model=self.model,
             temperature=0.3,
-            max_tokens=16384,
+            max_tokens=self.max_tokens,
         )
 
-        logger.info(f"[CODE_GEN_LLM] LLM response: content_len={len(result.get('content', ''))}, "
+        logger.info(f"[CODE_GEN_LLM] LLM response: model={self.model}, max_tokens={self.max_tokens}, "
+                     f"content_len={len(result.get('content', ''))}, "
                      f"tokens={result.get('total_tokens', 0)}, cost=${result.get('cost', 0):.4f}, "
                      f"error={result.get('error', 'none')}")
 
@@ -636,9 +639,31 @@ class CodeGenerationAgent(BaseAgent):
         "python_saas": "llm",
     }
     
+    # Max tokens by (project_type, cost_profile) — generous defaults so code
+    # never gets truncated.  Can always scale back if costs are too high.
+    _MAX_TOKENS = {
+        # project_type → {cost_profile → max_tokens}
+        "web_simple":           {"budget": 24000, "balanced": 32000, "premium": 64000},
+        "web_complex":          {"budget": 32000, "balanced": 48000, "premium": 64000},
+        "mobile_pwa":           {"budget": 24000, "balanced": 32000, "premium": 64000},
+        "mobile_native_ios":    {"budget": 32000, "balanced": 48000, "premium": 64000},
+        "mobile_cross_platform":{"budget": 32000, "balanced": 48000, "premium": 64000},
+        "desktop_app":          {"budget": 32000, "balanced": 48000, "premium": 64000},
+        "chrome_extension":     {"budget": 16000, "balanced": 24000, "premium": 32000},
+        "cli_tool":             {"budget": 16000, "balanced": 24000, "premium": 32000},
+        "python_api":           {"budget": 24000, "balanced": 32000, "premium": 64000},
+        "python_saas":          {"budget": 32000, "balanced": 48000, "premium": 64000},
+    }
+    _DEFAULT_MAX_TOKENS = {"budget": 24000, "balanced": 32000, "premium": 64000}
+
     def __init__(self, settings=None):
         super().__init__(settings)
         self.v0_api_key = self.get_integration_key("VERCEL_V0_API_KEY")
+
+    def _get_max_tokens(self, project_type: str, cost_profile: str) -> int:
+        """Get max_tokens for code generation based on project type and cost profile."""
+        profile_map = self._MAX_TOKENS.get(project_type, self._DEFAULT_MAX_TOKENS)
+        return profile_map.get(cost_profile, profile_map.get("balanced", 32000))
     
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate code using appropriate strategy based on project type."""
@@ -647,7 +672,15 @@ class CodeGenerationAgent(BaseAgent):
         design_system = input_data.get("design_system", {})
         brief = input_data.get("brief", "")
 
+        # Use model routing for cost-profile-aware model selection
+        model = self.get_model(input_data)
+        cost_profile = input_data.get("cost_profile", "balanced")
+
+        # Scale max_tokens based on project complexity
+        max_tokens = self._get_max_tokens(project_type, cost_profile)
+
         logger.info(f"[CODE_GEN] Starting code generation — project_type={project_type}, "
+                     f"model={model}, max_tokens={max_tokens}, cost_profile={cost_profile}, "
                      f"brief_len={len(brief)}, has_architecture={bool(architecture)}, "
                      f"has_design_system={bool(design_system)}")
 
@@ -683,8 +716,8 @@ class CodeGenerationAgent(BaseAgent):
         
         # Use LLM strategy if v0 wasn't selected or failed
         if result is None:
-            logger.info(f"[CODE_GEN] Using LLM strategy (project_type={project_type})")
-            strategy = LLMCodeStrategy(self.call_llm, project_type)
+            logger.info(f"[CODE_GEN] Using LLM strategy (project_type={project_type}, model={model}, max_tokens={max_tokens})")
+            strategy = LLMCodeStrategy(self.call_llm, project_type, model=model, max_tokens=max_tokens)
             result = await strategy.generate(context)
 
         files_count = len(result.get("files", []))
@@ -738,11 +771,15 @@ Format: ```filename:path/to/file.ext
 <complete file content>
 ```"""
         
+        model = self.get_model(input_data)
+        cost_profile = input_data.get("cost_profile", "balanced")
+        max_tokens = self._get_max_tokens(project_type, cost_profile)
+
         result = await self.call_llm(
             prompt=prompt,
-            model="anthropic/claude-sonnet-4",
+            model=model,
             temperature=0.3,
-            max_tokens=16384,
+            max_tokens=max_tokens,
         )
 
         # Parse the response

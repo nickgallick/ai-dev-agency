@@ -316,7 +316,7 @@ class BaseAgent(ABC):
         model: str = "anthropic/claude-3-haiku",
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
     ) -> Dict[str, Any]:
         """Call the LLM via OpenRouter API with automatic retry and circuit breaker.
 
