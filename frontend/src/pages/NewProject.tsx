@@ -469,7 +469,7 @@ export default function NewProject() {
   }
 
   return (
-    <div className="space-y-6 pb-32">
+    <div className="space-y-6 pb-48 lg:pb-32">
       {/* Header */}
       <div className="mb-2">
         <h1 className="text-2xl lg:text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
@@ -1415,7 +1415,7 @@ export default function NewProject() {
 
         {/* ============ STEP 4: BUILD SUMMARY (Sticky) ============ */}
         <div 
-          className="fixed bottom-0 left-0 right-0 z-50 lg:left-64"
+          className="fixed bottom-16 lg:bottom-0 left-0 right-0 z-[110] lg:left-64"
           style={{ 
             background: 'var(--background-primary)',
             borderTop: '1px solid var(--glass-border)',
