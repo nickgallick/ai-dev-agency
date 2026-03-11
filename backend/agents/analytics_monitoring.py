@@ -279,8 +279,8 @@ class AnalyticsMonitoringAgent(BaseAgent):
             return AgentResult(
                 success=False,
                 agent_name=self.name,
-                error=str(e),
-                data={"report": report.to_dict()},
+                errors=[str(e)],
+                data={},
             )
     
     def _extract_integrations(self, requirements: Dict[str, Any]) -> List[str]:

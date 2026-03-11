@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from models.database import get_db
 from models.project import Project
+from config.settings import get_settings
 from export.project import (
     export_project_zip,
     import_project_zip,
@@ -98,10 +99,12 @@ async def list_project_files(
         )
     
     # Try to find project path
+    settings = get_settings()
+    base_dir = settings.project_temp_dir
     project_path = None
     possible_paths = [
-        f"/home/ubuntu/projects/{project_id}",
-        f"/home/ubuntu/ai-dev-agency/generated/{project_id}",
+        f"{base_dir}/projects/{project_id}",
+        f"{base_dir}/generated/{project_id}",
     ]
     if project.project_metadata:
         possible_paths.append(project.project_metadata.get("output_path"))
@@ -266,7 +269,8 @@ async def list_backups():
     import os
     from pathlib import Path
     
-    backup_dir = Path("/home/ubuntu/ai-dev-agency/backups")
+    settings = get_settings()
+    backup_dir = Path(settings.project_temp_dir) / "backups"
     
     if not backup_dir.exists():
         return {"backups": []}
@@ -362,7 +366,7 @@ async def import_knowledge(
 ):
     """
     Import knowledge base from JSON.
-    
+
     Set merge=false to replace existing knowledge base.
     """
     if not file.filename.endswith(".json"):
@@ -370,7 +374,7 @@ async def import_knowledge(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be a JSON file"
         )
-    
+
     try:
         content = await file.read()
         result = import_knowledge_base(
@@ -378,10 +382,122 @@ async def import_knowledge(
             json_data=content,
             merge=merge
         )
-        
+
         return result
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Import failed: {str(e)}"
         )
+
+
+# Project Artifacts Endpoint
+@router.get("/projects/{project_id}/artifacts")
+async def get_project_artifacts(
+    project_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    Get artifact metadata for a completed project.
+
+    Returns preview_url, github_repo, readme, file structure, and deployment URLs.
+    """
+    import os
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    settings = get_settings()
+    base_dir = settings.project_temp_dir
+
+    # Locate the project directory
+    project_path = None
+    possible_paths = [
+        f"{base_dir}/projects/{project_id}",
+        f"{base_dir}/generated/{project_id}",
+    ]
+    if project.project_metadata:
+        output_path = project.project_metadata.get("output_path") or project.project_metadata.get("project_path")
+        if output_path:
+            possible_paths.insert(0, output_path)
+
+    for path in possible_paths:
+        if path and os.path.exists(path):
+            project_path = path
+            break
+
+    # Try to read the README
+    readme_content = None
+    if project_path:
+        for readme_name in ["README.md", "readme.md", "README.txt"]:
+            readme_path = os.path.join(project_path, readme_name)
+            if os.path.exists(readme_path):
+                try:
+                    with open(readme_path, "r", encoding="utf-8") as f:
+                        readme_content = f.read()
+                    break
+                except Exception:
+                    pass
+
+    # Check agent outputs for generated README
+    agent_outputs = project.agent_outputs or {}
+    if not readme_content:
+        coding_output = agent_outputs.get("coding_standards", {})
+        if isinstance(coding_output, dict):
+            readme_content = coding_output.get("readme_content") or coding_output.get("readme")
+
+    # Build file structure
+    file_structure = []
+    if project_path:
+        try:
+            for root, dirs, files in os.walk(project_path):
+                dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('node_modules', '__pycache__', '.git')]
+                rel_root = os.path.relpath(root, project_path)
+                if rel_root == '.':
+                    for f in files[:20]:
+                        file_structure.append(f)
+                else:
+                    for f in files[:10]:
+                        file_structure.append(f"{rel_root}/{f}")
+                if len(file_structure) > 50:
+                    break
+        except Exception:
+            pass
+
+    # Extract live URL from multiple sources
+    delivery_output = agent_outputs.get("delivery", {})
+    deployment_output = agent_outputs.get("deployment", {})
+
+    live_url = (
+        project.live_url
+        or (delivery_output.get("live_url") if isinstance(delivery_output, dict) else None)
+        or (deployment_output.get("live_url") if isinstance(deployment_output, dict) else None)
+    )
+
+    # Get all deployment URLs
+    deployment_urls = []
+    if isinstance(deployment_output, dict):
+        for dep in deployment_output.get("deployments", []):
+            if isinstance(dep, dict) and dep.get("url"):
+                deployment_urls.append({
+                    "platform": dep.get("platform", "unknown"),
+                    "url": dep["url"],
+                    "status": dep.get("status", "unknown"),
+                })
+
+    return {
+        "project_id": str(project_id),
+        "project_type": project.project_type.value if project.project_type else None,
+        "project_name": project.name,
+        "status": project.status.value if project.status else None,
+        "live_url": live_url,
+        "github_repo": project.github_repo,
+        "deployment_urls": deployment_urls,
+        "readme_content": readme_content,
+        "file_structure": file_structure,
+        "has_local_files": project_path is not None,
+    }

@@ -130,6 +130,17 @@ class BaseAgent(ABC):
                     errors=result.get("errors", []) if isinstance(result.get("errors"), list) else [],
                     warnings=result.get("warnings", []) if isinstance(result.get("warnings"), list) else [],
                 )
+            elif hasattr(result, 'status') and hasattr(result, 'error_message'):
+                # Handle AgentOutput from models.schemas
+                success = getattr(result, 'status', None) != AgentStatus.FAILED
+                errors = [result.error_message] if result.error_message else []
+                output_data = getattr(result, 'output_data', {}) or {}
+                agent_result = AgentResult(
+                    success=success,
+                    agent_name=self.name,
+                    data=output_data,
+                    errors=errors,
+                )
             else:
                 # Unexpected return type
                 agent_result = AgentResult(

@@ -664,6 +664,11 @@ export const api = {
   },
 
   // Export APIs
+  getProjectArtifacts: async (projectId: string): Promise<ProjectArtifacts> => {
+    const response = await apiClient.get(`/export/projects/${projectId}/artifacts`)
+    return response.data
+  },
+
   getExportableFiles: async (projectId: string): Promise<ExportableFiles> => {
     const response = await apiClient.get(`/export/projects/${projectId}/files`)
     return response.data
@@ -785,6 +790,19 @@ export interface QueueStats {
     background: number
   }
   average_wait_seconds: number
+}
+
+export interface ProjectArtifacts {
+  project_id: string
+  project_type: string | null
+  project_name: string | null
+  status: string | null
+  live_url: string | null
+  github_repo: string | null
+  deployment_urls: { platform: string; url: string; status: string }[]
+  readme_content: string | null
+  file_structure: string[]
+  has_local_files: boolean
 }
 
 export interface ExportableFiles {

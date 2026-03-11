@@ -193,7 +193,7 @@ class AssetGenerationAgent(BaseAgent):
                 status=AgentStatus.FAILED,
                 started_at=started_at,
                 completed_at=datetime.utcnow(),
-                error=str(e)
+                error_message=str(e)
             )
     
     async def _generate_favicons(

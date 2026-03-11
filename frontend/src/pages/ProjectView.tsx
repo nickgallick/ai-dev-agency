@@ -8,6 +8,7 @@ import { ActivityFeed } from '@/components/ActivityFeed'
 import { api } from '@/lib/api'
 import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2 } from 'lucide-react'
 import { Button } from '@/components/Button'
+import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { useState } from 'react'
 
 export default function ProjectView() {
@@ -264,6 +265,16 @@ export default function ProjectView() {
             </a>
           ))}
         </div>
+      )}
+
+      {/* Artifact Viewer - only show for completed projects */}
+      {project.status === 'completed' && (
+        <ArtifactViewer
+          projectId={id!}
+          projectType={project.project_type}
+          liveUrl={project.live_url}
+          githubRepo={project.github_repo}
+        />
       )}
 
       {/* PM Checkpoint 1 - Build Manifest */}

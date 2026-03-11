@@ -60,7 +60,21 @@ class Settings:
             "DATABASE_URL", "postgresql://postgres:postgres@db:5432/aidevagency"
         )
     )
-    
+
+    # Redis Configuration
+    redis_url: str = field(
+        default_factory=lambda: os.getenv("REDIS_URL", "redis://redis:6379/0")
+    )
+    redis_host: str = field(
+        default_factory=lambda: os.getenv("REDIS_HOST", "redis")
+    )
+    redis_port: int = field(
+        default_factory=lambda: int(os.getenv("REDIS_PORT", "6379"))
+    )
+    redis_password: Optional[str] = field(
+        default_factory=lambda: os.getenv("REDIS_PASSWORD")
+    )
+
     # ===========================================
     # LLM API Configuration
     # ===========================================
