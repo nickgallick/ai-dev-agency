@@ -281,11 +281,14 @@ export default function ProjectView() {
           projectType={project.project_type}
           liveUrl={project.live_url}
           githubRepo={project.github_repo}
+          outputs={outputs?.agent_outputs}
         />
       )}
 
+      {/* Inline report cards - only show during build (not when completed, since ArtifactViewer handles it) */}
+
       {/* PM Checkpoint 1 - Build Manifest */}
-      {pmCheckpoint1 && pmCheckpoint1.build_manifest && (
+      {project.status !== 'completed' && pmCheckpoint1 && pmCheckpoint1.build_manifest && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <ClipboardCheck className="w-5 h-5 text-accent-primary" />
@@ -348,7 +351,7 @@ export default function ProjectView() {
       )}
 
       {/* Code Review Report */}
-      {codeReviewReport && (
+      {project.status !== 'completed' && codeReviewReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Code2 className="w-5 h-5 text-accent-primary" />
@@ -416,7 +419,7 @@ export default function ProjectView() {
       )}
 
       {/* QA Test Results */}
-      {qaReport && (
+      {project.status !== 'completed' && qaReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <TestTube className="w-5 h-5 text-accent-primary" />
@@ -519,7 +522,7 @@ export default function ProjectView() {
       )}
 
       {/* Deployment Status */}
-      {deploymentReport && (
+      {project.status !== 'completed' && deploymentReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Rocket className="w-5 h-5 text-accent-primary" />
@@ -597,7 +600,7 @@ export default function ProjectView() {
       )}
 
       {/* Post-Deploy Verification */}
-      {deployVerificationReport && (
+      {project.status !== 'completed' && deployVerificationReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-accent-primary" />
@@ -703,7 +706,7 @@ export default function ProjectView() {
       )}
 
       {/* Monitoring Status - Phase 6 */}
-      {monitoringReport && (
+      {project.status !== 'completed' && monitoringReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-5 h-5 text-accent-primary" />
@@ -782,7 +785,7 @@ export default function ProjectView() {
       )}
 
       {/* Documentation Status - Phase 6 */}
-      {codingStandardsReport && (
+      {project.status !== 'completed' && codingStandardsReport && (
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <FileText className="w-5 h-5 text-accent-primary" />
