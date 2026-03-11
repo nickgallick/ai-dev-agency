@@ -56,6 +56,7 @@ export type AgentNodeStatus =
   | 'completed'
   | 'failed'
   | 'skipped'
+  | 'paused'
 
 export interface AgentNodeData extends Record<string, unknown> {
   label: string
@@ -244,6 +245,8 @@ function AgentNodeComponent({ data }: NodeProps<Node<AgentNodeData>>) {
         <div className="dag-node-icon">
           {status === 'running' ? (
             <Loader2 className="w-4 h-4 animate-spin" />
+          ) : status === 'paused' ? (
+            <AlertCircle className="w-4 h-4" />
           ) : status === 'completed' ? (
             <Check className="w-4 h-4" />
           ) : status === 'failed' ? (
@@ -263,6 +266,11 @@ function AgentNodeComponent({ data }: NodeProps<Node<AgentNodeData>>) {
       {/* Running message */}
       {isRunning && message && (
         <div className="dag-node-message">{message}</div>
+      )}
+
+      {/* Paused message */}
+      {status === 'paused' && (
+        <div className="dag-node-message">Waiting for approval...</div>
       )}
 
       {/* Completed meta */}
@@ -401,6 +409,13 @@ export function PipelineDAG({
       case 'agent_skip':
         newStatus = 'skipped'
         break
+      case 'checkpoint_pause':
+        newStatus = 'paused'
+        message = ev.message
+        break
+      case 'checkpoint_resume':
+        newStatus = 'completed'
+        break
     }
 
     if (!newStatus) return
@@ -497,6 +512,7 @@ export function PipelineDAG({
       <div className="dag-legend">
         <LegendItem status="pending" label="Pending" />
         <LegendItem status="running" label="Running" />
+        <LegendItem status="paused" label="Paused" />
         <LegendItem status="completed" label="Done" />
         <LegendItem status="failed" label="Failed" />
         <LegendItem status="skipped" label="Skipped" />

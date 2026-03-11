@@ -154,7 +154,7 @@ export default function CostDashboard() {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               days === opt.days
                 ? 'bg-accent-primary text-white'
-                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                : 'bg-background-secondary text-text-secondary hover:bg-background-tertiary'
             }`}
           >
             {opt.label}
@@ -165,19 +165,19 @@ export default function CostDashboard() {
             type="date"
             value={customFrom}
             onChange={(e) => setCustomFrom(e.target.value)}
-            className="px-2 py-1.5 rounded-lg text-sm bg-bg-secondary text-text-primary border border-border-default"
+            className="px-2 py-1.5 rounded-lg text-sm bg-background-secondary text-text-primary border border-border-subtle"
           />
           <span className="text-text-tertiary text-sm">to</span>
           <input
             type="date"
             value={customTo}
             onChange={(e) => setCustomTo(e.target.value)}
-            className="px-2 py-1.5 rounded-lg text-sm bg-bg-secondary text-text-primary border border-border-default"
+            className="px-2 py-1.5 rounded-lg text-sm bg-background-secondary text-text-primary border border-border-subtle"
           />
           <button
             onClick={handleApplyCustomRange}
             disabled={!customFrom || !customTo}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-bg-secondary text-text-secondary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-background-secondary text-text-secondary hover:bg-background-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Apply
           </button>
@@ -185,7 +185,7 @@ export default function CostDashboard() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex flex-wrap gap-2 border-b border-border-default pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-border-subtle pb-2">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -193,7 +193,7 @@ export default function CostDashboard() {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-accent-primary text-white'
-                : 'text-text-secondary hover:bg-bg-secondary'
+                : 'text-text-secondary hover:bg-background-secondary'
             }`}
           >
             <tab.icon className="w-4 h-4" />
@@ -340,7 +340,7 @@ export default function CostDashboard() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-text-secondary border-b border-border-default">
+                  <tr className="text-left text-text-secondary border-b border-border-subtle">
                     <th className="pb-3 font-medium">Project Name</th>
                     <th className="pb-3 font-medium">Type</th>
                     <th className="pb-3 font-medium">Status</th>
@@ -355,10 +355,10 @@ export default function CostDashboard() {
                       onClick={() => setSelectedProjectId(
                         selectedProjectId === project.id ? null : project.id
                       )}
-                      className={`border-b border-border-default/50 cursor-pointer transition-colors ${
+                      className={`border-b border-border-subtle/50 cursor-pointer transition-colors ${
                         selectedProjectId === project.id
                           ? 'bg-accent-primary/10'
-                          : 'hover:bg-bg-secondary'
+                          : 'hover:bg-background-secondary'
                       }`}
                     >
                       <td className="py-3 text-text-primary font-medium">
@@ -372,7 +372,7 @@ export default function CostDashboard() {
                           project.status === 'completed' ? 'bg-accent-success/20 text-accent-success' :
                           project.status === 'running' || project.status === 'in_progress' ? 'bg-accent-primary/20 text-accent-primary' :
                           project.status === 'failed' ? 'bg-accent-error/20 text-accent-error' :
-                          'bg-bg-secondary text-text-tertiary'
+                          'bg-background-secondary text-text-tertiary'
                         }`}>
                           {project.status}
                         </span>
@@ -419,7 +419,7 @@ export default function CostDashboard() {
                       </div>
                     </div>
                   ))}
-                  <div className="pt-3 border-t border-border-default flex justify-between text-sm">
+                  <div className="pt-3 border-t border-border-subtle flex justify-between text-sm">
                     <span className="text-text-secondary font-medium">Total</span>
                     <span className="text-text-primary font-mono font-semibold">
                       ${projectCostBreakdown.reduce((s, i) => s + i.total_cost, 0).toFixed(4)}
@@ -439,7 +439,7 @@ export default function CostDashboard() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-left text-text-secondary border-b border-border-default">
+                        <tr className="text-left text-text-secondary border-b border-border-subtle">
                           <th className="pb-2 font-medium">Agent</th>
                           <th className="pb-2 font-medium">Model</th>
                           <th className="pb-2 font-medium">Status</th>
@@ -450,12 +450,12 @@ export default function CostDashboard() {
                       </thead>
                       <tbody>
                         {projectAgentLogs.map((log) => (
-                          <tr key={log.id} className="border-b border-border-default/50">
+                          <tr key={log.id} className="border-b border-border-subtle/50">
                             <td className="py-2 capitalize text-text-primary">
                               {log.agent_name.replace(/_/g, ' ')}
                             </td>
                             <td className="py-2">
-                              <code className="text-xs bg-bg-secondary px-1.5 py-0.5 rounded text-text-secondary">
+                              <code className="text-xs bg-background-secondary px-1.5 py-0.5 rounded text-text-secondary">
                                 {log.model_used.split('/').pop()}
                               </code>
                             </td>
@@ -499,7 +499,7 @@ export default function CostDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-text-secondary border-b border-border-default">
+                <tr className="text-left text-text-secondary border-b border-border-subtle">
                   <th className="pb-3 font-medium">Rank</th>
                   <th className="pb-3 font-medium">Agent</th>
                   <th className="pb-3 font-medium">Success Rate</th>
@@ -512,13 +512,13 @@ export default function CostDashboard() {
               </thead>
               <tbody>
                 {successRates?.map((agent, index) => (
-                  <tr key={agent.agent_name} className="border-b border-border-default/50">
+                  <tr key={agent.agent_name} className="border-b border-border-subtle/50">
                     <td className="py-3">
                       <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
                         index === 0 ? 'bg-yellow-500/20 text-yellow-500' :
                         index === 1 ? 'bg-gray-400/20 text-gray-400' :
                         index === 2 ? 'bg-amber-600/20 text-amber-600' :
-                        'bg-bg-secondary text-text-tertiary'
+                        'bg-background-secondary text-text-tertiary'
                       }`}>
                         {index + 1}
                       </span>
@@ -544,7 +544,7 @@ export default function CostDashboard() {
                     </td>
                     <td className="py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-16 h-2 bg-bg-secondary rounded-full overflow-hidden">
+                        <div className="w-16 h-2 bg-background-secondary rounded-full overflow-hidden">
                           <div
                             className="h-full bg-accent-primary rounded-full"
                             style={{ width: `${agent.avg_quality_score * 100}%` }}
@@ -581,7 +581,7 @@ export default function CostDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-text-secondary border-b border-border-default">
+                <tr className="text-left text-text-secondary border-b border-border-subtle">
                   <th className="pb-3 font-medium">Agent</th>
                   <th className="pb-3 font-medium">Model</th>
                   <th className="pb-3 font-medium">Success Rate</th>
@@ -592,12 +592,12 @@ export default function CostDashboard() {
               </thead>
               <tbody>
                 {modelComparison?.map((item, index) => (
-                  <tr key={`${item.agent_name}-${item.model_used}-${index}`} className="border-b border-border-default/50">
+                  <tr key={`${item.agent_name}-${item.model_used}-${index}`} className="border-b border-border-subtle/50">
                     <td className="py-3 capitalize text-text-primary">
                       {item.agent_name.replace(/_/g, ' ')}
                     </td>
                     <td className="py-3">
-                      <code className="text-xs bg-bg-secondary px-2 py-1 rounded">
+                      <code className="text-xs bg-background-secondary px-2 py-1 rounded">
                         {item.model_used.split('/').pop()}
                       </code>
                     </td>
@@ -649,7 +649,7 @@ export default function CostDashboard() {
                     </span>
                   </div>
                 </div>
-                <div className="w-full h-4 bg-bg-secondary rounded-full overflow-hidden">
+                <div className="w-full h-4 bg-background-secondary rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-accent-primary to-accent-secondary rounded-full transition-all duration-500"
                     style={{ width: `${Math.min(100, item.percentage_of_total)}%` }}
@@ -665,7 +665,7 @@ export default function CostDashboard() {
           </div>
 
           {buildTimeWaterfall && buildTimeWaterfall.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-border-default">
+            <div className="mt-6 pt-4 border-t border-border-subtle">
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Total Average Build Time:</span>
                 <span className="font-semibold text-text-primary">
@@ -688,7 +688,7 @@ export default function CostDashboard() {
             {failurePatterns?.map((pattern, index) => (
               <div
                 key={pattern.id}
-                className="p-4 bg-bg-secondary rounded-lg border border-border-default"
+                className="p-4 bg-background-secondary rounded-lg border border-border-subtle"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
@@ -781,7 +781,7 @@ export default function CostDashboard() {
                     {type.replace(/_/g, ' ')}
                   </span>
                   <div className="flex items-center gap-3">
-                    <div className="w-32 h-2 bg-bg-secondary rounded-full overflow-hidden">
+                    <div className="w-32 h-2 bg-background-secondary rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full ${
                           accuracy >= 80 ? 'bg-accent-success' :
@@ -812,7 +812,7 @@ export default function CostDashboard() {
                 <div key={profile} className="flex items-center justify-between">
                   <span className="text-sm text-text-primary capitalize">{profile}</span>
                   <div className="flex items-center gap-3">
-                    <div className="w-32 h-2 bg-bg-secondary rounded-full overflow-hidden">
+                    <div className="w-32 h-2 bg-background-secondary rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full ${
                           accuracy >= 80 ? 'bg-accent-success' :

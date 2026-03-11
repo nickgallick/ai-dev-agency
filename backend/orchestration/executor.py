@@ -17,6 +17,7 @@ from datetime import datetime
 
 from .pipeline import Pipeline, PipelineConfig, NodeStatus
 from .checkpointing import save_checkpoint, get_latest_checkpoint, delete_checkpoints
+from .checkpoints import CheckpointManager, get_checkpoint_manager
 from .audit import (
     audit_pipeline_start, audit_pipeline_complete, audit_pipeline_failed,
     audit_agent_start, audit_agent_complete, audit_agent_failed,
@@ -53,6 +54,7 @@ class PipelineExecutor:
         self.db = db_session
         self._progress_callback: Optional[Callable] = None
         self._step_counter = 0  # tracks which step we're on for checkpointing
+        self._checkpoint_manager: Optional[CheckpointManager] = None
 
     def set_progress_callback(self, callback: Callable):
         """Set callback for progress updates."""
@@ -165,6 +167,10 @@ class PipelineExecutor:
                 "Pipeline started - building your project!",
                 progress=0
             )
+
+        # ── Initialize HITL checkpoint manager ─────────────────────
+        if self.db:
+            self._checkpoint_manager = get_checkpoint_manager(self.db, project_id)
 
         project_type = (requirements or {}).get("project_type", "unknown")
         audit_pipeline_start(self.db, project_id, cost_profile, project_type)
@@ -438,6 +444,63 @@ class PipelineExecutor:
             )
             # Continue with next agents instead of raising
             results[node.id] = None
+
+        # ── HITL: Check if we should pause at this checkpoint ────────
+        if self._checkpoint_manager and self._checkpoint_manager.should_pause_at(agent_name):
+            agent_output = {}
+            if results.get(node.id) and hasattr(results[node.id], 'data'):
+                agent_output = results[node.id].data or {}
+
+            self._emit_activity(
+                project_id, "checkpoint_pause",
+                f"Paused at checkpoint: {agent_name.replace('_', ' ').title()} — waiting for approval",
+                agent_name=agent_name,
+                details={
+                    "checkpoint_agent": agent_name,
+                    "requires_approval": True,
+                    "output_summary": str(agent_output)[:500] if agent_output else None,
+                },
+            )
+
+            logger.info(f"HITL: Pausing at checkpoint after {agent_name}")
+
+            # Build pipeline state snapshot for checkpoint
+            pipeline_state = {
+                nid: n.status.value for nid, n in pipeline.nodes.items()
+            }
+
+            # This blocks until the user resumes via the API
+            await self._checkpoint_manager.pause_at_checkpoint(
+                agent_name=agent_name,
+                agent_output=agent_output,
+                pipeline_state=pipeline_state,
+            )
+
+            # Check if user edited the output
+            state = self._checkpoint_manager.project.checkpoint_state or {}
+            cp_data = state.get("checkpoint_data", {})
+            if cp_data.get("edited") and cp_data.get("output_data"):
+                # Replace agent result with edited output
+                from agents.base import AgentResult
+                edited = cp_data["output_data"]
+                results[node.id] = AgentResult(
+                    success=True,
+                    agent_name=agent_name,
+                    data=edited,
+                )
+                # Also update the node result in the pipeline
+                if node.id in pipeline.nodes:
+                    pipeline.nodes[node.id].result = results[node.id]
+                # Store edited result in context for downstream agents
+                pipeline.context[f"{agent_name}_result"] = edited
+
+            self._emit_activity(
+                project_id, "checkpoint_resume",
+                f"Resumed from checkpoint: {agent_name.replace('_', ' ').title()}",
+                agent_name=agent_name,
+            )
+
+            logger.info(f"HITL: Resumed from checkpoint after {agent_name}")
 
         # ── Save checkpoint after every agent ────────────────────────
         if self.db:

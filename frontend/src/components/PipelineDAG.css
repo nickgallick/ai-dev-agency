@@ -113,6 +113,7 @@
 .dag-legend-running   { background: var(--accent-primary); animation: dag-pulse 2s ease-in-out infinite; }
 .dag-legend-completed { background: var(--accent-success); }
 .dag-legend-failed    { background: var(--accent-error); }
+.dag-legend-paused    { background: #f59e0b; animation: dag-pulse 2s ease-in-out infinite; }
 .dag-legend-skipped   { background: var(--text-tertiary); }
 
 /* ── Canvas ────────────────────────────────────────────────────────── */
@@ -209,6 +210,18 @@
   opacity: 0.5;
 }
 
+.dag-node-paused {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+  opacity: 1;
+  animation: dag-node-glow-amber 2s ease-in-out infinite;
+}
+
+@keyframes dag-node-glow-amber {
+  0%, 100% { box-shadow: 0 0 4px rgba(245, 158, 11, 0.3); }
+  50%      { box-shadow: 0 0 12px rgba(245, 158, 11, 0.5); }
+}
+
 /* Node header */
 .dag-node-header {
   display: flex;
@@ -231,6 +244,7 @@
 .dag-node-completed .dag-node-icon { color: var(--accent-success); }
 .dag-node-failed .dag-node-icon    { color: var(--accent-error); }
 .dag-node-skipped .dag-node-icon   { color: var(--text-tertiary); }
+.dag-node-paused .dag-node-icon    { color: #f59e0b; }
 
 .dag-node-label {
   font-size: 12px;
@@ -262,6 +276,7 @@
 .dag-node-status-dot.dag-node-completed { background: var(--accent-success); }
 .dag-node-status-dot.dag-node-failed    { background: var(--accent-error); }
 .dag-node-status-dot.dag-node-skipped   { background: var(--text-tertiary); }
+.dag-node-status-dot.dag-node-paused    { background: #f59e0b; animation: dag-pulse 1.5s ease-in-out infinite; }
 
 /* Running message */
 .dag-node-message {

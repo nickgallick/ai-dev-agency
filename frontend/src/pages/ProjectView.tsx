@@ -7,16 +7,18 @@ import { PipelineDAG } from '@/components/PipelineDAG'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { ActivityFeed } from '@/components/ActivityFeed'
 import { api } from '@/lib/api'
-import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2 } from 'lucide-react'
+import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { AgentOutputTimeline } from '@/components/AgentOutputTimeline'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 
 export default function ProjectView() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const [showCheckpointModal, setShowCheckpointModal] = useState(false)
+  const [editingOutput, setEditingOutput] = useState<string | null>(null)
+  const [editedOutputText, setEditedOutputText] = useState('')
 
   const { data: project, isLoading, refetch } = useQuery({
     queryKey: ['project', id],
@@ -34,6 +36,17 @@ export default function ProjectView() {
       // Poll every 4s while building so agent output cards fill in live
       if (project?.status === 'completed' || project?.status === 'failed') return false
       return 4000
+    },
+  })
+
+  // Per-agent cost & token tracking
+  const { data: agentLogs } = useQuery({
+    queryKey: ['agentLogs', id],
+    queryFn: () => api.getAgentLogs({ project_id: id! }),
+    enabled: !!project,
+    refetchInterval: (query) => {
+      if (project?.status === 'completed' || project?.status === 'failed') return false
+      return 5000
     },
   })
 
@@ -68,6 +81,45 @@ export default function ProjectView() {
       queryClient.invalidateQueries({ queryKey: ['checkpointStatus', id] })
     },
   })
+
+  const resumeWithEditMutation = useMutation({
+    mutationFn: (editedOutput: Record<string, any>) => api.resumeProject(id!, editedOutput),
+    onSuccess: () => {
+      setEditingOutput(null)
+      setEditedOutputText('')
+      refetch()
+      queryClient.invalidateQueries({ queryKey: ['checkpointStatus', id] })
+    },
+  })
+
+  const restartFromMutation = useMutation({
+    mutationFn: (agentName: string) => api.restartFromAgent(id!, agentName),
+    onSuccess: () => {
+      refetch()
+      queryClient.invalidateQueries({ queryKey: ['checkpointStatus', id] })
+    },
+  })
+
+  const handleApproveCheckpoint = useCallback(() => {
+    resumeMutation.mutate()
+  }, [resumeMutation])
+
+  const handleApproveWithEdits = useCallback(() => {
+    try {
+      const parsed = JSON.parse(editedOutputText)
+      resumeWithEditMutation.mutate(parsed)
+    } catch {
+      // If not valid JSON, wrap as a simple edit
+      resumeWithEditMutation.mutate({ edited_content: editedOutputText })
+    }
+  }, [editedOutputText, resumeWithEditMutation])
+
+  const handleRejectCheckpoint = useCallback(() => {
+    const pausedAgent = checkpointStatus?.paused_at_agent
+    if (pausedAgent) {
+      restartFromMutation.mutate(pausedAgent)
+    }
+  }, [checkpointStatus, restartFromMutation])
 
   if (isLoading) {
     return (
@@ -165,7 +217,7 @@ export default function ProjectView() {
         </Card>
       )}
 
-      {/* Phase 11C: Checkpoint Controls */}
+      {/* Phase 11C: Build Controls & HITL Approval Gates */}
       {project.status !== 'completed' && project.status !== 'failed' && (
         <Card>
           <div className="flex items-center justify-between mb-4">
@@ -174,34 +226,36 @@ export default function ProjectView() {
               <h3 className="font-medium text-text-primary">Build Controls</h3>
             </div>
             {checkpointStatus && (
-              <Badge variant={checkpointStatus.state === 'paused' ? 'warning' : 'info'}>
+              <Badge variant={checkpointStatus.state === 'paused' ? 'warning' : checkpointStatus.state === 'running' ? 'info' : 'default'}>
                 {checkpointStatus.state}
               </Badge>
             )}
           </div>
 
           <div className="flex flex-wrap gap-3 mb-4">
-            {/* Pause/Resume Button */}
-            {project.status === 'paused' || checkpointStatus?.state === 'paused' ? (
-              <Button
-                onClick={() => resumeMutation.mutate()}
-                disabled={resumeMutation.isPending}
-                variant="primary"
-                size="sm"
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Resume Build
-              </Button>
-            ) : (
-              <Button
-                onClick={() => pauseMutation.mutate()}
-                disabled={pauseMutation.isPending}
-                variant="secondary"
-                size="sm"
-              >
-                <Pause className="w-4 h-4 mr-2" />
-                Pause Build
-              </Button>
+            {/* Pause/Resume Button — only show when NOT at a HITL checkpoint */}
+            {!(checkpointStatus?.state === 'paused' && checkpointStatus?.current_checkpoint) && (
+              project.status === 'paused' ? (
+                <Button
+                  onClick={() => resumeMutation.mutate()}
+                  disabled={resumeMutation.isPending}
+                  variant="primary"
+                  size="sm"
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Resume Build
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => pauseMutation.mutate()}
+                  disabled={pauseMutation.isPending}
+                  variant="secondary"
+                  size="sm"
+                >
+                  <Pause className="w-4 h-4 mr-2" />
+                  Pause Build
+                </Button>
+              )
             )}
 
             {/* Mode Selector */}
@@ -219,31 +273,220 @@ export default function ProjectView() {
             </div>
           </div>
 
-          {/* Current Checkpoint Info */}
-          {checkpointStatus?.current_checkpoint && (
-            <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm font-medium text-yellow-400">Paused at Checkpoint</span>
+          {/* ── HITL Approval Gate ────────────────────────────────── */}
+          {checkpointStatus?.state === 'paused' && checkpointStatus?.current_checkpoint && (
+            <div className="p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                <span className="font-semibold text-yellow-400">
+                  Approval Required — {checkpointStatus.paused_at_agent?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </span>
               </div>
-              <p className="text-sm text-text-primary">
-                Agent: <strong>{checkpointStatus.paused_at_agent}</strong>
+
+              <p className="text-sm text-text-secondary mb-3">
+                The pipeline has paused after <strong className="text-text-primary">{checkpointStatus.paused_at_agent}</strong>.
+                Review the output below and choose to approve, edit, or reject.
               </p>
-              <p className="text-xs text-text-secondary mt-1">
+
+              <p className="text-xs text-text-tertiary mb-4">
                 Paused at: {checkpointStatus.paused_at ? new Date(checkpointStatus.paused_at).toLocaleString() : 'N/A'}
+                {' — '}Auto-continues in 5 minutes if not acted upon.
               </p>
-              <p className="text-xs text-text-tertiary mt-2">
-                Will auto-continue in 5 minutes if not resumed
-              </p>
+
+              {/* Agent Output Preview */}
+              {checkpointStatus.current_checkpoint?.output_data && (
+                <details className="group mb-4" open>
+                  <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary mb-2">
+                    Agent Output
+                  </summary>
+                  <pre className="p-3 bg-background-secondary rounded-lg text-xs text-text-secondary overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap border border-border-subtle">
+                    {JSON.stringify(checkpointStatus.current_checkpoint.output_data, null, 2)}
+                  </pre>
+                </details>
+              )}
+
+              {/* Edit Mode */}
+              {editingOutput === checkpointStatus.paused_at_agent && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Edit Output (JSON)
+                  </label>
+                  <textarea
+                    value={editedOutputText}
+                    onChange={(e) => setEditedOutputText(e.target.value)}
+                    className="w-full h-40 p-3 bg-background-secondary border border-border-subtle rounded-lg text-xs text-text-primary font-mono resize-y"
+                    placeholder="Edit the agent output JSON..."
+                  />
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={handleApproveCheckpoint}
+                  disabled={resumeMutation.isPending}
+                  variant="primary"
+                  size="sm"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Approve & Continue
+                </Button>
+
+                {editingOutput === checkpointStatus.paused_at_agent ? (
+                  <>
+                    <Button
+                      onClick={handleApproveWithEdits}
+                      disabled={resumeWithEditMutation.isPending}
+                      variant="primary"
+                      size="sm"
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Apply Edits & Continue
+                    </Button>
+                    <Button
+                      onClick={() => { setEditingOutput(null); setEditedOutputText('') }}
+                      variant="ghost"
+                      size="sm"
+                    >
+                      Cancel Edit
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setEditingOutput(checkpointStatus.paused_at_agent || null)
+                      setEditedOutputText(
+                        JSON.stringify(checkpointStatus.current_checkpoint?.output_data || {}, null, 2)
+                      )
+                    }}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    <Code2 className="w-4 h-4 mr-2" />
+                    Edit Output
+                  </Button>
+                )}
+
+                <Button
+                  onClick={handleRejectCheckpoint}
+                  disabled={restartFromMutation.isPending}
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-400 hover:text-red-300"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Reject & Re-run
+                </Button>
+              </div>
             </div>
           )}
 
           {/* Available Checkpoints Info */}
-          {checkpointStatus?.mode === 'supervised' && (
+          {checkpointStatus?.mode === 'supervised' && checkpointStatus?.state !== 'paused' && (
             <div className="mt-3 text-xs text-text-secondary">
-              <span className="font-medium">Default checkpoints:</span> {checkpointStatus.available_checkpoints?.join(', ')}
+              <span className="font-medium">Checkpoint agents:</span> {checkpointStatus.available_checkpoints?.join(', ')}
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Per-Agent Cost & Token Tracking */}
+      {agentLogs && agentLogs.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <DollarSign className="w-5 h-5 text-accent-primary" />
+            <h3 className="font-medium text-text-primary">Cost & Token Tracking</h3>
+          </div>
+
+          {/* Summary Stats */}
+          {(() => {
+            const totalCost = agentLogs.reduce((sum: number, l: any) => sum + (l.cost || 0), 0)
+            const totalTokens = agentLogs.reduce((sum: number, l: any) => sum + (l.total_tokens || 0), 0)
+            const totalPrompt = agentLogs.reduce((sum: number, l: any) => sum + (l.prompt_tokens || 0), 0)
+            const totalCompletion = agentLogs.reduce((sum: number, l: any) => sum + (l.completion_tokens || 0), 0)
+            const totalDuration = agentLogs.reduce((sum: number, l: any) => sum + (l.duration_ms || 0), 0)
+
+            return (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                  <div className="bg-accent-primary/10 rounded-lg p-3 text-center">
+                    <div className="text-xl font-bold text-accent-primary">${totalCost.toFixed(4)}</div>
+                    <div className="text-xs text-text-secondary">Total Cost</div>
+                  </div>
+                  <div className="bg-background-tertiary rounded-lg p-3 text-center">
+                    <div className="text-xl font-bold text-text-primary">{totalTokens.toLocaleString()}</div>
+                    <div className="text-xs text-text-secondary">Total Tokens</div>
+                  </div>
+                  <div className="bg-background-tertiary rounded-lg p-3 text-center">
+                    <div className="text-lg font-bold text-text-primary">
+                      {totalPrompt.toLocaleString()} / {totalCompletion.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-text-secondary">Prompt / Completion</div>
+                  </div>
+                  <div className="bg-background-tertiary rounded-lg p-3 text-center">
+                    <div className="text-xl font-bold text-text-primary">
+                      {totalDuration < 60000
+                        ? `${(totalDuration / 1000).toFixed(1)}s`
+                        : `${Math.floor(totalDuration / 60000)}m ${Math.round((totalDuration % 60000) / 1000)}s`
+                      }
+                    </div>
+                    <div className="text-xs text-text-secondary">Total Duration</div>
+                  </div>
+                </div>
+
+                {/* Per-Agent Breakdown */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-text-secondary mb-2">Per-Agent Breakdown</h4>
+                  {(() => {
+                    const agentMap: Record<string, { cost: number; tokens: number; prompt: number; completion: number; duration: number; model: string; status: string }> = {}
+                    for (const log of agentLogs) {
+                      if (!agentMap[log.agent_name]) {
+                        agentMap[log.agent_name] = { cost: 0, tokens: 0, prompt: 0, completion: 0, duration: 0, model: log.model_used || 'unknown', status: log.status || 'completed' }
+                      }
+                      agentMap[log.agent_name].cost += log.cost || 0
+                      agentMap[log.agent_name].tokens += log.total_tokens || 0
+                      agentMap[log.agent_name].prompt += log.prompt_tokens || 0
+                      agentMap[log.agent_name].completion += log.completion_tokens || 0
+                      agentMap[log.agent_name].duration += log.duration_ms || 0
+                      if (log.model_used) agentMap[log.agent_name].model = log.model_used
+                      if (log.status) agentMap[log.agent_name].status = log.status
+                    }
+                    const sorted = Object.entries(agentMap).sort((a, b) => b[1].cost - a[1].cost)
+                    const maxCost = sorted.length > 0 ? sorted[0][1].cost : 1
+
+                    return sorted.map(([name, data]) => (
+                      <div key={name} className="flex items-center gap-3 p-2 bg-background-tertiary rounded-lg">
+                        <div className="w-24 flex-shrink-0">
+                          <span className="text-sm font-medium text-text-primary truncate block">
+                            {name.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                          </span>
+                        </div>
+                        {/* Cost bar */}
+                        <div className="flex-1 min-w-0">
+                          <div className="h-2 rounded-full bg-background-secondary overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                data.status === 'failed' ? 'bg-accent-error' : 'bg-accent-primary'
+                              }`}
+                              style={{ width: `${maxCost > 0 ? Math.max(2, (data.cost / maxCost) * 100) : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-text-secondary flex-shrink-0">
+                          <span className="font-mono">${data.cost.toFixed(4)}</span>
+                          <span>{data.tokens.toLocaleString()} tok</span>
+                          <span className="text-text-tertiary hidden md:inline">{data.model.split('/').pop()}</span>
+                          <span className="text-text-tertiary">
+                            {data.duration < 1000 ? `${data.duration}ms` : `${(data.duration / 1000).toFixed(1)}s`}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              </>
+            )
+          })()}
         </Card>
       )}
 
