@@ -16,15 +16,16 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
           script: |
-            cd ${{ secrets.SERVER_PATH }}
-            git fetch origin
-            git checkout master
+            cd ${{ secrets.SERVER_PATH || '/home/ubuntu/ai-dev-agency' }}
             BRANCH="${{ github.ref_name }}"
-            if [ "$BRANCH" != "master" ]; then
-              git merge "origin/$BRANCH" --no-edit || { echo "Merge conflict — aborting"; git merge --abort; exit 1; }
-            else
-              git pull origin master --ff-only
-            fi
+            echo "=== Deploying $BRANCH ==="
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH"
+            git reset --hard "origin/$BRANCH"
+            echo "Commit: $(git log --oneline -1)"
             docker-compose up --build -d
-            docker image prune -f
+            docker image prune -f || true
+            sleep 10
+            curl -sf http://localhost:8000/health && echo "API healthy!" || echo "WARNING: health check failed"
