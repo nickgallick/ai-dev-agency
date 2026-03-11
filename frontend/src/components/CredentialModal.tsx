@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AlertCircle } from 'lucide-react';
 
 interface CredentialModalProps {
   isOpen: boolean;
@@ -54,14 +55,22 @@ export function CredentialModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+      onClick={onClose}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+      tabIndex={-1}
+    >
+      <div
+        className="glass-card-elevated w-full max-w-md mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-semibold text-text-primary mb-4">
           Configure {serverName} Credential
         </h2>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-text-primary mb-1">
             {credentialKey}
           </label>
           <input
@@ -69,39 +78,33 @@ export function CredentialModal({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="Enter credential value"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="glass-input w-full"
           />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs text-text-tertiary">
             This value will be encrypted before storage.
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-2 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm rounded">
-            {error}
+          <div className="mb-4 flex items-start gap-2 p-3 bg-accent-error/10 border border-accent-error/30 rounded-lg">
+            <AlertCircle className="w-4 h-4 text-accent-error flex-shrink-0 mt-0.5" />
+            <span className="text-sm text-accent-error">{error}</span>
           </div>
         )}
 
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center">
           <button
             onClick={handleDelete}
             disabled={isSaving}
-            className="px-3 py-2 text-red-600 hover:text-red-700 text-sm disabled:opacity-50"
+            className="px-3 py-2 text-accent-error hover:opacity-80 text-sm disabled:opacity-50 transition-opacity"
           >
             Remove Stored Credential
           </button>
           <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
+            <button onClick={onClose} className="btn-secondary">
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
+            <button onClick={handleSave} disabled={isSaving} className="btn-primary disabled:opacity-50">
               {isSaving ? 'Saving...' : 'Save'}
             </button>
           </div>

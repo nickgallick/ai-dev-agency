@@ -15,19 +15,19 @@ interface RevisionPanelProps {
 }
 
 const SCOPE_INFO: Record<RevisionScope, { label: string; color: string; description: string }> = {
-  small_tweak: { 
-    label: 'Small Tweak', 
-    color: 'bg-green-500/10 text-green-400',
+  small_tweak: {
+    label: 'Small Tweak',
+    color: 'bg-accent-success/10 text-accent-success',
     description: 'Minor changes like text updates, colors, bug fixes'
   },
-  medium_feature: { 
-    label: 'Medium Feature', 
-    color: 'bg-yellow-500/10 text-yellow-400',
+  medium_feature: {
+    label: 'Medium Feature',
+    color: 'bg-accent-warning/10 text-accent-warning',
     description: 'New pages, components, or features'
   },
-  major_addition: { 
-    label: 'Major Addition', 
-    color: 'bg-red-500/10 text-red-400',
+  major_addition: {
+    label: 'Major Addition',
+    color: 'bg-accent-error/10 text-accent-error',
     description: 'Significant new capabilities'
   },
 }
@@ -146,16 +146,16 @@ export function RevisionPanel({ projectId, revisions, onRevisionCreated }: Revis
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className={clsx(
                       'px-2 py-0.5 text-xs rounded-full',
-                      SCOPE_INFO[revision.scope_type]?.color || 'bg-gray-500/10 text-gray-400'
+                      SCOPE_INFO[revision.scope_type]?.color || 'bg-bg-secondary text-text-tertiary'
                     )}>
                       {SCOPE_INFO[revision.scope_type]?.label || revision.scope_type}
                     </span>
                     <span className={clsx(
                       'px-2 py-0.5 text-xs rounded-full',
-                      revision.status === 'completed' ? 'bg-green-500/10 text-green-400' :
-                      revision.status === 'in_progress' ? 'bg-blue-500/10 text-blue-400' :
-                      revision.status === 'failed' ? 'bg-red-500/10 text-red-400' :
-                      'bg-gray-500/10 text-gray-400'
+                      revision.status === 'completed' ? 'bg-accent-success/10 text-accent-success' :
+                      revision.status === 'in_progress' ? 'bg-accent-primary/10 text-accent-primary' :
+                      revision.status === 'failed' ? 'bg-accent-error/10 text-accent-error' :
+                      'bg-bg-secondary text-text-tertiary'
                     )}>
                       {revision.status}
                     </span>
@@ -190,7 +190,7 @@ export function RevisionPanel({ projectId, revisions, onRevisionCreated }: Revis
               )}
               
               {revision.errors && revision.errors.length > 0 && (
-                <div className="mt-2 p-2 bg-red-500/10 rounded text-xs text-red-400 flex items-start gap-1">
+                <div className="mt-2 p-2 bg-accent-error/10 rounded text-xs text-accent-error flex items-start gap-1">
                   <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                   {revision.errors[0]}
                 </div>

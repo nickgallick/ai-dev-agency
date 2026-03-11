@@ -68,16 +68,24 @@ export function AddCustomServerModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+      onClick={onClose}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+      tabIndex={-1}
+    >
+      <div
+        className="glass-card-elevated w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-semibold text-text-primary mb-4">
           Add Custom MCP Server
         </h2>
 
         <div className="space-y-4">
           {/* Server Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-text-primary mb-1">
               Server Name *
             </label>
             <input
@@ -85,13 +93,13 @@ export function AddCustomServerModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="my-custom-server"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="glass-input w-full"
             />
           </div>
 
           {/* Server URL */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-text-primary mb-1">
               Server URL *
             </label>
             <input
@@ -99,19 +107,19 @@ export function AddCustomServerModal({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="http://localhost:3001 or stdio://command"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="glass-input w-full"
             />
           </div>
 
           {/* Auth Method */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-text-primary mb-1">
               Authentication Method
             </label>
             <select
               value={authMethod}
               onChange={(e) => setAuthMethod(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="glass-input select w-full"
             >
               <option value="none">None</option>
               <option value="api_key">API Key</option>
@@ -122,7 +130,7 @@ export function AddCustomServerModal({
           {/* Credential Value */}
           {authMethod !== 'none' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-text-primary mb-1">
                 {authMethod === 'api_key' ? 'API Key' : 'Bearer Token'}
               </label>
               <input
@@ -130,14 +138,14 @@ export function AddCustomServerModal({
                 value={credentialValue}
                 onChange={(e) => setCredentialValue(e.target.value)}
                 placeholder="Enter credential"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                className="glass-input w-full"
               />
             </div>
           )}
 
           {/* Agent Assignment */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-text-primary mb-2">
               Assign to Agents
             </label>
             <div className="flex flex-wrap gap-2">
@@ -146,8 +154,8 @@ export function AddCustomServerModal({
                   key={agent}
                   className={`px-3 py-1.5 rounded-full text-sm cursor-pointer transition-colors ${
                     selectedAgents.includes(agent)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      ? 'bg-accent-primary text-white'
+                      : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
                   }`}
                 >
                   <input
@@ -164,23 +172,16 @@ export function AddCustomServerModal({
         </div>
 
         {error && (
-          <div className="mt-4 p-2 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm rounded">
+          <div className="mt-4 p-3 bg-accent-error/10 border border-accent-error/30 text-accent-error text-sm rounded-lg">
             {error}
           </div>
         )}
 
         <div className="flex justify-end gap-2 mt-6">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-          >
+          <button onClick={onClose} className="btn-secondary">
             Cancel
           </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
+          <button onClick={handleSubmit} disabled={isSubmitting} className="btn-primary disabled:opacity-50">
             {isSubmitting ? 'Adding...' : 'Add Server'}
           </button>
         </div>
