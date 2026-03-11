@@ -236,7 +236,15 @@ Create a complete design system with all tokens and component styles."""
             temperature=0.4,
             max_tokens=8192,
         )
-        
+
+        # Check for LLM errors (missing API key, auth failure, etc.)
+        if result.get("error"):
+            error_msg = result.get("error_message") or result.get("error")
+            return {
+                "error": error_msg,
+                "design_system": {"error": error_msg},
+            }
+
         try:
             design_system = json.loads(result["content"])
         except json.JSONDecodeError:

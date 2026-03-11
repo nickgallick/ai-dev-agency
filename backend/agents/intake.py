@@ -236,7 +236,15 @@ Provide your classification as JSON."""
             system_prompt=self.SYSTEM_PROMPT,
             temperature=0.3,
         )
-        
+
+        # Check for LLM errors (missing API key, auth failure, etc.)
+        if result.get("error"):
+            error_msg = result.get("error_message") or result.get("error")
+            return {
+                "error": error_msg,
+                "classification": {"error": error_msg},
+            }
+
         # Parse the JSON response
         try:
             classification = json.loads(result["content"])

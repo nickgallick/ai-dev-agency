@@ -389,7 +389,14 @@ Generate production-ready code. Return only the code, no markdown."""
                     temperature=0.3,
                     max_tokens=2000,
                 )
-                
+
+                # Check for LLM errors
+                if result.get("error"):
+                    error_msg = result.get("error_message") or result.get("error")
+                    logger.warning(f"LLM error generating {filepath}: {error_msg}")
+                    generated[filepath] = f"// TODO: Implement {filepath}\n// LLM Error: {error_msg}"
+                    continue
+
                 code = result["content"]
                 # Clean up any markdown code blocks
                 if code.startswith("```"):

@@ -216,7 +216,15 @@ Include build_manifest.json as the single source of truth."""
             temperature=0.4,
             max_tokens=8192,
         )
-        
+
+        # Check for LLM errors (missing API key, auth failure, etc.)
+        if result.get("error"):
+            error_msg = result.get("error_message") or result.get("error")
+            return {
+                "error": error_msg,
+                "architecture": {"error": error_msg},
+            }
+
         try:
             architecture = json.loads(result["content"])
         except json.JSONDecodeError:

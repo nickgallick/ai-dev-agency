@@ -168,7 +168,15 @@ If Figma tokens were provided, incorporate them into your color and typography r
             temperature=0.5,
             max_tokens=4096,
         )
-        
+
+        # Check for LLM errors (missing API key, auth failure, etc.)
+        if result.get("error"):
+            error_msg = result.get("error_message") or result.get("error")
+            return {
+                "error": error_msg,
+                "research": {"error": error_msg},
+            }
+
         try:
             research = json.loads(result["content"])
         except json.JSONDecodeError:
