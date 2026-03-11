@@ -469,7 +469,7 @@ export default function NewProject() {
   }
 
   return (
-    <div className="space-y-6 pb-48 lg:pb-32">
+    <div className="space-y-6 pb-8 lg:pb-32">
       {/* Header */}
       <div className="mb-2">
         <h1 className="text-2xl lg:text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
@@ -1413,9 +1413,58 @@ export default function NewProject() {
           )}
         </div>
 
-        {/* ============ STEP 4: BUILD SUMMARY (Sticky) ============ */}
-        <div 
-          className="fixed bottom-16 lg:bottom-0 left-0 right-0 z-[110] lg:left-64"
+        {/* ============ STEP 4: BUILD SUMMARY (Mobile inline) ============ */}
+        <div className="lg:hidden glass-card p-4 space-y-3">
+          <div className="flex items-center gap-3 mb-1">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold"
+                  style={{ background: form.brief && form.projectType ? 'var(--gradient-accent)' : 'var(--background-tertiary)', color: 'white' }}>4</span>
+            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Build Summary</span>
+            {costEstimate[form.costProfile] && (
+              <span className="ml-auto text-lg font-bold" style={{ color: 'var(--accent-primary)' }}>
+                Est: {costEstimate[form.costProfile]}
+              </span>
+            )}
+          </div>
+          {(!form.brief.trim() || !form.projectType) && (
+            <p className="text-sm text-center" style={{ color: 'var(--text-tertiary)' }}>
+              {!form.brief.trim()
+                ? 'Enter a project description to continue'
+                : 'Select a project type above to continue'}
+            </p>
+          )}
+          {submitError && (
+            <div className="flex items-start gap-2 rounded-lg p-3"
+                 style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#ef4444' }} />
+              <p className="text-sm" style={{ color: '#ef4444' }}>{submitError}</p>
+            </div>
+          )}
+          <button
+            type="submit"
+            className="btn-iridescent w-full"
+            disabled={!form.brief.trim() || !form.projectType || createProject.isPending}
+          >
+            {createProject.isPending ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Starting Build...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <Rocket className="w-5 h-5" />
+                Start Building
+                <ArrowRight className="w-5 h-5" />
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* ============ STEP 4: BUILD SUMMARY (Desktop sticky footer) ============ */}
+        <div
+          className="hidden lg:block fixed bottom-0 left-0 right-0 z-[110] lg:left-64"
           style={{ 
             background: 'var(--background-primary)',
             borderTop: '1px solid var(--glass-border)',
