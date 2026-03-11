@@ -105,14 +105,18 @@ class QueueWorker:
     
     async def _process_queue(self):
         """Process items from the queue"""
+        queue_status = self._queue_manager.get_queue_status()
+        queue_len = queue_status.get("queue_length", 0)
+        if queue_len > 0:
+            print(f"[QueueWorker] Queue has {queue_len} items, active: {len(self._current_tasks)}")
         while True:
             # Check if we have capacity
             active_count = len(self._current_tasks)
             max_concurrent = self._queue_manager._max_concurrent
-            
+
             if active_count >= max_concurrent:
                 return
-            
+
             # Try to dequeue a project
             item = self._queue_manager.dequeue_project()
             if item is None:
