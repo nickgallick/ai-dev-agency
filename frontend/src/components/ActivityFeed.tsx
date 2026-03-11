@@ -26,8 +26,13 @@ export function ActivityFeed({ projectId, isActive }: ActivityFeedProps) {
   const feedRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
+  const [reconnectKey, setReconnectKey] = useState(0)
+
   useEffect(() => {
     if (!isActive || !projectId) return
+
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let cancelled = false
 
     // Connect to SSE endpoint
     const apiUrl = import.meta.env.VITE_API_URL || ''
@@ -48,7 +53,7 @@ export function ActivityFeed({ projectId, isActive }: ActivityFeedProps) {
           const newEvents = [...prev, data].slice(-50)
           return newEvents
         })
-        
+
         // Update progress
         if (data.progress !== undefined && data.progress !== null) {
           setCurrentProgress(data.progress)
@@ -60,27 +65,23 @@ export function ActivityFeed({ projectId, isActive }: ActivityFeedProps) {
 
     eventSource.onerror = () => {
       setConnected(false)
-      // Close failed connection and attempt reconnect after delay
       eventSource.close()
       eventSourceRef.current = null
-      const timer = setTimeout(() => {
-        // Re-trigger the effect by toggling a reconnect
-        if (isActive && projectId) {
-          const retrySource = new EventSource(`${apiUrl}/api/activity/${projectId}/stream`)
-          eventSourceRef.current = retrySource
-          retrySource.onopen = () => setConnected(true)
-          retrySource.onmessage = eventSource.onmessage
-          retrySource.onerror = eventSource.onerror
+      // Schedule reconnect — the effect cleanup will cancel this if component unmounts
+      retryTimer = setTimeout(() => {
+        if (!cancelled) {
+          setReconnectKey(k => k + 1)
         }
       }, 3000)
-      return () => clearTimeout(timer)
     }
 
     return () => {
+      cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
       eventSource.close()
       eventSourceRef.current = null
     }
-  }, [projectId, isActive])
+  }, [projectId, isActive, reconnectKey])
 
   // Auto-scroll to bottom
   useEffect(() => {

@@ -243,7 +243,6 @@ async def get_conversation(conversation_id: str, db: Session = Depends(get_db)):
 @router.post("/start-build", response_model=StartBuildResponse)
 async def start_build_from_conversation(req: StartBuildRequest, db: Session = Depends(get_db)):
     """Convert a pre-build conversation into a structured brief and create a project."""
-    from api.projects import _create_project_record
 
     # Get all conversation messages
     messages = (
@@ -297,18 +296,25 @@ async def start_build_from_conversation(req: StartBuildRequest, db: Session = De
     }
 
     # Create project via the existing project creation logic
-    from models.project import Project, ProjectStatus, CostProfile
+    from models.project import Project, ProjectType, ProjectStatus, CostProfile
     import uuid as uuid_module
 
     project_name = req.name or f"Project from chat {req.conversation_id[:8]}"
+
+    # Resolve project type enum
+    resolved_type = None
+    try:
+        resolved_type = ProjectType(detected_type) if detected_type else ProjectType.WEB_SIMPLE
+    except ValueError:
+        resolved_type = ProjectType.WEB_SIMPLE
 
     project = Project(
         id=uuid_module.uuid4(),
         brief=final_brief,
         name=project_name,
-        status=ProjectStatus.QUEUED,
+        status=ProjectStatus.PENDING,
         cost_profile=CostProfile(req.cost_profile) if req.cost_profile in [e.value for e in CostProfile] else CostProfile.BALANCED,
-        project_type=detected_type or "web_simple",
+        project_type=resolved_type,
         requirements=requirements,
     )
     db.add(project)
@@ -316,8 +322,16 @@ async def start_build_from_conversation(req: StartBuildRequest, db: Session = De
 
     # Enqueue the project
     try:
-        from task_queue.manager import enqueue_project
-        enqueue_project(str(project.id))
+        from task_queue.manager import get_queue_manager
+        queue_manager = get_queue_manager()
+        queue_manager.enqueue_project(
+            project_id=str(project.id),
+            metadata={
+                "name": project_name,
+                "brief": final_brief[:200],
+                "cost_profile": req.cost_profile or "balanced",
+            },
+        )
     except Exception as e:
         logger.warning(f"Failed to enqueue project: {e}")
 

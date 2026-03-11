@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 
 interface User {
   id: string
@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [setupRequired, setSetupRequired] = useState(false)
-  const [lastActivity, setLastActivity] = useState(Date.now())
+  const lastActivityRef = useRef(Date.now())
 
   // Check auth status on mount
   const checkAuth = useCallback(async () => {
@@ -94,20 +94,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return
 
-    const updateActivity = () => setLastActivity(Date.now())
-    
+    const updateActivity = () => { lastActivityRef.current = Date.now() }
+
     window.addEventListener('mousemove', updateActivity)
     window.addEventListener('keypress', updateActivity)
     window.addEventListener('click', updateActivity)
     window.addEventListener('scroll', updateActivity)
-    
+
     const idleCheck = setInterval(() => {
-      if (Date.now() - lastActivity > IDLE_TIMEOUT_MS) {
+      if (Date.now() - lastActivityRef.current > IDLE_TIMEOUT_MS) {
         // Session timed out due to inactivity
         logout()
       }
     }, 60000) // Check every minute
-    
+
     return () => {
       window.removeEventListener('mousemove', updateActivity)
       window.removeEventListener('keypress', updateActivity)
@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('scroll', updateActivity)
       clearInterval(idleCheck)
     }
-  }, [user, lastActivity])
+  }, [user])
 
   const login = async (email: string, password: string, rememberMe = false) => {
     const res = await fetch(`${API_BASE}/login`, {
@@ -132,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     const data = await res.json()
     setUser(data.user)
-    setLastActivity(Date.now())
+    lastActivityRef.current = Date.now()
   }
 
   const logout = async () => {
@@ -164,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json()
     setUser(data.user)
     setSetupRequired(false)
-    setLastActivity(Date.now())
+    lastActivityRef.current = Date.now()
   }
 
   const refreshToken = async () => {
