@@ -11,6 +11,9 @@ from .preset import ProjectPreset
 # Phase 11B: Knowledge Base + Templates
 from .knowledge_base import KnowledgeBase
 from .project_template import ProjectTemplate
+# Phase 12: Pipeline Checkpointing + Audit Logging
+from .pipeline_checkpoint import PipelineCheckpoint
+from .audit_log import AuditLog
 
 __all__ = [
     "Base",
@@ -34,6 +37,9 @@ __all__ = [
     # Phase 11B
     "KnowledgeBase",
     "ProjectTemplate",
+    # Phase 12
+    "PipelineCheckpoint",
+    "AuditLog",
 ]
 
 # Note: Auth models (User, RefreshToken) are in backend/auth/models.py

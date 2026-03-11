@@ -273,6 +273,109 @@ async def delete_project(
     db.commit()
 
 
+@router.post("/{project_id}/resume")
+async def resume_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+):
+    """Resume a failed project from its last checkpoint.
+
+    Looks up the latest checkpoint and re-enqueues the project for
+    processing. The pipeline executor will automatically pick up
+    from where it left off.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.status.value not in ("failed", "paused"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot resume project with status '{project.status.value}'. "
+                   f"Only failed or paused projects can be resumed.",
+        )
+
+    # Check that a checkpoint exists
+    from orchestration.checkpointing import get_latest_checkpoint
+    checkpoint = get_latest_checkpoint(db, project_id)
+    if not checkpoint:
+        raise HTTPException(
+            status_code=400,
+            detail="No checkpoint found. Project must be restarted from scratch.",
+        )
+
+    # Update status back to intake so the worker picks it up
+    project.status = ProjectStatus.PENDING
+    db.commit()
+
+    # Re-enqueue
+    from task_queue.manager import get_queue_manager
+    queue_manager = get_queue_manager()
+    queue_manager.enqueue_project(
+        project_id=str(project_id),
+        metadata={
+            "name": project.name,
+            "brief": (project.brief or "")[:200],
+            "cost_profile": project.cost_profile.value if project.cost_profile else "balanced",
+            "resume": True,
+        },
+    )
+
+    return {
+        "success": True,
+        "project_id": project_id,
+        "resumed_from_step": checkpoint["step_number"],
+        "resumed_from_agent": checkpoint["agent_name"],
+    }
+
+
+@router.get("/{project_id}/checkpoints")
+async def get_project_checkpoints(
+    project_id: str,
+    db: Session = Depends(get_db),
+):
+    """Get checkpoint history for a project."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from orchestration.checkpointing import get_checkpoint_history
+    history = get_checkpoint_history(db, project_id)
+    return {"project_id": project_id, "checkpoints": history}
+
+
+@router.get("/{project_id}/audit-log")
+async def get_project_audit_log(
+    project_id: str,
+    event_type: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    """Get structured audit log for a project."""
+    from models.audit_log import AuditLog
+
+    query = db.query(AuditLog).filter(AuditLog.project_id == project_id)
+    if event_type:
+        query = query.filter(AuditLog.event_type == event_type)
+    entries = query.order_by(AuditLog.timestamp.asc()).limit(limit).all()
+
+    return {
+        "project_id": project_id,
+        "entries": [
+            {
+                "id": str(e.id),
+                "event_type": e.event_type,
+                "agent_name": e.agent_name,
+                "message": e.message,
+                "details": e.details,
+                "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+                "duration_ms": e.duration_ms,
+            }
+            for e in entries
+        ],
+    }
+
+
 async def run_pipeline(project_id: str, brief: str, cost_profile: str, requirements: dict = None):
     """Run the pipeline directly (used by queue worker).
 

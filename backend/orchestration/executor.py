@@ -1,8 +1,14 @@
 """Pipeline executor for running projects through the agent workflow.
 
-Enhanced with real-time activity streaming via SSE and actual agent execution.
+Enhanced with:
+- Real-time activity streaming via SSE
+- PostgreSQL checkpointing for crash recovery / resume
+- Structured audit logging for every pipeline decision
+- LangSmith tracing integration (when configured)
 """
 import asyncio
+import os
+import time
 import uuid
 import logging
 import traceback
@@ -10,8 +16,34 @@ from typing import Any, Dict, Optional, Callable
 from datetime import datetime
 
 from .pipeline import Pipeline, PipelineConfig, NodeStatus
+from .checkpointing import save_checkpoint, get_latest_checkpoint, delete_checkpoints
+from .audit import (
+    audit_pipeline_start, audit_pipeline_complete, audit_pipeline_failed,
+    audit_agent_start, audit_agent_complete, audit_agent_failed,
+    audit_agent_skipped, audit_agent_retry,
+    audit_checkpoint_save, audit_checkpoint_resume,
+)
 
 logger = logging.getLogger(__name__)
+
+# ── LangSmith tracing setup ─────────────────────────────────────────────
+
+_langsmith_enabled = False
+
+try:
+    if os.getenv("LANGCHAIN_TRACING_V2", "").lower() == "true":
+        from langsmith import traceable
+        _langsmith_enabled = True
+        logger.info("LangSmith tracing enabled")
+except ImportError:
+    traceable = None
+
+
+def _trace(name: str):
+    """Decorator that applies LangSmith tracing when available, otherwise no-op."""
+    if _langsmith_enabled and traceable:
+        return traceable(name=name)
+    return lambda fn: fn
 
 
 class PipelineExecutor:
@@ -20,6 +52,7 @@ class PipelineExecutor:
     def __init__(self, db_session=None):
         self.db = db_session
         self._progress_callback: Optional[Callable] = None
+        self._step_counter = 0  # tracks which step we're on for checkpointing
 
     def set_progress_callback(self, callback: Callable):
         """Set callback for progress updates."""
@@ -47,17 +80,16 @@ class PipelineExecutor:
         brief: str,
         cost_profile: str = "balanced",
         requirements: Optional[Dict[str, Any]] = None,
+        resume: bool = True,
     ) -> Dict[str, Any]:
-        """Execute the full pipeline for a project."""
+        """Execute the full pipeline for a project.
+
+        If `resume=True` (default), checks for an existing checkpoint and
+        resumes from where the pipeline left off instead of starting over.
+        """
+        pipeline_start = time.time()
 
         logger.info(f"Starting pipeline execution for project {project_id}")
-
-        # Emit pipeline start
-        self._emit_activity(
-            project_id, "pipeline_start",
-            "🚀 Pipeline started - building your project!",
-            progress=0
-        )
 
         # Create pipeline instance with config
         config = PipelineConfig(
@@ -66,13 +98,76 @@ class PipelineExecutor:
         )
         pipeline = Pipeline(config=config, db=self.db)
 
-        # Set up context for the pipeline — include structured requirements
+        # Set up context for the pipeline
         context = {
             "project_id": project_id,
             "brief": brief,
             "cost_profile": cost_profile,
             "requirements": requirements or {},
         }
+
+        # ── Check for existing checkpoint to resume from ─────────────
+        checkpoint = None
+        if resume and self.db:
+            checkpoint = get_latest_checkpoint(self.db, project_id)
+
+        if checkpoint:
+            # Resume from checkpoint
+            self._step_counter = checkpoint["step_number"]
+            pipeline.total_cost = checkpoint.get("total_cost", 0.0)
+            pipeline.cost_breakdown = checkpoint.get("cost_breakdown", {})
+
+            # Restore node states from checkpoint
+            saved_states = checkpoint.get("node_states", {})
+            for node_id, state in saved_states.items():
+                if node_id in pipeline.nodes:
+                    status_str = state.get("status", "pending")
+                    try:
+                        pipeline.nodes[node_id].status = NodeStatus(status_str)
+                    except ValueError:
+                        pipeline.nodes[node_id].status = NodeStatus.PENDING
+
+            # Restore context (merge saved context with fresh context)
+            saved_context = checkpoint.get("pipeline_context", {})
+            # Keep fresh brief/requirements but merge accumulated results
+            for key, val in saved_context.items():
+                if key.endswith("_result") or key.startswith("qa_retry"):
+                    context[key] = val
+
+            completed_agents = [
+                nid for nid, s in saved_states.items()
+                if s.get("status") in ("completed", "skipped")
+            ]
+
+            audit_checkpoint_resume(
+                self.db, project_id,
+                from_step=checkpoint["step_number"],
+                from_agent=checkpoint["agent_name"],
+                skipped_agents=completed_agents,
+            )
+
+            self._emit_activity(
+                project_id, "pipeline_resume",
+                f"Resuming from checkpoint (step {checkpoint['step_number']}, "
+                f"after {checkpoint['agent_name']})",
+                progress=self._estimate_progress(checkpoint["agent_name"])
+            )
+
+            logger.info(
+                f"Resumed from checkpoint step {checkpoint['step_number']} "
+                f"(after {checkpoint['agent_name']})"
+            )
+        else:
+            # Fresh start
+            self._step_counter = 0
+            self._emit_activity(
+                project_id, "pipeline_start",
+                "Pipeline started - building your project!",
+                progress=0
+            )
+
+        project_type = (requirements or {}).get("project_type", "unknown")
+        audit_pipeline_start(self.db, project_id, cost_profile, project_type)
 
         # Update project status in database
         if self.db:
@@ -92,11 +187,16 @@ class PipelineExecutor:
                     pipeline.total_cost,
                     pipeline.cost_breakdown
                 )
+                # Clean up checkpoints on success
+                delete_checkpoints(self.db, project_id)
+
+            duration_ms = int((time.time() - pipeline_start) * 1000)
+            audit_pipeline_complete(self.db, project_id, pipeline.total_cost, duration_ms)
 
             # Emit completion
             self._emit_activity(
                 project_id, "pipeline_complete",
-                "✅ Project build completed successfully!",
+                "Project build completed successfully!",
                 progress=100
             )
 
@@ -117,10 +217,13 @@ class PipelineExecutor:
         except Exception as e:
             logger.error(f"Pipeline failed: {e}\n{traceback.format_exc()}")
 
+            duration_ms = int((time.time() - pipeline_start) * 1000)
+            audit_pipeline_failed(self.db, project_id, str(e), duration_ms)
+
             # Emit failure
             self._emit_activity(
                 project_id, "pipeline_error",
-                f"❌ Pipeline failed: {str(e)}",
+                f"Pipeline failed: {str(e)}",
                 details={"error": str(e), "traceback": traceback.format_exc()}
             )
 
@@ -134,6 +237,19 @@ class PipelineExecutor:
                 "status": "failed",
                 "error": str(e),
             }
+
+    def _estimate_progress(self, agent_name: str) -> float:
+        """Estimate progress percentage from agent name."""
+        progress_map = {
+            "intake": 10, "research": 18, "architect": 28,
+            "design_system": 35, "asset_generation": 42, "content_generation": 48,
+            "pm_checkpoint_1": 52, "code_generation": 68, "integration_wiring": 72,
+            "pm_checkpoint_2": 76, "code_review": 80, "security": 84,
+            "seo": 86, "accessibility": 88, "qa": 92, "deployment": 96,
+            "post_deploy_verification": 98, "analytics_monitoring": 99,
+            "coding_standards": 100, "delivery": 100,
+        }
+        return progress_map.get(agent_name, 50)
 
     async def _run_pipeline_with_activity(
         self,
@@ -171,7 +287,7 @@ class PipelineExecutor:
         pipeline.context = context
 
         # QA retry tracking (max 3 attempts)
-        qa_retry_count = 0
+        qa_retry_count = context.get("qa_retry_count", 0)
         MAX_QA_RETRIES = 3
         QA_RETRY_NODES = [
             "code_generation", "integration_wiring", "pm_checkpoint_2", "code_review",
@@ -194,9 +310,15 @@ class PipelineExecutor:
                         f"QA failed — retrying code generation "
                         f"(attempt {qa_retry_count}/{MAX_QA_RETRIES})"
                     )
+
+                    audit_agent_retry(
+                        self.db, project_id,
+                        qa_retry_count, MAX_QA_RETRIES, QA_RETRY_NODES,
+                    )
+
                     self._emit_activity(
                         project_id, "agent_retry",
-                        f"🔄 QA found issues — retrying code generation "
+                        f"QA found issues — retrying code generation "
                         f"(attempt {qa_retry_count}/{MAX_QA_RETRIES})",
                         progress=52
                     )
@@ -242,12 +364,16 @@ class PipelineExecutor:
         agent_progress: Dict,
         results: Dict
     ):
-        """Execute a single node with activity streaming."""
+        """Execute a single node with activity streaming, checkpointing, and audit logging."""
         agent_name = node.id
         progress_info = agent_progress.get(agent_name, (50, 60, f"Running {agent_name}..."))
         start_progress, end_progress, message = progress_info
 
-        # Emit agent start
+        self._step_counter += 1
+        step = self._step_counter
+
+        # Audit + activity: agent start
+        audit_agent_start(self.db, project_id, agent_name, step)
         self._emit_activity(
             project_id, "agent_start",
             message,
@@ -264,36 +390,104 @@ class PipelineExecutor:
             progress=(start_progress + end_progress) / 2
         )
 
+        agent_start = time.time()
+
         try:
             # Actually execute the node
             logger.info(f"Executing agent: {agent_name}")
             result = await pipeline.execute_node(node)
             results[node.id] = result
 
+            duration_ms = int((time.time() - agent_start) * 1000)
+            cost = 0.0
+            if result and hasattr(result, 'data') and isinstance(result.data, dict):
+                cost = result.data.get('cost', 0.0)
+
             # Capture knowledge from successful agent outputs
             if result and result.success and self.db:
                 await self._capture_knowledge(project_id, agent_name, result, pipeline.context)
+
+            # Audit: agent complete or failed
+            if result and result.success:
+                audit_agent_complete(self.db, project_id, agent_name, duration_ms, cost)
+            else:
+                err = (result.errors[0] if result and result.errors else "unknown")
+                audit_agent_failed(self.db, project_id, agent_name, str(err), duration_ms)
 
             # Emit completion
             status = "complete" if result and result.success else "failed"
             self._emit_activity(
                 project_id, f"agent_{status}",
-                f"{'✅ Completed' if result and result.success else '⚠️ Completed with issues'} {agent_name.replace('_', ' ').title()}",
+                f"{'Completed' if result and result.success else 'Completed with issues'} {agent_name.replace('_', ' ').title()}",
                 agent_name=agent_name,
                 progress=end_progress,
                 details={"success": result.success if result else False}
             )
 
         except Exception as e:
+            duration_ms = int((time.time() - agent_start) * 1000)
             logger.error(f"Agent {agent_name} failed: {e}")
+
+            audit_agent_failed(self.db, project_id, agent_name, str(e), duration_ms)
+
             self._emit_activity(
                 project_id, "agent_error",
-                f"❌ Error in {agent_name}: {str(e)}",
+                f"Error in {agent_name}: {str(e)}",
                 agent_name=agent_name,
                 details={"error": str(e)}
             )
             # Continue with next agents instead of raising
             results[node.id] = None
+
+        # ── Save checkpoint after every agent ────────────────────────
+        if self.db:
+            self._save_pipeline_checkpoint(project_id, pipeline, agent_name, step)
+
+    def _save_pipeline_checkpoint(
+        self, project_id: str, pipeline: Pipeline, agent_name: str, step: int
+    ):
+        """Snapshot full pipeline state to PostgreSQL."""
+        try:
+            # Build node_states dict
+            node_states = {}
+            for nid, node in pipeline.nodes.items():
+                node_states[nid] = {
+                    "status": node.status.value,
+                    "has_result": node.result is not None,
+                }
+
+            # Build config dict
+            config_dict = {
+                "cost_profile": pipeline.config.cost_profile,
+                "max_parallel": pipeline.config.max_parallel,
+                "timeout_per_node": pipeline.config.timeout_per_node,
+                "continue_on_failure": pipeline.config.continue_on_failure,
+                "project_type": pipeline.config.project_type,
+            }
+
+            agent_status = "completed"
+            node = pipeline.nodes.get(agent_name)
+            if node:
+                agent_status = node.status.value
+
+            cp_id = save_checkpoint(
+                db=self.db,
+                project_id=project_id,
+                agent_name=agent_name,
+                agent_status=agent_status,
+                node_states=node_states,
+                pipeline_context=pipeline.context,
+                pipeline_config=config_dict,
+                total_cost=pipeline.total_cost,
+                cost_breakdown=pipeline.cost_breakdown,
+                step_number=step,
+            )
+
+            if cp_id:
+                audit_checkpoint_save(self.db, project_id, agent_name, step, cp_id)
+
+        except Exception as e:
+            logger.warning(f"Checkpoint save failed for {agent_name}: {e}")
 
     async def _execute_parallel_with_activity(
         self,

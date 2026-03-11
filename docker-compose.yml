@@ -14,28 +14,45 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - VERCEL_V0_API_KEY=${VERCEL_V0_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
+      # LangSmith tracing (set LANGCHAIN_TRACING_V2=true to enable)
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-ai-dev-agency}
+      - LANGCHAIN_ENDPOINT=${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
     volumes:
       - ./backend:/app
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
 
   dashboard:
     build: ./frontend
     ports:
       - "5173:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   db:
     image: postgres:16-alpine
@@ -53,6 +70,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    command: >
+      postgres
+        -c shared_buffers=128MB
+        -c effective_cache_size=256MB
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=4MB
+        -c max_connections=100
 
 volumes:
   pgdata:

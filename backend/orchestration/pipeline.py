@@ -19,6 +19,7 @@ Phase 11D Enhancements:
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -28,6 +29,19 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from agents.base import AgentResult, BaseAgent
+
+# Phase 12: LangSmith tracing
+_langsmith_available = False
+_langsmith_client = None
+try:
+    if os.getenv("LANGCHAIN_TRACING_V2", "").lower() == "true":
+        from langsmith import Client as LangSmithClient
+        from langsmith.run_trees import RunTree
+        _langsmith_client = LangSmithClient()
+        _langsmith_available = True
+        logging.getLogger(__name__).info("LangSmith tracing enabled for pipeline")
+except ImportError:
+    pass
 # Phase 11B: Knowledge capture
 from knowledge.capture import capture_agent_knowledge, auto_generate_template
 # Import all actual agents
@@ -490,10 +504,14 @@ class Pipeline:
         return groups
 
     async def execute_node(self, node: PipelineNode) -> AgentResult:
-        """Execute a single pipeline node with performance analytics tracking."""
+        """Execute a single pipeline node with performance analytics tracking.
+
+        When LangSmith is configured, each agent execution is wrapped in a
+        trace span for full end-to-end observability.
+        """
         self.logger.info(f"Executing node: {node.name}")
         node.status = NodeStatus.RUNNING
-        
+
         # Phase 9A: Track execution time
         start_time = time.time()
         model_used = "placeholder"
@@ -501,6 +519,25 @@ class Pipeline:
         cost = 0.0
         error_occurred = False
         error_message = None
+
+        # Phase 12: LangSmith trace context
+        run_tree = None
+        if _langsmith_available and _langsmith_client:
+            try:
+                project_id = self.context.get("project_id", "unknown")
+                run_tree = RunTree(
+                    name=f"agent:{node.id}",
+                    run_type="chain",
+                    inputs={
+                        "agent": node.id,
+                        "project_id": str(project_id),
+                        "brief": str(self.context.get("brief", ""))[:500],
+                    },
+                    project_name=os.getenv("LANGCHAIN_PROJECT", "ai-dev-agency"),
+                )
+            except Exception as e:
+                self.logger.debug(f"LangSmith trace setup failed: {e}")
+                run_tree = None
 
         try:
             # Skip placeholder agents
@@ -591,6 +628,23 @@ class Pipeline:
             # Phase 11B: Capture knowledge from completed agent
             if node.status == NodeStatus.COMPLETED and node.result and node.result.success:
                 await self._capture_agent_knowledge(node)
+
+            # Phase 12: Complete LangSmith trace span
+            if run_tree:
+                try:
+                    run_tree.end(
+                        outputs={
+                            "status": node.status.value,
+                            "success": not error_occurred,
+                            "duration_ms": execution_time_ms,
+                            "cost": cost,
+                            "model": model_used,
+                        },
+                        error=error_message,
+                    )
+                    run_tree.post()
+                except Exception as e:
+                    self.logger.debug(f"LangSmith trace post failed: {e}")
     
     async def _capture_agent_knowledge(self, node: PipelineNode) -> None:
         """Capture knowledge from a completed agent.
