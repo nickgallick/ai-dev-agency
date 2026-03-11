@@ -210,6 +210,50 @@ export default function ProjectView() {
         </div>
       </div>
 
+      {/* Build Failure Banner */}
+      {project.status === 'failed' && (() => {
+        const ao = outputs?.agent_outputs || {}
+        const codeGen = ao.code_generation
+        const failedAgents = Object.entries(ao)
+          .filter(([, v]: [string, any]) => v?.success === false || v?.error)
+          .map(([name, v]: [string, any]) => ({ name, error: v?.error || v?.error_message || 'Unknown error' }))
+        const codeGenError = codeGen?.error || codeGen?.error_message
+        return (
+          <Card className="!border-accent-error/30 !bg-accent-error/5">
+            <div className="flex items-start gap-3">
+              <XCircle className="w-6 h-6 text-accent-error flex-shrink-0 mt-0.5" />
+              <div className="space-y-2 min-w-0">
+                <h3 className="font-semibold text-accent-error">Build Failed</h3>
+                {codeGenError ? (
+                  <p className="text-sm text-text-secondary">
+                    <strong>Code Generation:</strong> {codeGenError}
+                  </p>
+                ) : (
+                  <p className="text-sm text-text-secondary">
+                    The pipeline completed but failed to produce working code. Check agent outputs below for details.
+                  </p>
+                )}
+                {failedAgents.length > 0 && (
+                  <details className="text-sm">
+                    <summary className="cursor-pointer text-text-secondary hover:text-text-primary">
+                      {failedAgents.length} agent{failedAgents.length > 1 ? 's' : ''} failed
+                    </summary>
+                    <ul className="mt-1 space-y-1 text-text-tertiary">
+                      {failedAgents.map(a => (
+                        <li key={a.name}>
+                          <span className="font-medium text-text-secondary">{a.name.replace(/_/g, ' ')}:</span>{' '}
+                          {String(a.error).slice(0, 200)}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            </div>
+          </Card>
+        )
+      })()}
+
       {/* Real-Time Pipeline DAG */}
       <Card className="!p-0 overflow-hidden">
         <PipelineDAG

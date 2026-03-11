@@ -273,6 +273,7 @@ Generate these files:
             prompt=prompt,
             model="anthropic/claude-sonnet-4",
             temperature=0.3,
+            max_tokens=16384,
         )
 
         logger.info(f"[CODE_GEN_LLM] LLM response: content_len={len(result.get('content', ''))}, "
@@ -331,17 +332,31 @@ Generate complete, production-ready code. Format each file as:
         Supports formats:
           ```filename:path/to/file.ext   (preferred)
           ```path/to/file.ext            (bare path with extension)
+
+        Also handles truncated responses where the last code block may
+        not have a closing ``` (e.g. when max_tokens is reached).
         """
         files = []
         import re
 
-        # Primary: explicit filename: prefix
+        # Primary: explicit filename: prefix (closed blocks)
         pattern = r"```filename:([^\n]+)\n(.*?)```"
         matches = re.findall(pattern, content, re.DOTALL)
         for filename, code in matches:
             path = filename.strip()
             if path and code.strip():
                 files.append({"path": path, "content": code.strip()})
+
+        # Also capture a trailing unclosed block (truncated response)
+        unclosed = r"```filename:([^\n]+)\n((?:(?!```).)*)$"
+        trailing = re.search(unclosed, content, re.DOTALL)
+        if trailing:
+            path = trailing.group(1).strip()
+            code = trailing.group(2).strip()
+            # Only add if we didn't already capture it and it has meaningful content
+            if path and code and len(code) > 20 and not any(f["path"] == path for f in files):
+                files.append({"path": path, "content": code})
+                logger.warning(f"[CODE_GEN] Recovered truncated file: {path} ({len(code)} chars)")
 
         if files:
             return files
@@ -353,6 +368,16 @@ Generate complete, production-ready code. Format each file as:
             path = filename.strip()
             if path and code.strip():
                 files.append({"path": path, "content": code.strip()})
+
+        # Trailing unclosed block for file-path format
+        unclosed2 = r"```([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)\n((?:(?!```).)*)$"
+        trailing2 = re.search(unclosed2, content, re.DOTALL)
+        if trailing2:
+            path = trailing2.group(1).strip()
+            code = trailing2.group(2).strip()
+            if path and code and len(code) > 20 and not any(f["path"] == path for f in files):
+                files.append({"path": path, "content": code})
+                logger.warning(f"[CODE_GEN] Recovered truncated file: {path} ({len(code)} chars)")
 
         if files:
             return files
@@ -717,8 +742,9 @@ Format: ```filename:path/to/file.ext
             prompt=prompt,
             model="anthropic/claude-sonnet-4",
             temperature=0.3,
+            max_tokens=16384,
         )
-        
+
         # Parse the response
         strategy = LLMCodeStrategy(None, project_type)
         files = strategy._parse_code_blocks(result.get("content", ""))
