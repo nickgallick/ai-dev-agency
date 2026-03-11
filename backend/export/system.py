@@ -353,13 +353,13 @@ def export_knowledge_base(
     for entry in entries:
         entry_data = {
             "id": str(entry.id),
-            "knowledge_type": entry.knowledge_type,
+            "entry_type": entry.entry_type,
             "project_type": entry.project_type,
-            "source_project_id": str(entry.source_project_id) if entry.source_project_id else None,
-            "source_agent": entry.source_agent,
+            "project_id": str(entry.project_id) if entry.project_id else None,
+            "agent_name": entry.agent_name,
             "title": entry.title,
             "content": entry.content,
-            "metadata": entry.metadata,
+            "entry_metadata": entry.entry_metadata,
             "quality_score": entry.quality_score,
             "usage_count": entry.usage_count,
             "created_at": entry.created_at.isoformat() if entry.created_at else None,
@@ -408,22 +408,22 @@ def import_knowledge_base(
             # Check if entry already exists (by title and type)
             existing = db.query(KnowledgeBase).filter(
                 KnowledgeBase.title == entry_data.get("title"),
-                KnowledgeBase.knowledge_type == entry_data.get("knowledge_type")
+                KnowledgeBase.entry_type == entry_data.get("entry_type")
             ).first()
-            
+
             if existing and merge:
                 skipped += 1
                 continue
-            
+
             entry = KnowledgeBase(
                 id=uuid.uuid4(),
-                knowledge_type=entry_data.get("knowledge_type"),
+                entry_type=entry_data.get("entry_type"),
                 project_type=entry_data.get("project_type"),
-                source_project_id=entry_data.get("source_project_id"),
-                source_agent=entry_data.get("source_agent"),
+                project_id=entry_data.get("project_id"),
+                agent_name=entry_data.get("agent_name"),
                 title=entry_data.get("title"),
                 content=entry_data.get("content"),
-                metadata=entry_data.get("metadata", {}),
+                entry_metadata=entry_data.get("entry_metadata", {}),
                 quality_score=entry_data.get("quality_score", 0.8),
                 usage_count=entry_data.get("usage_count", 0)
             )

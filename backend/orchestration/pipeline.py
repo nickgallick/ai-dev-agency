@@ -448,20 +448,20 @@ class Pipeline:
                     node.dependencies.remove(node_id)
 
     def get_ready_nodes(self) -> List[PipelineNode]:
-        """Get nodes that are ready to execute (all dependencies completed)."""
+        """Get nodes that are ready to execute (all dependencies completed or skipped)."""
         ready = []
         for node in self.nodes.values():
             if node.status != NodeStatus.PENDING:
                 continue
 
-            # Check if all dependencies are completed
-            deps_completed = all(
-                self.nodes[dep].status == NodeStatus.COMPLETED
+            # Check if all dependencies are done (completed or skipped)
+            deps_done = all(
+                self.nodes[dep].status in (NodeStatus.COMPLETED, NodeStatus.SKIPPED)
                 for dep in node.dependencies
                 if dep in self.nodes
             )
 
-            # Check if any dependency failed
+            # Check if any dependency failed (not skipped — skipped is OK)
             deps_failed = any(
                 self.nodes[dep].status == NodeStatus.FAILED
                 for dep in node.dependencies
@@ -472,7 +472,7 @@ class Pipeline:
                 node.status = NodeStatus.SKIPPED
                 continue
 
-            if deps_completed:
+            if deps_done:
                 ready.append(node)
 
         return ready
