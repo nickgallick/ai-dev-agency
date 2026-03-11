@@ -187,19 +187,8 @@ export default function ProjectView() {
     { name: 'Standards', status: getAgentStatus(project.status, 'coding_standards') },
   ]
 
-  // Extract QA and deployment data from outputs
-  const qaReport = outputs?.agent_outputs?.qa?.report
+  // Extract deployment data for links section
   const deploymentReport = outputs?.agent_outputs?.deployment?.report
-  
-  // Extract Phase 6 data from outputs
-  const monitoringReport = outputs?.agent_outputs?.analytics_monitoring?.report
-  const codingStandardsReport = outputs?.agent_outputs?.coding_standards?.report
-  
-  // Extract Phase 8 data - New agents
-  const pmCheckpoint1 = outputs?.agent_outputs?.pm_checkpoint_1
-  const pmCheckpoint2 = outputs?.agent_outputs?.pm_checkpoint_2
-  const codeReviewReport = outputs?.agent_outputs?.code_review?.report
-  const deployVerificationReport = outputs?.agent_outputs?.post_deploy_verification?.report
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
@@ -239,18 +228,35 @@ export default function ProjectView() {
         </Card>
       </details>
 
-      {/* Real-time Activity Feed */}
+      {/* Real-time Activity Feed + Live Agent Outputs (side by side on desktop during builds) */}
       {project.status !== 'completed' && project.status !== 'failed' && (
-        <Card>
-          <h3 className="font-medium text-text-primary mb-4 flex items-center gap-2">
-            <Activity className="w-5 h-5 text-accent-primary" />
-            Live Activity
-          </h3>
-          <ActivityFeed 
-            projectId={id!} 
-            isActive={project.status !== 'completed' && project.status !== 'failed'} 
-          />
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Activity Feed - left column */}
+          <Card>
+            <h3 className="font-medium text-text-primary mb-4 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-accent-primary" />
+              Live Activity
+            </h3>
+            <ActivityFeed
+              projectId={id!}
+              isActive={project.status !== 'completed' && project.status !== 'failed'}
+            />
+          </Card>
+
+          {/* Live Agent Outputs - right column */}
+          <Card>
+            <h3 className="font-medium text-text-primary mb-4 flex items-center gap-2">
+              <Code2 className="w-5 h-5 text-accent-primary" />
+              Agent Outputs (Live)
+            </h3>
+            <div className="max-h-[500px] overflow-y-auto">
+              <AgentOutputTimeline
+                projectStatus={project.status}
+                agentOutputs={outputs?.agent_outputs || {}}
+              />
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* Phase 11C: Build Controls & HITL Approval Gates */}
@@ -628,584 +634,22 @@ export default function ProjectView() {
         </div>
       )}
 
-      {/* Artifact Viewer - only show for completed projects */}
-      {project.status === 'completed' && (
-        <ArtifactViewer
-          projectId={id!}
-          projectType={project.project_type}
-          liveUrl={project.live_url}
-          githubRepo={project.github_repo}
-          outputs={outputs?.agent_outputs}
-        />
-      )}
+      {/* Artifact Viewer — always visible, shows live preview + code + all report tabs */}
+      <ArtifactViewer
+        projectId={id!}
+        projectType={project.project_type}
+        liveUrl={project.live_url}
+        githubRepo={project.github_repo}
+        outputs={outputs?.agent_outputs}
+      />
 
-      {/* Inline report cards - only show during build (not when completed, since ArtifactViewer handles it) */}
-
-      {/* PM Checkpoint 1 - Build Manifest */}
-      {project.status !== 'completed' && pmCheckpoint1 && pmCheckpoint1.build_manifest && (
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <ClipboardCheck className="w-5 h-5 text-accent-primary" />
-            <h3 className="font-medium text-text-primary">PM Checkpoint 1: Coherence</h3>
-            <Badge variant={pmCheckpoint1.coherent ? 'success' : 'error'}>
-              {pmCheckpoint1.coherent ? 'Passed' : 'Issues Found'}
-            </Badge>
-          </div>
-          
-          {pmCheckpoint1.issues?.length > 0 && (
-            <div className="mb-4">
-              <h4 className="text-sm font-medium text-text-secondary mb-2">Validation Issues</h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {pmCheckpoint1.issues.slice(0, 10).map((issue: any, idx: number) => (
-                  <div key={idx} className={`p-2 rounded border-l-2 ${
-                    issue.severity === 'critical' ? 'border-red-400 bg-red-500/10' :
-                    issue.severity === 'warning' ? 'border-yellow-400 bg-yellow-500/10' :
-                    'border-blue-400 bg-blue-500/10'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={issue.severity === 'critical' ? 'error' : issue.severity === 'warning' ? 'warning' : 'info'}>
-                        {issue.severity}
-                      </Badge>
-                      <span className="text-sm text-text-primary">{issue.category}</span>
-                    </div>
-                    <p className="text-xs text-text-secondary mt-1">{issue.message}</p>
-                    <p className="text-xs text-text-tertiary mt-1">💡 {issue.suggestion}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          <details className="group">
-            <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
-              View Build Manifest
-            </summary>
-            <div className="mt-3 p-3 bg-background-tertiary rounded-lg">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div>
-                  <span className="text-text-tertiary">Pages:</span>
-                  <span className="ml-2 text-text-primary">{pmCheckpoint1.build_manifest.pages?.length || 0}</span>
-                </div>
-                <div>
-                  <span className="text-text-tertiary">Components:</span>
-                  <span className="ml-2 text-text-primary">{pmCheckpoint1.build_manifest.components?.length || 0}</span>
-                </div>
-                <div>
-                  <span className="text-text-tertiary">API Endpoints:</span>
-                  <span className="ml-2 text-text-primary">{pmCheckpoint1.build_manifest.api_endpoints?.length || 0}</span>
-                </div>
-                <div>
-                  <span className="text-text-tertiary">Warnings:</span>
-                  <span className="ml-2 text-text-primary">{pmCheckpoint1.build_manifest.warnings?.length || 0}</span>
-                </div>
-              </div>
-            </div>
-          </details>
-        </Card>
-      )}
-
-      {/* Code Review Report */}
-      {project.status !== 'completed' && codeReviewReport && (
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Code2 className="w-5 h-5 text-accent-primary" />
-            <h3 className="font-medium text-text-primary">Code Review</h3>
-            <Badge variant={codeReviewReport.pass_threshold ? 'success' : 'error'}>
-              {codeReviewReport.pass_threshold ? 'Passed' : 'Needs Attention'}
-            </Badge>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-            <div className="bg-background-tertiary rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-text-primary">{codeReviewReport.total_files_scanned || 0}</div>
-              <div className="text-xs text-text-secondary">Files Scanned</div>
-            </div>
-            <div className="bg-background-tertiary rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-text-primary">{codeReviewReport.total_issues || 0}</div>
-              <div className="text-xs text-text-secondary">Total Issues</div>
-            </div>
-            <div className="bg-red-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-red-400">{codeReviewReport.issues_by_severity?.critical || 0}</div>
-              <div className="text-xs text-text-secondary">Critical</div>
-            </div>
-            <div className="bg-yellow-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-yellow-400">{codeReviewReport.issues_by_severity?.high || 0}</div>
-              <div className="text-xs text-text-secondary">High</div>
-            </div>
-            <div className="bg-green-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-green-400">{codeReviewReport.auto_fixes_applied?.length || 0}</div>
-              <div className="text-xs text-text-secondary">Auto-Fixed</div>
-            </div>
-          </div>
-
-          {codeReviewReport.issues?.length > 0 && (
-            <details className="group">
-              <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
-                View Issues by Category
-              </summary>
-              <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
-                {codeReviewReport.issues.slice(0, 15).map((issue: any, idx: number) => (
-                  <div key={idx} className={`p-2 rounded border-l-2 ${
-                    issue.severity === 'critical' ? 'border-red-400 bg-red-500/10' :
-                    issue.severity === 'high' ? 'border-orange-400 bg-orange-500/10' :
-                    issue.severity === 'medium' ? 'border-yellow-400 bg-yellow-500/10' :
-                    'border-blue-400 bg-blue-500/10'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={issue.severity === 'critical' || issue.severity === 'high' ? 'error' : 'warning'} className="text-xs">
-                        {issue.category}
-                      </Badge>
-                      <span className="text-sm text-text-primary">{issue.rule}</span>
-                      {issue.auto_fixable && <span className="text-xs text-green-400">🔧 Auto-fixable</span>}
-                    </div>
-                    <p className="text-xs text-text-secondary mt-1">{issue.message}</p>
-                    <p className="text-xs text-text-tertiary">{issue.file}:{issue.line}</p>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-          <div className="mt-4 p-3 bg-background-tertiary rounded-lg">
-            <p className="text-sm text-text-secondary">{codeReviewReport.summary}</p>
-          </div>
-        </Card>
-      )}
-
-      {/* QA Test Results */}
-      {project.status !== 'completed' && qaReport && (
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <TestTube className="w-5 h-5 text-accent-primary" />
-            <h3 className="font-medium text-text-primary">QA Test Results</h3>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <div className="text-center">
-              <ScoreGauge 
-                score={qaReport.quality_score || 0} 
-                label="Quality Score" 
-                size="md"
-              />
-            </div>
-            <div className="bg-background-tertiary rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-text-primary">{qaReport.total_tests || 0}</div>
-              <div className="text-sm text-text-secondary">Total Tests</div>
-            </div>
-            <div className="bg-green-500/10 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-green-400">{qaReport.passed || 0}</div>
-              <div className="text-sm text-text-secondary">Passed</div>
-            </div>
-            <div className="bg-red-500/10 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-red-400">{qaReport.failed || 0}</div>
-              <div className="text-sm text-text-secondary">Failed</div>
-            </div>
-            <div className="bg-yellow-500/10 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-yellow-400">{qaReport.skipped || 0}</div>
-              <div className="text-sm text-text-secondary">Skipped</div>
-            </div>
-          </div>
-
-          {/* Test Results List */}
-          {qaReport.test_results?.length > 0 && (
-            <details className="group">
-              <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary flex items-center gap-2">
-                <span>View Test Details ({qaReport.test_results.length} tests)</span>
-              </summary>
-              <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
-                {qaReport.test_results.slice(0, 20).map((test: any, idx: number) => (
-                  <div key={idx} className="flex items-center gap-3 p-2 bg-background-tertiary rounded">
-                    {test.status === 'passed' ? (
-                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
-                    ) : test.status === 'failed' ? (
-                      <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                    ) : (
-                      <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-                    )}
-                    <span className="text-sm text-text-primary truncate">{test.name}</span>
-                    {test.duration > 0 && (
-                      <span className="text-xs text-text-tertiary ml-auto">{test.duration.toFixed(2)}s</span>
-                    )}
-                  </div>
-                ))}
-                {qaReport.test_results.length > 20 && (
-                  <p className="text-sm text-text-tertiary text-center py-2">
-                    ...and {qaReport.test_results.length - 20} more tests
-                  </p>
-                )}
-              </div>
-            </details>
-          )}
-
-          {/* Code Quality Issues */}
-          {qaReport.quality_issues?.length > 0 && (
-            <details className="group mt-4">
-              <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <span>Code Quality Issues ({qaReport.quality_issues.length})</span>
-              </summary>
-              <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
-                {qaReport.quality_issues.slice(0, 10).map((issue: any, idx: number) => (
-                  <div key={idx} className="p-2 bg-background-tertiary rounded border-l-2 border-yellow-400">
-                    <div className="flex items-center gap-2">
-                      <Badge variant={issue.severity === 'error' ? 'error' : 'warning'} className="text-xs">
-                        {issue.tool}
-                      </Badge>
-                      <span className="text-sm text-text-primary">{issue.rule}</span>
-                    </div>
-                    <p className="text-xs text-text-secondary mt-1">{issue.message}</p>
-                    <p className="text-xs text-text-tertiary">{issue.file_path}:{issue.line}</p>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-          {/* Fix Attempts */}
-          {qaReport.fix_iterations > 0 && (
-            <div className="mt-4 p-3 bg-background-tertiary rounded-lg">
-              <p className="text-sm text-text-secondary">
-                Fix Iterations: <span className="text-text-primary font-medium">{qaReport.fix_iterations} / 3</span>
-                {qaReport.all_tests_passing && (
-                  <span className="ml-2 text-green-400">✓ All tests passing</span>
-                )}
-              </p>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Deployment Status */}
-      {project.status !== 'completed' && deploymentReport && (
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Rocket className="w-5 h-5 text-accent-primary" />
-            <h3 className="font-medium text-text-primary">Deployment Status</h3>
-          </div>
-
-          <div className="space-y-4">
-            {deploymentReport.deployments?.map((deployment: any, idx: number) => (
-              <div key={idx} className="p-4 bg-background-tertiary rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-text-primary capitalize">{deployment.platform}</span>
-                    <DeploymentStatusBadge status={deployment.status} />
-                  </div>
-                  {deployment.url && (
-                    <a
-                      href={deployment.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-accent-primary hover:underline flex items-center gap-1"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      {deployment.url}
-                    </a>
-                  )}
-                </div>
-                {deployment.error_message && (
-                  <p className="text-sm text-red-400 mt-2">{deployment.error_message}</p>
-                )}
-                {deployment.logs?.length > 0 && (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary">
-                      View logs ({deployment.logs.length} entries)
-                    </summary>
-                    <pre className="mt-2 p-2 bg-background-secondary rounded text-xs text-text-tertiary overflow-x-auto max-h-32">
-                      {deployment.logs.join('\n')}
-                    </pre>
-                  </details>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* GitHub Actions */}
-          {deploymentReport.github_actions_generated && (
-            <div className="mt-4 p-3 bg-green-500/10 rounded-lg">
-              <p className="text-sm text-green-400 flex items-center gap-2">
-                <CheckCircle className="w-4 h-4" />
-                GitHub Actions workflows generated
-              </p>
-              {deploymentReport.github_actions_files?.length > 0 && (
-                <ul className="mt-2 text-xs text-text-secondary">
-                  {deploymentReport.github_actions_files.map((file: string, idx: number) => (
-                    <li key={idx}>• {file.split('/').slice(-2).join('/')}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {/* Manual Instructions */}
-          {deploymentReport.manual_instructions?.length > 0 && (
-            <details className="mt-4">
-              <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
-                Manual Setup Instructions
-              </summary>
-              <div className="mt-3 p-3 bg-background-tertiary rounded-lg prose prose-sm prose-invert max-w-none">
-                <pre className="text-xs whitespace-pre-wrap text-text-secondary">
-                  {deploymentReport.manual_instructions.join('\n')}
-                </pre>
-              </div>
-            </details>
-          )}
-        </Card>
-      )}
-
-      {/* Post-Deploy Verification */}
-      {project.status !== 'completed' && deployVerificationReport && (
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Globe className="w-5 h-5 text-accent-primary" />
-            <h3 className="font-medium text-text-primary">Post-Deploy Verification</h3>
-            <Badge variant={deployVerificationReport.overall_status === 'passed' ? 'success' : 
-                           deployVerificationReport.overall_status === 'partial' ? 'warning' : 'error'}>
-              {deployVerificationReport.overall_status}
-            </Badge>
-          </div>
-          
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="bg-green-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-green-400">{deployVerificationReport.checks_passed || 0}</div>
-              <div className="text-xs text-text-secondary">Checks Passed</div>
-            </div>
-            <div className="bg-red-500/10 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-red-400">{deployVerificationReport.checks_failed || 0}</div>
-              <div className="text-xs text-text-secondary">Checks Failed</div>
-            </div>
-            <div className={`rounded-lg p-3 text-center ${deployVerificationReport.ssl_valid ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-              <div className="text-xl font-bold text-text-primary">{deployVerificationReport.ssl_valid ? '🔒' : '🔓'}</div>
-              <div className="text-xs text-text-secondary">SSL {deployVerificationReport.ssl_valid ? 'Valid' : 'Invalid'}</div>
-            </div>
-            {deployVerificationReport.visual_diff_score !== null && (
-              <div className="bg-background-tertiary rounded-lg p-3 text-center">
-                <div className="text-xl font-bold text-text-primary">{Math.round((deployVerificationReport.visual_diff_score || 0) * 100)}%</div>
-                <div className="text-xs text-text-secondary">Visual Match</div>
-              </div>
-            )}
-          </div>
-
-          {/* Endpoint Checks */}
-          {deployVerificationReport.endpoint_checks?.length > 0 && (
-            <details className="group mb-4">
-              <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
-                Endpoint Health Checks ({deployVerificationReport.endpoint_checks.length})
-              </summary>
-              <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
-                {deployVerificationReport.endpoint_checks.map((check: any, idx: number) => (
-                  <div key={idx} className={`p-2 rounded flex items-center justify-between ${
-                    check.passed ? 'bg-green-500/10' : 'bg-red-500/10'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      {check.passed ? (
-                        <CheckCircle className="w-4 h-4 text-green-400" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-red-400" />
-                      )}
-                      <span className="text-sm text-text-primary truncate max-w-[200px]">{check.url}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className={check.passed ? 'text-green-400' : 'text-red-400'}>{check.status_code}</span>
-                      <span className="text-text-tertiary">{check.response_time_ms}ms</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-          {/* Verification Results */}
-          {deployVerificationReport.verification_results?.length > 0 && (
-            <details className="group">
-              <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary">
-                Verification Details
-              </summary>
-              <div className="mt-3 space-y-2">
-                {deployVerificationReport.verification_results.map((result: any, idx: number) => (
-                  <div key={idx} className={`p-2 rounded flex items-center gap-2 ${
-                    result.passed ? 'bg-green-500/10' : result.severity === 'critical' ? 'bg-red-500/10' : 'bg-yellow-500/10'
-                  }`}>
-                    {result.passed ? (
-                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
-                    ) : (
-                      <XCircle className={`w-4 h-4 flex-shrink-0 ${result.severity === 'critical' ? 'text-red-400' : 'text-yellow-400'}`} />
-                    )}
-                    <div>
-                      <span className="text-sm text-text-primary">{result.check}</span>
-                      <p className="text-xs text-text-secondary">{result.message}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-          {/* Deployment URL */}
-          {deployVerificationReport.deployment_url && (
-            <div className="mt-4 p-3 bg-background-tertiary rounded-lg">
-              <a
-                href={deployVerificationReport.deployment_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-accent-primary hover:underline flex items-center gap-2"
-              >
-                <ExternalLink className="w-4 h-4" />
-                {deployVerificationReport.deployment_url}
-              </a>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Monitoring Status - Phase 6 */}
-      {project.status !== 'completed' && monitoringReport && (
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-5 h-5 text-accent-primary" />
-            <h3 className="font-medium text-text-primary">Monitoring & Analytics</h3>
-          </div>
-
-          {/* Services Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            {monitoringReport.services?.map((service: any, idx: number) => (
-              <div 
-                key={idx} 
-                className={`p-3 rounded-lg ${service.configured ? 'bg-green-500/10' : 'bg-background-tertiary'}`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  {service.configured ? (
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <XCircle className="w-4 h-4 text-text-tertiary" />
-                  )}
-                  <span className="text-sm font-medium text-text-primary">{service.name}</span>
-                </div>
-                {service.configured && service.dashboard_url && (
-                  <a
-                    href={service.dashboard_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-accent-primary hover:underline flex items-center gap-1"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Dashboard
-                  </a>
-                )}
-                {!service.configured && service.error_message && (
-                  <p className="text-xs text-text-tertiary">{service.error_message}</p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Lighthouse CI Status */}
-          {monitoringReport.lighthouse_ci_configured && (
-            <div className="p-3 bg-blue-500/10 rounded-lg mb-4">
-              <div className="flex items-center gap-2">
-                <Gauge className="w-4 h-4 text-blue-400" />
-                <span className="text-sm font-medium text-blue-400">Lighthouse CI Configured</span>
-              </div>
-              <p className="text-xs text-text-secondary mt-1">
-                Performance monitoring runs on every push to main branch
-              </p>
-            </div>
-          )}
-
-          {/* Dashboard Links */}
-          <div className="flex flex-wrap gap-2">
-            {monitoringReport.services?.filter((s: any) => s.configured && s.dashboard_url).map((service: any, idx: number) => (
-              <a
-                key={idx}
-                href={service.dashboard_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-3 py-1.5 bg-background-tertiary rounded text-xs text-text-secondary hover:text-text-primary transition-colors"
-              >
-                <BarChart3 className="w-3 h-3" />
-                {service.name}
-              </a>
-            ))}
-          </div>
-
-          {/* Summary */}
-          <div className="mt-4 p-3 bg-background-tertiary rounded-lg">
-            <p className="text-sm text-text-secondary">
-              Configured: <span className="text-text-primary font-medium">{monitoringReport.total_configured || 0}</span> / {monitoringReport.total_available || 0} services
-            </p>
-          </div>
-        </Card>
-      )}
-
-      {/* Documentation Status - Phase 6 */}
-      {project.status !== 'completed' && codingStandardsReport && (
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <FileText className="w-5 h-5 text-accent-primary" />
-            <h3 className="font-medium text-text-primary">Documentation & Standards</h3>
-          </div>
-
-          {/* Generated Documents */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            {codingStandardsReport.documents?.filter((d: any) => d.generated).map((doc: any, idx: number) => (
-              <div key={idx} className="p-3 bg-green-500/10 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span className="text-sm text-text-primary">{doc.name}</span>
-                </div>
-                <span className="text-xs text-text-tertiary capitalize">{doc.type.replace('_', ' ')}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Style Configs */}
-          {codingStandardsReport.style_configs?.length > 0 && (
-            <div className="mb-4">
-              <h4 className="text-sm font-medium text-text-secondary mb-2">Code Style Configurations</h4>
-              <div className="flex flex-wrap gap-2">
-                {codingStandardsReport.style_configs.map((config: string, idx: number) => (
-                  <span key={idx} className="px-2 py-1 bg-background-tertiary rounded text-xs text-text-secondary">
-                    {config}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ADRs */}
-          {codingStandardsReport.adrs_generated > 0 && (
-            <div className="p-3 bg-purple-500/10 rounded-lg mb-4">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-purple-400" />
-                <span className="text-sm text-purple-400">
-                  {codingStandardsReport.adrs_generated} Architecture Decision Records Generated
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Summary */}
-          <div className="p-3 bg-background-tertiary rounded-lg">
-            <p className="text-sm text-text-secondary">
-              Total Documents: <span className="text-text-primary font-medium">{codingStandardsReport.total_generated || 0}</span> files generated
-            </p>
-          </div>
-        </Card>
-      )}
-
-      {/* Brief */}
-      <Card>
-        <h3 className="font-medium text-text-primary mb-2">Project Brief</h3>
-        <p className="text-text-secondary text-sm whitespace-pre-wrap">
-          {project.brief}
-        </p>
-      </Card>
-
-      {/* Agent Output Timeline — live per-agent artifact view */}
+      {/* Agent Output Timeline — shows each agent's output as it completes */}
       <Card>
         <div className="flex items-center justify-between mb-2">
-          <div />
+          <h3 className="font-medium text-text-primary flex items-center gap-2">
+            <FileText className="w-5 h-5 text-accent-primary" />
+            Agent Outputs
+          </h3>
           {Object.keys(outputs?.agent_outputs || {}).length >= 2 && (
             <button
               onClick={() => setShowDiffModal(true)}
@@ -1222,36 +666,39 @@ export default function ProjectView() {
         />
       </Card>
 
-      {/* Project History Timeline — checkpoint branching & audit log (#6) */}
-      <Card>
-        <div className="flex items-center gap-2 mb-3">
-          <GitBranch className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Pipeline History & Branching
-          </h3>
+      {/* Brief */}
+      <details className="group">
+        <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary px-1 py-2">
+          Show Project Brief
+        </summary>
+        <Card>
+          <p className="text-text-secondary text-sm whitespace-pre-wrap">
+            {project.brief}
+          </p>
+        </Card>
+      </details>
+
+      {/* Advanced Tools — collapsed by default */}
+      <details className="group">
+        <summary className="cursor-pointer text-sm font-medium text-text-secondary hover:text-text-primary px-1 py-2">
+          Advanced Tools (History, Memory, Testing, Sharing, Design Import)
+        </summary>
+        <div className="space-y-6 mt-2">
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <GitBranch className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Pipeline History & Branching
+              </h3>
+            </div>
+            <ProjectTimeline projectId={id!} projectStatus={project.status} />
+          </Card>
+          <Card><ProjectMemory projectId={id!} /></Card>
+          <Card><BrowserTestPanel projectId={id!} liveUrl={project.live_url} /></Card>
+          <Card><ShareLinkPanel projectId={id!} /></Card>
+          <Card><DesignImportPanel projectId={id!} /></Card>
         </div>
-        <ProjectTimeline projectId={id!} projectStatus={project.status} />
-      </Card>
-
-      {/* Persistent Project Memory (#12) */}
-      <Card>
-        <ProjectMemory projectId={id!} />
-      </Card>
-
-      {/* Automated Browser Testing (#11) */}
-      <Card>
-        <BrowserTestPanel projectId={id!} liveUrl={project.live_url} />
-      </Card>
-
-      {/* Shareable Preview Links (#22) */}
-      <Card>
-        <ShareLinkPanel projectId={id!} />
-      </Card>
-
-      {/* Figma & Screenshot Import (#23) */}
-      <Card>
-        <DesignImportPanel projectId={id!} />
-      </Card>
+      </details>
 
       {/* Monaco Diff Editor Modal — code-split, only loaded on demand */}
       {showDiffModal && (
