@@ -33,6 +33,27 @@ class AgentStatus(Enum):
 
 
 @dataclass
+class AgentReasoning:
+    """Captures the reasoning behind an agent's decisions."""
+    goal: str = ""
+    approach: str = ""
+    key_decisions: List[Dict[str, str]] = field(default_factory=list)
+    alternatives_considered: List[str] = field(default_factory=list)
+    confidence: float = 0.0
+    constraints: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "goal": self.goal,
+            "approach": self.approach,
+            "key_decisions": self.key_decisions,
+            "alternatives_considered": self.alternatives_considered,
+            "confidence": self.confidence,
+            "constraints": self.constraints,
+        }
+
+
+@dataclass
 class AgentResult:
     """Result from an agent execution."""
     success: bool
@@ -42,10 +63,11 @@ class AgentResult:
     warnings: List[str] = field(default_factory=list)
     execution_time: float = 0.0
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    reasoning: Optional[AgentReasoning] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert result to dictionary."""
-        return {
+        result = {
             "success": self.success,
             "agent_name": self.agent_name,
             "data": self.data,
@@ -54,6 +76,9 @@ class AgentResult:
             "execution_time": self.execution_time,
             "timestamp": self.timestamp,
         }
+        if self.reasoning:
+            result["reasoning"] = self.reasoning.to_dict()
+        return result
 
 
 class BaseAgent(ABC):
@@ -107,6 +132,25 @@ class BaseAgent(ABC):
     async def execute(self, context: Dict[str, Any]) -> AgentResult:
         """Execute the agent's main task."""
         pass
+
+    def build_reasoning(
+        self,
+        goal: str,
+        approach: str,
+        key_decisions: Optional[List[Dict[str, str]]] = None,
+        alternatives_considered: Optional[List[str]] = None,
+        confidence: float = 0.8,
+        constraints: Optional[List[str]] = None,
+    ) -> AgentReasoning:
+        """Build a reasoning object to attach to an AgentResult."""
+        return AgentReasoning(
+            goal=goal,
+            approach=approach,
+            key_decisions=key_decisions or [],
+            alternatives_considered=alternatives_considered or [],
+            confidence=confidence,
+            constraints=constraints or [],
+        )
 
     def get_model(self, context: Optional[Dict[str, Any]] = None) -> str:
         """Get the optimal model for this agent via centralized routing.
@@ -175,6 +219,11 @@ class BaseAgent(ABC):
             
             self.status = AgentStatus.COMPLETED if agent_result.success else AgentStatus.FAILED
             agent_result.execution_time = time.time() - start_time
+
+            # Auto-generate reasoning if the agent didn't provide one
+            if agent_result.reasoning is None and agent_result.success:
+                agent_result.reasoning = self._infer_reasoning(agent_result, context)
+
             self.logger.info(
                 f"{self.name} agent completed in {agent_result.execution_time:.2f}s"
             )
@@ -197,6 +246,47 @@ class BaseAgent(ABC):
                 errors=[str(e)],
                 execution_time=time.time() - start_time,
             )
+
+    def _infer_reasoning(self, result: AgentResult, context: Dict[str, Any]) -> AgentReasoning:
+        """Infer reasoning from agent result data when not explicitly provided."""
+        agent_id = self.__class__.__name__.replace("Agent", "").lower()
+        cost_profile = context.get("cost_profile", "balanced")
+        model = self.get_model(context)
+
+        goal = f"Execute {self.name} stage of the pipeline"
+        approach = f"Used model {model} with {cost_profile} cost profile"
+        decisions = []
+        constraints = []
+
+        # Extract meaningful decisions from result data
+        data = result.data or {}
+        if "project_type" in data or "detected_project_type" in data:
+            pt = data.get("project_type") or data.get("detected_project_type")
+            decisions.append({"decision": f"Classified as {pt}", "reason": "Based on brief analysis"})
+        if "tech_stack" in data:
+            decisions.append({"decision": "Selected tech stack", "reason": "Matched project requirements"})
+        if "files" in data or "generated_files" in data:
+            fc = len(data.get("files") or data.get("generated_files") or [])
+            decisions.append({"decision": f"Generated {fc} files", "reason": "Based on architecture spec"})
+        if data.get("auto_fixes_applied"):
+            decisions.append({"decision": f"Applied {len(data['auto_fixes_applied'])} auto-fixes", "reason": "Resolved automatically fixable issues"})
+        if "score" in data or "quality_score" in data:
+            s = data.get("score") or data.get("quality_score")
+            decisions.append({"decision": f"Quality score: {s}", "reason": "Evaluated against quality criteria"})
+
+        if result.warnings:
+            constraints = [f"Warning: {w}" for w in result.warnings[:3]]
+
+        confidence = 0.85 if result.success and not result.warnings else 0.65
+
+        return AgentReasoning(
+            goal=goal,
+            approach=approach,
+            key_decisions=decisions,
+            alternatives_considered=[],
+            confidence=confidence,
+            constraints=constraints,
+        )
 
     async def call_llm(
         self,

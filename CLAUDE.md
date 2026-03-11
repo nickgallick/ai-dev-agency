@@ -168,6 +168,7 @@ frontend/src/components/AgentOutputTimeline.tsx   Vertical timeline of all 21 ag
 frontend/src/components/TemplateBrowser.tsx       Template gallery modal with search and filtering
 frontend/src/components/VoiceInput.tsx            Voice-to-text via Web Speech API
 frontend/src/components/RevisionPanel.tsx         Revision request panel
+frontend/src/components/MonacoDiffEditor.tsx      Code-split Monaco diff editor for agent output comparison
 frontend/src/components/ScoreGauge.tsx            Animated SVG circular gauge
 frontend/src/lib/api.ts                          Axios API client — 60+ functions, all TypeScript types
 frontend/src/contexts/AuthContext.tsx             JWT auth with idle timeout
@@ -392,6 +393,27 @@ These features are complete and integrated. Do not re-implement them.
 - Docker Compose adds `prometheus` (port 9090) and `grafana` (port 3000) services
 - Pre-provisioned Grafana dashboard with 21 panels across 4 sections: Pipeline Overview, Agent Performance, LLM API, HTTP & Infrastructure
 - Prometheus scrapes api:8000/metrics every 15s, retains 15 days
+
+### Agent Reasoning Transparency (#25)
+- **Where:** `backend/agents/base.py`, `backend/orchestration/executor.py`, `frontend/src/components/PipelineDAG.tsx`, `frontend/src/components/AgentOutputTimeline.tsx`
+- `AgentReasoning` dataclass captures: goal, approach, key_decisions, alternatives_considered, confidence, constraints
+- Added to `AgentResult` as optional `reasoning` field, auto-inferred from output data when agents don't provide explicit reasoning
+- `BaseAgent.build_reasoning()` helper lets agents explicitly set reasoning
+- SSE `agent_complete` events include reasoning in `details.reasoning`
+- Reasoning persisted to `agent_outputs` JSONB under `_reasoning` key
+- PipelineDAG: purple brain icon on completed nodes opens a floating reasoning panel (goal, approach, decisions, confidence bar, constraints)
+- AgentOutputTimeline: collapsible "Agent Reasoning" section at bottom of each expanded agent card
+- CSS: `dag-reasoning-*` classes in PipelineDAG.css for reasoning panel styling
+
+### Monaco Diff Editor for Agent Output Comparison (#4)
+- **Where:** `frontend/src/components/MonacoDiffEditor.tsx`, `frontend/src/pages/ProjectView.tsx`
+- Code-split via `React.lazy()` — Monaco loads only when user clicks "Compare Outputs"
+- `MonacoDiffEditor` component: side-by-side diff view with copy buttons, configurable labels, vs-dark theme
+- `AgentOutputDiffModal` component: full-screen modal with agent selector dropdowns for comparing any two completed agent outputs
+- Strips `_reasoning` from diff view to show clean output comparison
+- Build output: separate `MonacoDiffEditor-*.js` chunk (~5KB, Monaco loads from CDN on demand)
+- "Compare Outputs" button appears in ProjectView when 2+ agents have completed
+- Dependency: `@monaco-editor/react` (CDN-loaded Monaco, no local bundle)
 
 ***
 

@@ -45,6 +45,9 @@ import {
   Activity,
   FileText,
   Package,
+  Brain,
+  X,
+  ChevronRight,
 } from 'lucide-react'
 import './PipelineDAG.css'
 
@@ -58,6 +61,15 @@ export type AgentNodeStatus =
   | 'skipped'
   | 'paused'
 
+export interface AgentReasoning {
+  goal: string
+  approach: string
+  key_decisions: Array<{ decision: string; reason: string }>
+  alternatives_considered: string[]
+  confidence: number
+  constraints: string[]
+}
+
 export interface AgentNodeData extends Record<string, unknown> {
   label: string
   agentId: string
@@ -67,6 +79,7 @@ export interface AgentNodeData extends Record<string, unknown> {
   cost?: number
   message?: string
   parallelGroup?: string
+  reasoning?: AgentReasoning
 }
 
 interface PipelineDAGProps {
@@ -232,13 +245,15 @@ function AgentIcon({ icon, className }: { icon: string; className?: string }) {
 // ── Custom node component ──────────────────────────────────────────────
 
 function AgentNodeComponent({ data }: NodeProps<Node<AgentNodeData>>) {
-  const { label, status, icon, duration, cost, message } = data
+  const { label, status, icon, duration, cost, message, reasoning } = data
+  const [showReasoning, setShowReasoning] = useState(false)
 
   const statusClass = `dag-node-${status}`
   const isRunning = status === 'running'
+  const hasReasoning = reasoning && (reasoning.goal || reasoning.key_decisions?.length > 0)
 
   return (
-    <div className={`dag-node ${statusClass}`}>
+    <div className={`dag-node ${statusClass} ${hasReasoning ? 'dag-node-has-reasoning' : ''}`}>
       <Handle type="target" position={Position.Left} className="dag-handle" />
 
       <div className="dag-node-header">
@@ -258,6 +273,15 @@ function AgentNodeComponent({ data }: NodeProps<Node<AgentNodeData>>) {
           )}
         </div>
         <span className="dag-node-label">{label}</span>
+        {hasReasoning && (
+          <button
+            className="dag-reasoning-toggle"
+            onClick={(e) => { e.stopPropagation(); setShowReasoning(!showReasoning) }}
+            title="View agent reasoning"
+          >
+            <Brain className="w-3 h-3" />
+          </button>
+        )}
       </div>
 
       {/* Status indicator dot */}
@@ -280,6 +304,65 @@ function AgentNodeComponent({ data }: NodeProps<Node<AgentNodeData>>) {
             <span>{duration < 1000 ? `${duration}ms` : `${(duration/1000).toFixed(1)}s`}</span>
           )}
           {cost != null && cost > 0 && <span>${cost.toFixed(4)}</span>}
+        </div>
+      )}
+
+      {/* Reasoning panel (overlaid below node) */}
+      {showReasoning && reasoning && (
+        <div className="dag-reasoning-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="dag-reasoning-header">
+            <Brain className="w-3.5 h-3.5 text-purple-400" />
+            <span>Agent Reasoning</span>
+            <button onClick={() => setShowReasoning(false)} className="dag-reasoning-close">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          {reasoning.goal && (
+            <div className="dag-reasoning-section">
+              <span className="dag-reasoning-label">Goal</span>
+              <p>{reasoning.goal}</p>
+            </div>
+          )}
+          {reasoning.approach && (
+            <div className="dag-reasoning-section">
+              <span className="dag-reasoning-label">Approach</span>
+              <p>{reasoning.approach}</p>
+            </div>
+          )}
+          {reasoning.key_decisions?.length > 0 && (
+            <div className="dag-reasoning-section">
+              <span className="dag-reasoning-label">Key Decisions</span>
+              {reasoning.key_decisions.map((d, i) => (
+                <div key={i} className="dag-reasoning-decision">
+                  <ChevronRight className="w-3 h-3 text-accent-primary flex-shrink-0 mt-0.5" />
+                  <div>
+                    <span className="dag-reasoning-decision-text">{d.decision}</span>
+                    {d.reason && <span className="dag-reasoning-decision-reason"> — {d.reason}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {reasoning.confidence > 0 && (
+            <div className="dag-reasoning-confidence">
+              <span className="dag-reasoning-label">Confidence</span>
+              <div className="dag-reasoning-confidence-bar">
+                <div
+                  className="dag-reasoning-confidence-fill"
+                  style={{ width: `${reasoning.confidence * 100}%` }}
+                />
+              </div>
+              <span>{Math.round(reasoning.confidence * 100)}%</span>
+            </div>
+          )}
+          {reasoning.constraints?.length > 0 && (
+            <div className="dag-reasoning-section">
+              <span className="dag-reasoning-label">Constraints</span>
+              {reasoning.constraints.map((c, i) => (
+                <p key={i} className="dag-reasoning-constraint">{c}</p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -423,19 +506,22 @@ export function PipelineDAG({
     // Track status in ref (for edge updates)
     nodeStatusRef.current[agentName] = newStatus
 
-    // Update the specific node
+    // Update the specific node (include reasoning if present)
     setNodes((nds) =>
       nds.map((n) => {
         if (n.id !== agentName) return n
+        const updatedData: Partial<AgentNodeData> = {
+          status: newStatus!,
+          message: message,
+          duration: ev.details?.duration_ms,
+          cost: ev.details?.cost,
+        }
+        if (ev.details?.reasoning) {
+          updatedData.reasoning = ev.details.reasoning as AgentReasoning
+        }
         return {
           ...n,
-          data: {
-            ...n.data,
-            status: newStatus!,
-            message: message,
-            duration: ev.details?.duration_ms,
-            cost: ev.details?.cost,
-          },
+          data: { ...n.data, ...updatedData },
         }
       })
     )

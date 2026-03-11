@@ -322,6 +322,142 @@
   }
 }
 
+/* ── Reasoning Toggle Button ──────────────────────────────────────── */
+
+.dag-reasoning-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.dag-reasoning-toggle:hover {
+  background: rgba(168, 85, 247, 0.3);
+  border-color: #a855f7;
+  transform: scale(1.1);
+}
+
+.dag-node-has-reasoning {
+  cursor: pointer;
+}
+
+/* ── Reasoning Panel ─────────────────────────────────────────────── */
+
+.dag-reasoning-panel {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: 280px;
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--background-secondary);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.dag-reasoning-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.dag-reasoning-close {
+  margin-left: auto;
+  padding: 2px;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.dag-reasoning-close:hover {
+  background: var(--background-tertiary);
+  color: var(--text-primary);
+}
+
+.dag-reasoning-section {
+  margin-bottom: 8px;
+}
+
+.dag-reasoning-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+}
+
+.dag-reasoning-section p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.dag-reasoning-decision {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 3px;
+}
+
+.dag-reasoning-decision-text {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.dag-reasoning-decision-reason {
+  color: var(--text-tertiary);
+}
+
+.dag-reasoning-confidence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.dag-reasoning-confidence-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--background-tertiary);
+  overflow: hidden;
+}
+
+.dag-reasoning-confidence-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #a855f7, #6366f1);
+  transition: width 0.5s ease;
+}
+
+.dag-reasoning-constraint {
+  margin: 0 0 2px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(245, 158, 11, 0.4);
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
 /* ── Responsive ────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {

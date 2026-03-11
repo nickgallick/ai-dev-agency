@@ -7,17 +7,23 @@ import { PipelineDAG } from '@/components/PipelineDAG'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { ActivityFeed } from '@/components/ActivityFeed'
 import { api } from '@/lib/api'
-import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock } from 'lucide-react'
+import { ExternalLink, Github, RefreshCw, CheckCircle, XCircle, AlertTriangle, Rocket, TestTube, Activity, FileText, BarChart3, Shield, Gauge, ClipboardCheck, Code2, Globe, Pause, Play, RotateCcw, Settings2, DollarSign, Zap, Clock, ArrowLeftRight } from 'lucide-react'
 import { Button } from '@/components/Button'
 import { ArtifactViewer } from '@/components/ArtifactViewer'
 import { AgentOutputTimeline } from '@/components/AgentOutputTimeline'
-import { useState, useCallback } from 'react'
+import { lazy, Suspense, useState, useCallback } from 'react'
+
+// Code-split Monaco diff editor — only loaded when user clicks "Compare Outputs"
+const AgentOutputDiffModal = lazy(() =>
+  import('@/components/MonacoDiffEditor').then((m) => ({ default: m.AgentOutputDiffModal }))
+)
 
 export default function ProjectView() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const [showCheckpointModal, setShowCheckpointModal] = useState(false)
   const [editingOutput, setEditingOutput] = useState<string | null>(null)
+  const [showDiffModal, setShowDiffModal] = useState(false)
   const [editedOutputText, setEditedOutputText] = useState('')
 
   const { data: project, isLoading, refetch } = useQuery({
@@ -1126,11 +1132,54 @@ export default function ProjectView() {
 
       {/* Agent Output Timeline — live per-agent artifact view */}
       <Card>
+        <div className="flex items-center justify-between mb-2">
+          <div />
+          {Object.keys(outputs?.agent_outputs || {}).length >= 2 && (
+            <button
+              onClick={() => setShowDiffModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary bg-background-tertiary hover:bg-white/10 rounded-md transition-colors"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" />
+              Compare Outputs
+            </button>
+          )}
+        </div>
         <AgentOutputTimeline
           projectStatus={project.status}
           agentOutputs={outputs?.agent_outputs || {}}
         />
       </Card>
+
+      {/* Monaco Diff Editor Modal — code-split, only loaded on demand */}
+      {showDiffModal && (
+        <Suspense fallback={null}>
+          <AgentOutputDiffModal
+            agentOutputs={outputs?.agent_outputs || {}}
+            agents={[
+              { id: 'intake', label: 'Intake' },
+              { id: 'research', label: 'Research' },
+              { id: 'architect', label: 'Architect' },
+              { id: 'design_system', label: 'Design System' },
+              { id: 'asset_generation', label: 'Assets' },
+              { id: 'content_generation', label: 'Content' },
+              { id: 'pm_checkpoint_1', label: 'PM Check 1' },
+              { id: 'code_generation', label: 'Code Gen' },
+              { id: 'pm_checkpoint_2', label: 'PM Check 2' },
+              { id: 'code_review', label: 'Code Review' },
+              { id: 'security', label: 'Security' },
+              { id: 'seo', label: 'SEO' },
+              { id: 'accessibility', label: 'Accessibility' },
+              { id: 'qa', label: 'QA Testing' },
+              { id: 'deployment', label: 'Deploy' },
+              { id: 'post_deploy_verification', label: 'Verify' },
+              { id: 'analytics_monitoring', label: 'Analytics' },
+              { id: 'coding_standards', label: 'Standards' },
+              { id: 'delivery', label: 'Delivery' },
+            ]}
+            onClose={() => setShowDiffModal(false)}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

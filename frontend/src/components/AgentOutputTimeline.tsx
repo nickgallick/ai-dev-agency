@@ -34,6 +34,7 @@ import {
   Layers,
   Globe,
   Cpu,
+  Brain,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -877,6 +878,78 @@ function renderVerification(data: any) {
   )
 }
 
+// ─── Agent Reasoning Section ─────────────────────────────────────────────────
+
+function ReasoningSection({ reasoning }: { reasoning: any }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!reasoning || (!reasoning.goal && !reasoning.key_decisions?.length)) return null
+
+  return (
+    <div className="mt-3 pt-3 border-t border-white/5">
+      <button
+        className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <Brain className="w-3.5 h-3.5" />
+        <span className="font-medium">Agent Reasoning</span>
+        <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? '' : '-rotate-90'}`} />
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-2 text-xs">
+          {reasoning.goal && (
+            <div>
+              <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider mb-0.5">Goal</p>
+              <p className="text-text-secondary">{reasoning.goal}</p>
+            </div>
+          )}
+          {reasoning.approach && (
+            <div>
+              <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider mb-0.5">Approach</p>
+              <p className="text-text-secondary">{reasoning.approach}</p>
+            </div>
+          )}
+          {reasoning.key_decisions?.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider mb-1">Key Decisions</p>
+              <div className="space-y-1">
+                {reasoning.key_decisions.map((d: any, i: number) => (
+                  <div key={i} className="flex gap-1.5 text-xs">
+                    <span className="text-purple-400 flex-shrink-0">-</span>
+                    <span>
+                      <span className="text-text-primary font-medium">{d.decision}</span>
+                      {d.reason && <span className="text-text-tertiary"> — {d.reason}</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {reasoning.confidence > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Confidence</span>
+              <div className="flex-1 h-1.5 rounded-full bg-background-tertiary overflow-hidden max-w-[120px]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                  style={{ width: `${reasoning.confidence * 100}%` }}
+                />
+              </div>
+              <span className="text-text-tertiary">{Math.round(reasoning.confidence * 100)}%</span>
+            </div>
+          )}
+          {reasoning.constraints?.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider mb-0.5">Constraints</p>
+              {reasoning.constraints.map((c: string, i: number) => (
+                <p key={i} className="text-text-tertiary pl-2 border-l-2 border-yellow-500/30 text-[11px]">{c}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Agent output dispatcher ──────────────────────────────────────────────────
 
 function renderAgentOutput(agentId: string, data: any): React.ReactNode {
@@ -1027,7 +1100,12 @@ export function AgentOutputTimeline({ projectStatus, agentOutputs }: AgentOutput
               {isExpanded && (
                 <div className="ml-10 mb-2 p-3 bg-white/3 rounded-lg border border-white/5">
                   {hasOutput
-                    ? renderAgentOutput(agentId, agentOutputs[agentId])
+                    ? (
+                      <>
+                        {renderAgentOutput(agentId, agentOutputs[agentId])}
+                        <ReasoningSection reasoning={agentOutputs[agentId]?._reasoning} />
+                      </>
+                    )
                     : (
                       <div className="flex items-center gap-2 text-xs text-accent-primary">
                         <Loader2 className="w-3 h-3 animate-spin" />

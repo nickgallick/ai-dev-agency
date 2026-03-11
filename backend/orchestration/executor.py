@@ -434,14 +434,17 @@ class PipelineExecutor:
                 audit_agent_failed(self.db, project_id, agent_name, str(err), duration_ms)
                 record_agent_run(agent_name, "failure", duration_ms / 1000.0)
 
-            # Emit completion
+            # Emit completion with reasoning data
             status = "complete" if result and result.success else "failed"
+            completion_details: Dict[str, Any] = {"success": result.success if result else False}
+            if result and result.reasoning:
+                completion_details["reasoning"] = result.reasoning.to_dict()
             self._emit_activity(
                 project_id, f"agent_{status}",
                 f"{'Completed' if result and result.success else 'Completed with issues'} {agent_name.replace('_', ' ').title()}",
                 agent_name=agent_name,
                 progress=end_progress,
-                details={"success": result.success if result else False}
+                details=completion_details,
             )
 
         except Exception as e:
@@ -664,11 +667,14 @@ class PipelineExecutor:
         from sqlalchemy import update
         import uuid as uuid_module
 
-        # Extract agent outputs from results
+        # Extract agent outputs from results (include reasoning)
         agent_outputs = {}
         for agent_name, result in results.items():
             if result and hasattr(result, 'data'):
-                agent_outputs[agent_name] = result.data
+                output = dict(result.data) if isinstance(result.data, dict) else result.data
+                if isinstance(output, dict) and hasattr(result, 'reasoning') and result.reasoning:
+                    output["_reasoning"] = result.reasoning.to_dict()
+                agent_outputs[agent_name] = output
             elif result:
                 agent_outputs[agent_name] = {"success": result.success if hasattr(result, 'success') else False}
 
