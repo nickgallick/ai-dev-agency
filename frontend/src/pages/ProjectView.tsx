@@ -819,10 +819,10 @@ export default function ProjectView() {
 
           {/* ADRs */}
           {codingStandardsReport.adrs_generated > 0 && (
-            <div className="p-3 bg-purple-500/10 rounded-lg mb-4">
+            <div className="p-3 bg-accent-purple/10 rounded-lg mb-4">
               <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-purple-400" />
-                <span className="text-sm text-purple-400">
+                <Shield className="w-4 h-4 text-accent-purple" />
+                <span className="text-sm text-accent-purple">
                   {codingStandardsReport.adrs_generated} Architecture Decision Records Generated
                 </span>
               </div>

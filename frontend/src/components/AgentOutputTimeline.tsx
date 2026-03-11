@@ -88,7 +88,7 @@ const STEP_CONFIG: Record<string, StepConfig> = {
   research: {
     label: 'Research',
     icon: <Search className="w-4 h-4" />,
-    color: 'text-blue-400',
+    color: 'text-accent-secondary',
     description: 'Researched competitors, design trends, and best practices',
   },
   architect: {
@@ -112,7 +112,7 @@ const STEP_CONFIG: Record<string, StepConfig> = {
   content_generation: {
     label: 'Content',
     icon: <FileText className="w-4 h-4" />,
-    color: 'text-yellow-400',
+    color: 'text-accent-warning',
     description: 'Wrote headlines, CTAs, body copy, and SEO meta content',
   },
   pm_checkpoint_1: {
@@ -124,7 +124,7 @@ const STEP_CONFIG: Record<string, StepConfig> = {
   code_generation: {
     label: 'Code Generation',
     icon: <Code2 className="w-4 h-4" />,
-    color: 'text-green-400',
+    color: 'text-accent-success',
     description: 'Generated all application code and components',
   },
   pm_checkpoint_2: {
@@ -142,7 +142,7 @@ const STEP_CONFIG: Record<string, StepConfig> = {
   security: {
     label: 'Security',
     icon: <ShieldCheck className="w-4 h-4" />,
-    color: 'text-red-400',
+    color: 'text-accent-error',
     description: 'Scanned for vulnerabilities and applied auto-fixes',
   },
   seo: {
@@ -178,7 +178,7 @@ const STEP_CONFIG: Record<string, StepConfig> = {
   analytics_monitoring: {
     label: 'Monitoring',
     icon: <BarChart2 className="w-4 h-4" />,
-    color: 'text-purple-400',
+    color: 'text-accent-purple',
     description: 'Configured Plausible, Sentry, and Lighthouse CI',
   },
   coding_standards: {
@@ -190,7 +190,7 @@ const STEP_CONFIG: Record<string, StepConfig> = {
   delivery: {
     label: 'Delivery',
     icon: <PackageCheck className="w-4 h-4" />,
-    color: 'text-green-300',
+    color: 'text-accent-success',
     description: 'Assembled final delivery package',
   },
 }
@@ -809,7 +809,7 @@ function renderCodingStandards(data: any) {
             {docs.filter((d: any) => d.generated).length} documents
           </Chip>
         )}
-        {adrs > 0 && <Chip color="bg-purple-500/20 text-purple-300">{adrs} ADRs</Chip>}
+        {adrs > 0 && <Chip color="bg-accent-purple/20 text-accent-purple">{adrs} ADRs</Chip>}
         {configs.length > 0 && <Chip>{configs.length} style configs</Chip>}
       </div>
       {docs.length > 0 && (
@@ -935,9 +935,9 @@ function getStepStatus(agentId: string, projectStatus: string, agentOutputs: Rec
 
 function StatusIcon({ status }: { status: AgentStepStatus }) {
   switch (status) {
-    case 'completed': return <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+    case 'completed': return <CheckCircle2 className="w-4 h-4 text-accent-success flex-shrink-0" />
     case 'active': return <Loader2 className="w-4 h-4 text-accent-primary flex-shrink-0 animate-spin" />
-    case 'failed': return <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+    case 'failed': return <XCircle className="w-4 h-4 text-accent-error flex-shrink-0" />
     default: return <Circle className="w-4 h-4 text-text-tertiary flex-shrink-0" />
   }
 }
@@ -973,7 +973,7 @@ export function AgentOutputTimeline({ projectStatus, agentOutputs }: AgentOutput
                 <div
                   className="absolute left-[11px] top-8 w-0.5 h-full -z-10"
                   style={{
-                    background: status === 'completed' ? 'rgba(74,222,128,0.3)' : 'rgba(255,255,255,0.06)'
+                    background: status === 'completed' ? 'var(--accent-success-border, rgba(52,211,153,0.3))' : 'var(--border-subtle)'
                   }}
                 />
               )}
