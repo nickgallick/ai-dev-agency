@@ -1,24 +1,52 @@
 /**
  * ChatBuilder — Lovable/Deep Agent style chat-first project builder
  * Split-pane: chat on left, live preview on right
+ * Design: Framer Motion animations, glassmorphic glass panels,
+ *         warm/cool chat bubbles matching sleek-chat-soul reference
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { motion, AnimatePresence } from 'framer-motion'
 import { api, ChatMessage, Project } from '@/lib/api'
 import BuildPreviewPanel from '@/components/BuildPreviewPanel'
 import {
   Send, Loader2, Sparkles, Bot, User, ArrowRight,
-  PanelRightOpen, PanelRightClose, Zap
+  PanelRightOpen, PanelRightClose, Zap, Lightbulb,
+  FileCode, Smartphone, Globe
 } from 'lucide-react'
 
-// Quick-start suggestion prompts
+// Quick-start suggestion prompts with distinct icons
 const SUGGESTIONS = [
-  'Build me a SaaS dashboard with auth and billing',
-  'Create a portfolio website with a blog',
-  'Build a REST API for a todo app',
-  'Make a Chrome extension that summarizes pages',
+  { text: 'Build me a SaaS dashboard with auth and billing', icon: Globe },
+  { text: 'Create a portfolio website with a blog', icon: FileCode },
+  { text: 'Build a REST API for a todo app', icon: Lightbulb },
+  { text: 'Make a Chrome extension that summarizes pages', icon: Smartphone },
 ]
+
+// Agent descriptions for source-citation-style pills
+const AGENT_DESCRIPTIONS: Record<string, string> = {
+  intake: 'Classified project type & requirements',
+  research: 'Analyzed market & technical landscape',
+  architect: 'Designed system architecture',
+  design_system: 'Created design tokens & component specs',
+  asset_generation: 'Generated visual assets',
+  content_generation: 'Wrote copy & content',
+  project_manager: 'Reviewed checkpoint quality',
+  code_generation: 'Generated application code',
+  code_generation_openhands: 'Generated application code',
+  integration_wiring: 'Connected components & APIs',
+  code_review: 'Reviewed code quality',
+  security: 'Scanned for vulnerabilities',
+  seo: 'Optimized SEO & performance',
+  accessibility: 'Checked WCAG compliance',
+  qa: 'Ran QA tests & bug fixes',
+  deploy: 'Deployed to hosting',
+  analytics: 'Set up monitoring',
+  coding_standards: 'Enforced coding standards',
+  post_deploy_verification: 'Verified live deployment',
+  delivery: 'Packaged final deliverables',
+}
 
 interface ChatEntry {
   role: 'user' | 'assistant' | 'system'
@@ -26,6 +54,27 @@ interface ChatEntry {
   timestamp: string
   agentName?: string
   agentStatus?: 'running' | 'completed' | 'failed'
+  // Agent source citations shown as pills under AI messages
+  agentSources?: { name: string; description: string }[]
+}
+
+// Animation variants matching sleek-chat-soul's Framer Motion style
+const messageVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.06, duration: 0.3, ease: 'easeOut' },
+  }),
+}
+
+const suggestionVariants = {
+  hidden: { opacity: 0, y: 8 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: 0.15 + i * 0.08, duration: 0.3, ease: 'easeOut' },
+  }),
 }
 
 export default function ChatBuilder() {
@@ -45,6 +94,8 @@ export default function ChatBuilder() {
   const [projectId, setProjectId] = useState<string | null>(urlProjectId || null)
   const [buildStarted, setBuildStarted] = useState(false)
   const [showPreview, setShowPreview] = useState(true)
+  // Collect completed agent names for source citations on build-complete message
+  const completedAgentsRef = useRef<string[]>([])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -84,19 +135,18 @@ export default function ChatBuilder() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Track agent progress as chat messages
+  // Track agent progress as chat messages with source citations
   useEffect(() => {
     if (!outputs?.agent_outputs || !buildStarted) return
 
-    const agentNames = Object.keys(outputs.agent_outputs)
+    const agentNames = Object.keys(outputs.agent_outputs).filter(k => !k.startsWith('_'))
     const existingAgentMessages = messages.filter(m => m.role === 'system' && m.agentName)
 
     for (const agentName of agentNames) {
-      const output = outputs.agent_outputs[agentName]
       const existing = existingAgentMessages.find(m => m.agentName === agentName)
-
       if (!existing) {
         const label = agentName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+        completedAgentsRef.current = [...new Set([...completedAgentsRef.current, agentName])]
         setMessages(prev => [...prev, {
           role: 'system',
           message: `${label} completed`,
@@ -108,15 +158,21 @@ export default function ChatBuilder() {
     }
   }, [outputs?.agent_outputs, buildStarted])
 
-  // Show build complete message
+  // Show build complete message with agent source citations
   useEffect(() => {
     if (project?.status === 'completed' && buildStarted) {
       const alreadyHasComplete = messages.some(m => m.message.includes('build is complete'))
       if (!alreadyHasComplete) {
+        // Build source citations from completed agents
+        const sources = completedAgentsRef.current.map(name => ({
+          name: name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          description: AGENT_DESCRIPTIONS[name] || 'Completed',
+        }))
         setMessages(prev => [...prev, {
           role: 'assistant',
-          message: 'Your build is complete! Check the preview panel to see the results. You can view the full project details or start a new build.',
+          message: 'Your build is complete! Check the preview panel to see the results.',
           timestamp: new Date().toISOString(),
+          agentSources: sources,
         }])
       }
     }
@@ -280,78 +336,132 @@ export default function ChatBuilder() {
 
   return (
     <div className="chat-builder">
+      {/* Background image layer for glassmorphism depth */}
+      <div className="chat-bg-image" />
+
       {/* Chat Panel */}
       <div className="chat-panel">
         {/* Chat Messages */}
         <div className="chat-messages">
           {messages.length === 0 ? (
             <div className="chat-empty">
-              <div className="chat-empty-icon">
+              <motion.div
+                className="chat-empty-icon"
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+              >
                 <Sparkles className="w-8 h-8" />
-              </div>
-              <h2>What do you want to build?</h2>
-              <p>Describe your project and I'll build it for you with AI agents.</p>
+              </motion.div>
+              <motion.h2
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1, duration: 0.3 }}
+              >
+                What do you want to build?
+              </motion.h2>
+              <motion.p
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.3 }}
+              >
+                Describe your project and I'll build it for you with AI agents.
+              </motion.p>
               <div className="chat-suggestions">
                 {SUGGESTIONS.map((s, i) => (
-                  <button
+                  <motion.button
                     key={i}
+                    custom={i}
+                    variants={suggestionVariants}
+                    initial="hidden"
+                    animate="visible"
                     className="chat-suggestion"
-                    onClick={() => sendMessage(s)}
+                    onClick={() => sendMessage(s.text)}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.97 }}
                   >
-                    <Zap className="w-3.5 h-3.5" />
-                    {s}
-                  </button>
+                    <div className="chat-suggestion-icon">
+                      <s.icon className="w-4 h-4" />
+                    </div>
+                    <span>{s.text}</span>
+                  </motion.button>
                 ))}
               </div>
             </div>
           ) : (
             <div className="chat-message-list">
-              {messages.map((msg, i) => (
-                <div key={i} className={`chat-message chat-message-${msg.role}`}>
-                  {msg.role === 'user' ? (
-                    <>
-                      <div className="chat-message-content">
-                        <p>{msg.message}</p>
+              <AnimatePresence initial={false}>
+                {messages.map((msg, i) => (
+                  <motion.div
+                    key={`${msg.timestamp}-${i}`}
+                    custom={i}
+                    variants={messageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className={`chat-message chat-message-${msg.role}`}
+                  >
+                    {msg.role === 'user' ? (
+                      <>
+                        <div className="chat-message-content">
+                          <p>{msg.message}</p>
+                        </div>
+                        <div className="chat-avatar chat-avatar-user">
+                          <User className="w-4 h-4" />
+                        </div>
+                      </>
+                    ) : msg.role === 'system' ? (
+                      <div className="chat-system-message">
+                        {msg.agentStatus === 'running' && (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        )}
+                        {msg.agentStatus === 'completed' && (
+                          <div className="chat-agent-dot completed" />
+                        )}
+                        {msg.agentStatus === 'failed' && (
+                          <div className="chat-agent-dot failed" />
+                        )}
+                        <span>{msg.message}</span>
                       </div>
-                      <div className="chat-avatar chat-avatar-user">
-                        <User className="w-4 h-4" />
-                      </div>
-                    </>
-                  ) : msg.role === 'system' ? (
-                    <div className="chat-system-message">
-                      {msg.agentStatus === 'running' && (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      )}
-                      {msg.agentStatus === 'completed' && (
-                        <div className="chat-agent-dot completed" />
-                      )}
-                      {msg.agentStatus === 'failed' && (
-                        <div className="chat-agent-dot failed" />
-                      )}
-                      <span>{msg.message}</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="chat-avatar chat-avatar-ai">
-                        <Bot className="w-4 h-4" />
-                      </div>
-                      <div className="chat-message-content">
-                        <p>{msg.message}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
+                    ) : (
+                      <>
+                        <div className="chat-avatar chat-avatar-ai">
+                          <Bot className="w-4 h-4" />
+                        </div>
+                        <div className="chat-message-content-wrapper">
+                          <div className="chat-message-content">
+                            <p>{msg.message}</p>
+                          </div>
+                          {/* Agent source citation pills */}
+                          {msg.agentSources && msg.agentSources.length > 0 && (
+                            <div className="chat-sources">
+                              {msg.agentSources.map((source, si) => (
+                                <div key={si} className="chat-source-pill">
+                                  <span className="chat-source-num">{si + 1}</span>
+                                  <span className="chat-source-name">{source.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
 
               {sending && (
-                <div className="chat-message chat-message-assistant">
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="chat-message chat-message-assistant"
+                >
                   <div className="chat-avatar chat-avatar-ai">
                     <Bot className="w-4 h-4" />
                   </div>
                   <div className="chat-typing">
                     <span /><span /><span />
                   </div>
-                </div>
+                </motion.div>
               )}
 
               <div ref={messagesEndRef} />
@@ -395,7 +505,7 @@ export default function ChatBuilder() {
               {sending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <ArrowRight className="w-4 h-4" />
+                <Send className="w-4 h-4" />
               )}
             </button>
           </div>

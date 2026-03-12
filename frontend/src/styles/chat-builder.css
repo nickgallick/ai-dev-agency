@@ -1,15 +1,72 @@
 /* ========================================
    ChatBuilder — Matching sleek-chat-soul design
-   Glassmorphic, warm tones, animated chat
+   Glassmorphic, warm tones, Framer Motion animated
    ======================================== */
 
-/* Main layout */
+/* ----------------------------------------
+   CTA Gradient tokens (warm-pink-purple sweep)
+   Matching reference: from warm → via pink → to purple
+   ---------------------------------------- */
+:root,
+[data-theme="dark"] {
+  --cta-from: hsl(220, 20%, 20%);
+  --cta-via: hsl(280, 15%, 22%);
+  --cta-to: hsl(320, 15%, 22%);
+  --chat-bg-image: linear-gradient(135deg,
+    hsl(220, 30%, 10%) 0%,
+    hsl(260, 20%, 12%) 50%,
+    hsl(220, 25%, 8%) 100%);
+}
+
+[data-theme="light"] {
+  --cta-from: hsl(30, 30%, 90%);
+  --cta-via: hsl(320, 20%, 90%);
+  --cta-to: hsl(260, 20%, 90%);
+  --chat-bg-image: linear-gradient(135deg,
+    hsl(30, 20%, 92%) 0%,
+    hsl(280, 15%, 94%) 50%,
+    hsl(220, 20%, 94%) 100%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --cta-from: hsl(30, 30%, 90%);
+    --cta-via: hsl(320, 20%, 90%);
+    --cta-to: hsl(260, 20%, 90%);
+    --chat-bg-image: linear-gradient(135deg,
+      hsl(30, 20%, 92%) 0%,
+      hsl(280, 15%, 94%) 50%,
+      hsl(220, 20%, 94%) 100%);
+  }
+}
+
+/* ----------------------------------------
+   Main Layout
+   ---------------------------------------- */
 .chat-builder {
   display: flex;
   height: 100vh;
-  background: var(--bg-base);
   position: relative;
   overflow: hidden;
+}
+
+/* Background image layer — creates depth behind glass panels */
+.chat-bg-image {
+  position: fixed;
+  inset: 0;
+  background: var(--chat-bg-image);
+  z-index: 0;
+}
+
+/* Add subtle noise/texture over the gradient */
+.chat-bg-image::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(ellipse at 25% 25%, rgba(167, 139, 250, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 75% 75%, rgba(32, 184, 205, 0.06) 0%, transparent 50%);
+  pointer-events: none;
 }
 
 /* ----------------------------------------
@@ -22,6 +79,11 @@
   min-width: 0;
   height: 100vh;
   position: relative;
+  z-index: 1;
+  /* Glass effect on the chat panel itself */
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur-strong));
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong));
 }
 
 .chat-builder:has(.preview-panel) .chat-panel {
@@ -79,13 +141,13 @@
   max-width: 360px;
 }
 
-/* Suggestion cards - 3-column grid matching reference */
+/* Suggestion cards — glass cards with icons like reference SuggestionCard */
 .chat-suggestions {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: var(--space-3);
   width: 100%;
-  max-width: 480px;
+  max-width: 500px;
   margin-top: var(--space-4);
 }
 
@@ -112,21 +174,33 @@
   background: var(--glass-bg-hover);
   border-color: var(--glass-border-hover);
   color: var(--text-primary);
-  transform: translateY(-2px);
   box-shadow: var(--shadow-glass);
 }
 
-.chat-suggestion:active {
-  transform: scale(0.97);
-}
-
-.chat-suggestion svg {
+/* Icon container matching reference --icon-bg / --icon-color */
+.chat-suggestion-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  margin-top: 1px;
+  background: rgba(32, 184, 205, 0.1);
   color: var(--accent-primary);
 }
 
-/* CTA button matching reference gradient */
+[data-theme="light"] .chat-suggestion-icon {
+  background: hsl(35, 40%, 88%);
+  color: hsl(35, 50%, 45%);
+}
+
+.chat-suggestion span {
+  flex: 1;
+  padding-top: 4px;
+}
+
+/* CTA gradient button — warm-pink-purple sweep matching reference */
 .chat-cta-btn {
   display: inline-flex;
   align-items: center;
@@ -136,18 +210,18 @@
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
   font-family: var(--font-sans);
-  color: white;
-  background: var(--gradient-accent);
+  color: var(--text-primary);
+  background: linear-gradient(135deg, var(--cta-from), var(--cta-via), var(--cta-to));
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(32, 184, 205, 0.3);
+  box-shadow: var(--shadow-elevated);
   transition: all var(--transition-fast);
   margin-top: var(--space-4);
 }
 
 .chat-cta-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(32, 184, 205, 0.4);
+  box-shadow: var(--shadow-glow-strong);
 }
 
 .chat-cta-btn:active {
@@ -167,23 +241,11 @@
   padding-top: var(--space-4);
 }
 
-/* Message bubbles - matching reference chat bubble style */
+/* Message bubbles — Framer Motion handles enter animation */
 .chat-message {
   display: flex;
   gap: var(--space-3);
   align-items: flex-end;
-  animation: chat-bubble-enter 0.3s ease-out;
-}
-
-@keyframes chat-bubble-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .chat-message-user {
@@ -194,7 +256,7 @@
 .chat-avatar {
   width: 30px;
   height: 30px;
-  border-radius: var(--radius-md);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -204,19 +266,23 @@
 .chat-avatar-ai {
   background: var(--gradient-accent);
   color: white;
-  border-radius: 50%;
 }
 
 .chat-avatar-user {
   background: var(--glass-bg-elevated);
   color: var(--text-secondary);
   border: 1px solid var(--glass-border);
-  border-radius: 50%;
 }
 
-/* Bubble content - matching reference design */
-.chat-message-content {
+/* Bubble content — matching reference ChatBubble */
+.chat-message-content-wrapper {
   max-width: 75%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chat-message-content {
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);
   line-height: 1.6;
@@ -226,14 +292,15 @@
   white-space: pre-wrap;
 }
 
-/* User bubble: dark blue tone matching reference */
+/* User bubble: dark blue matching reference --bubble-user */
 .chat-message-user .chat-message-content {
   background: hsl(210, 30%, 20%);
   color: hsl(30, 20%, 92%);
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
+  max-width: 75%;
 }
 
-/* AI bubble: warm light glass matching reference */
+/* AI bubble: warm glass matching reference --bubble-ai */
 .chat-message-assistant .chat-message-content {
   background: var(--glass-bg-elevated);
   border: 1px solid var(--glass-border);
@@ -241,7 +308,7 @@
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
 }
 
-/* Light mode overrides for chat bubbles */
+/* Light mode bubble overrides matching reference HSL values */
 [data-theme="light"] .chat-message-user .chat-message-content {
   background: hsl(210, 25%, 25%);
   color: white;
@@ -250,6 +317,64 @@
 [data-theme="light"] .chat-message-assistant .chat-message-content {
   background: hsl(25, 30%, 90%);
   color: hsl(220, 20%, 15%);
+  border-color: hsl(30, 20%, 85%);
+}
+
+/* ----------------------------------------
+   Agent Source Citation Pills
+   Horizontal scrollable pills matching reference AnswerThread sources
+   ---------------------------------------- */
+.chat-sources {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding: var(--space-1) 0;
+  scrollbar-width: none;
+}
+
+.chat-sources::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-source-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.chat-source-pill:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+}
+
+.chat-source-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  flex-shrink: 0;
+}
+
+.chat-source-name {
+  font-weight: var(--font-medium);
 }
 
 /* System messages (agent progress) - pill style */
@@ -266,7 +391,6 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border-radius: var(--radius-full);
   border: 1px solid var(--glass-border);
-  animation: chat-bubble-enter 0.3s ease-out;
 }
 
 .chat-agent-dot {
@@ -285,7 +409,7 @@
   background: var(--accent-error);
 }
 
-/* Typing indicator */
+/* Typing indicator — bouncing dots matching reference loading state */
 .chat-typing {
   display: flex;
   align-items: center;
@@ -305,11 +429,11 @@
 }
 
 .chat-typing span:nth-child(2) {
-  animation-delay: 0.2s;
+  animation-delay: 0.15s;
 }
 
 .chat-typing span:nth-child(3) {
-  animation-delay: 0.4s;
+  animation-delay: 0.3s;
 }
 
 @keyframes typing-bounce {
@@ -324,10 +448,12 @@
 }
 
 /* ----------------------------------------
-   Input Area — glass card input like reference
+   Input Area — glass card input like reference ChatInput
    ---------------------------------------- */
 .chat-input-area {
   padding: var(--space-3) var(--space-4) var(--space-4);
+  position: relative;
+  z-index: 1;
 }
 
 .chat-input-suggestions {
@@ -363,14 +489,14 @@
   border-color: var(--glass-border-hover);
 }
 
-/* Glass card input wrapper - matching reference ChatInput */
+/* Glass card input wrapper — matching reference */
 .chat-input-wrapper {
   display: flex;
   align-items: flex-end;
   gap: var(--space-3);
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
   padding: var(--space-3) var(--space-4);
@@ -439,6 +565,9 @@
   height: 100vh;
   overflow: hidden;
   display: none;
+  position: relative;
+  z-index: 1;
+  background: var(--bg-base);
 }
 
 @media (min-width: 1024px) {
