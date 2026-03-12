@@ -5,15 +5,15 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Home from './pages/Home'
-import NewProject from './pages/NewProject'
+import ChatBuilder from './pages/ChatBuilder'
 import ProjectView from './pages/ProjectView'
 import ProjectHistory from './pages/ProjectHistory'
 import Settings from './pages/Settings'
 import AgentLogs from './pages/AgentLogs'
 import CostDashboard from './pages/CostDashboard'
-import KnowledgeBase from './pages/KnowledgeBase'  // Phase 11B
-import Queue from './pages/Queue'  // Phase 11C
-import SystemBackup from './pages/SystemBackup'  // Phase 11C
+import KnowledgeBase from './pages/KnowledgeBase'
+import Queue from './pages/Queue'
+import SystemBackup from './pages/SystemBackup'
 
 function AppRoutes() {
   const { isAuthenticated, setupRequired, isLoading } = useAuth()
@@ -31,6 +31,26 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
+
+      {/* Chat builder — full-width, no sidebar wrapper */}
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <ChatBuilder />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chat/:projectId"
+        element={
+          <ProtectedRoute>
+            <ChatBuilder />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Standard layout with sidebar */}
       <Route
         path="/"
         element={
@@ -40,7 +60,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<Home />} />
-        <Route path="new" element={<NewProject />} />
+        <Route path="new" element={<Navigate to="/chat" replace />} />
         <Route path="project/:id" element={<ProjectView />} />
         <Route path="projects" element={<ProjectHistory />} />
         <Route path="settings" element={<Settings />} />
